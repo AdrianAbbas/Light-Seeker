@@ -10,6 +10,8 @@ The developer's mood references informed the palette and light only (never copie
 import math
 import random
 
+import numpy as np
+
 import bpy
 from mathutils import Vector
 
@@ -254,7 +256,7 @@ def far_mountains(seed, y=2600, height=520, snow=True):
     B.ridge(-3000, 3000, y, -40, height, 300, seed, "far", B.mat_stone("farmtn", (0.55, 0.58, 0.72), haze=0.25, haze_colour=(0.7, 0.78, 0.95)), segments=200, rows=4)
 
 
-def meta(sun, anchors, horizon=300, clouds=0.75, rays=0.6, haze=0.55, exposure=1.0, sky_seed=1):
+def meta(sun, anchors, horizon=300, clouds=0.75, rays=0.6, haze=0.3, exposure=1.0, sky_seed=1):
     return {"sky": {"moon": [sun[0], sun[1], 60], "horizon": horizon, "clouds": clouds, "rays": rays, "stars": 0.0, "seed": sky_seed},
             "haze": {"near": 60, "far": 2600, "amount": haze}, "exposure": exposure, "anchors": anchors}
 
@@ -977,10 +979,7 @@ def citadel_gates_v2():
     D.sparkles((0, 60, 8), (60, 80, 14), 140, "near", 21, size=0.12)
     D.sparkles((0, 300, 90), (260, 120, 120), 90, "mid", 22, size=0.5)
     # Far: valley, mountains, cumulus.
-    B.ground(gz - 60, 9000, "far", D.mat_ground("valley2", (0.2, 0.36, 0.12)))
-    far_mountains(2, y=2600, height=700)
-    for k, (x, y, z, s_) in enumerate([(-900, 2200, 380, 700), (350, 2800, 560, 1000), (1100, 2300, 340, 650), (-500, 3300, 720, 1100)]):
-        D.cumulus((x, y, z), (s_ * 1.6, s_, s_ * 0.9), "far", 100 + k, density=0.012, name="fogcloud%d" % k)
+    v2_sky(2, gz)
     return meta(sun_xy, [hotspot(0, (0, 229, gz + 8)), hotspot(1, (-60, 380, gz + 200)), hotspot(2, (0, 380, gz + 280)),
                          hotspot(3, (0, 380, gz + 420)),
                          lightpt((0, 229, gz + 6), 20, "glint"), lightpt((0, 380, gz + 330), 14, "glint"), lightpt((-16, 230, gz + 40), 10, "fire")],
@@ -1017,15 +1016,16 @@ def v2_mid_meadow(seed, ground, kinds=BLOOM, y0=70, y1=260, width=400):
 
 def v2_sky(seed, gz, clouds=((-900, 2200, 380, 700), (350, 2800, 560, 1000), (1100, 2300, 340, 650), (-500, 3300, 720, 1100)), mountains=True, valley=True):
     if valley:
-        B.ground(gz - 60, 9000, "far", D.mat_ground("valley2", (0.2, 0.36, 0.12)))
+        h = D.valley(seed, gz - 60, y0=280)
+        D.grove(h, -2600, 2600, 500, 2400, 260, "far", seed + 7, size=(16, 34), blossom=0.15, name="farwood%d" % seed)
     if mountains:
-        far_mountains(seed, y=2600, height=700)
+        D.mountains(seed, y=2800, height=620, base_z=gz - 80)
     for k, (x, y, z, s_) in enumerate(clouds):
         D.cumulus((x, y, z), (s_ * 1.6, s_, s_ * 0.9), "far", seed * 10 + k, density=0.012, name="fogcloud%d_%d" % (seed, k))
 
 
 def v2_interior(seed, length=300, width=80, height=90, stone=None, window=(1.0, 0.85, 0.55), bays=7, cam=None, rose=True,
-                beams=True, floor=None, columns=True):
+                beams=True, floor=None, columns=True, wall_colour=(0.9, 0.85, 0.76)):
     """A gothic interior: clustered columns, pointed arcades, clerestory lancets with gold
     frames, rib vaults, a rose window, a polished chequered floor, sunbeams through haze."""
     rng = random.Random(seed)
@@ -1034,13 +1034,14 @@ def v2_interior(seed, length=300, width=80, height=90, stone=None, window=(1.0, 
     sun = daylight2((-0.6, 0.4, 0.55), strength=2.0, sky_strength=0.15)
     stone = stone or D.mat_marble("hallmarble", colour=(0.9, 0.84, 0.74))
     gold = D.mat_gold()
-    glass = B.mat_emission(window, 2.2, "lancet%.2f" % window[2])
+    glass = D.mat_stained(window, 1.9, "stained%d" % seed)
+    wall = D.mat_ashlar("ashlar%d" % seed, colour=wall_colour)
     B.box((0, length / 2, -0.5), (width * 1.4, length * 1.1, 1), "mid", floor or D.mat_floor(), name="floor")
     b = G.Builder()
     half = width / 2
     bay = length / bays
     for side in (-1, 1):
-        B.box((side * (half + 14), length / 2, height / 2), (2, length, height * 1.1), "mid", stone, name="wall")
+        B.box((side * (half + 14), length / 2, height / 2), (2, length, height * 1.1), "mid", wall, name="wall")
         for k in range(bays + 1):
             y = k * bay
             x = side * half * 0.62
@@ -1048,9 +1049,11 @@ def v2_interior(seed, length=300, width=80, height=90, stone=None, window=(1.0, 
                 # A clustered column: a core and four shafts, gilt capitals and bases.
                 b.prism("stone", x, y, 0, 3.2, 3.2, 1.6, sides=8)
                 b.prism("stone", x, y, 1.6, 2.4, 2.3, height * 0.5, sides=12)
-                for c in range(4):
-                    a = c * math.pi / 2 + math.pi / 4
-                    b.prism("stone", x + math.cos(a) * 2.2, y + math.sin(a) * 2.2, 1.6, 0.8, 0.8, height * 0.5, sides=8)
+                for c in range(8):
+                    a = c * math.pi / 4 + math.pi / 8
+                    r_ = 0.85 if c % 2 == 0 else 0.55
+                    b.prism("stone", x + math.cos(a) * 2.3, y + math.sin(a) * 2.3, 1.6, r_, r_, height * 0.5, sides=8)
+                    b.prism("gold", x + math.cos(a) * 2.3, y + math.sin(a) * 2.3, 1.6 + height * 0.25, r_ * 1.25, r_ * 1.25, 0.6, sides=8)
                 b.prism("gold", x, y, 1.6 + height * 0.5, 3.4, 3.0, 1.6, sides=12)
             # Clerestory lancets in the outer wall.
             if k < bays:
@@ -1091,18 +1094,18 @@ def v2_interior(seed, length=300, width=80, height=90, stone=None, window=(1.0, 
         for sx in (-1, 1):
             D.arc(lambda t, y0=y0, y1=y1, sx=sx: (sx * half * 0.62 * (1 - 2 * t), y0 + (y1 - y0) * t, 1.6 + height * 0.53 + (top - 1.6 - height * 0.53) * math.sin(t * math.pi)),
                   14, 1.0, "mid", gold, "rib")
-    B.box((0, length / 2, height * 1.05), (width * 1.3, length, 2), "mid", stone, name="vault")
+    B.box((0, length / 2, height * 1.05), (width * 1.3, length, 2), "mid", wall, name="vault")
     if rose:
-        B.box((0, length + 1, height / 2), (width * 1.4, 2, height * 1.2), "far", stone, name="endwall")
+        B.box((0, length + 1, height / 2), (width * 1.4, 2, height * 1.2), "far", wall, name="endwall")
         B.cylinder((0, length - 0.2, height * 0.55), height * 0.28, 0.3, "far", glass, sides=48, name="rose", rotation=(math.pi / 2, 0, 0))
         for k in range(16):
             a = k * 2 * math.pi / 16
             B.box((math.cos(a) * height * 0.14, length - 0.5, height * 0.55 + math.sin(a) * height * 0.14), (height * 0.28, 0.4, 0.8), "far", gold,
                   rotation=(0, -a, 0), name="tracery")
         B.cylinder((0, length - 0.6, height * 0.55), height * 0.29, 0.5, "far", gold, sides=48, name="roserim", rotation=(math.pi / 2, 0, 0))
-    B.light("AREA", (0, length * 0.5, height * 0.95), (1.0, 0.92, 0.8), 3.0e4 * (height / 90) ** 2, size=width * 0.8, look_at=(0, length * 0.5, 0), name="fill")
+    B.light("AREA", (0, length * 0.5, height * 0.95), (1.0, 0.92, 0.8), 2.0e4 * (height / 90) ** 2, size=width * 0.8, look_at=(0, length * 0.5, 0), name="fill")
     if beams:
-        fog = B.mat_fog(colour=(1.0, 0.95, 0.85), density=0.0012, noise_scale=0.01, z0=0, z1=height, anisotropy=0.6, emission=0.0, emit_colour=(1, 1, 1))
+        fog = B.mat_fog(colour=(1.0, 0.95, 0.85), density=0.0008, noise_scale=0.01, z0=0, z1=height, anisotropy=0.6, emission=0.0, emit_colour=(1, 1, 1))
         B.fog_box((0, length / 2, height / 2), (width * 1.4, length, height), "mid", fog)
     return b
 
@@ -1132,7 +1135,7 @@ def gentle(seed, amp=1.5, rise=0.07, start=10):
 # ============================================================ CELESTIAL CITADEL (v2)
 @scene("celestial-citadel/hall-of-mirrors")
 def v2_mirrors():
-    v2_interior(2, length=260, width=70, height=80, window=(0.85, 0.92, 1.0), bays=7, cam=((22, -10, 20), (-34, 170, 30)))
+    v2_interior(2, length=260, width=70, height=80, window=(0.85, 0.92, 1.0), bays=7, cam=((6, -10, 20), (-30, 190, 30)))
     mirror = B.mat_metal((0.92, 0.92, 0.95), 0.03, "mirror2")
     for k in range(7):
         y = k * 260 / 7 + 260 / 14
@@ -1174,7 +1177,7 @@ def v2_throne():
 
 @scene("celestial-citadel/spire-summit")
 def v2_summit():
-    B.camera((0, -10, 405), (0, 400, 330), lens=24)
+    B.camera((0, -14, 407), (0, 500, 385), lens=24)
     v2_light((-0.55, -0.35, 0.65), strength=5.0, sky=0.25)
     m, gold = D.mat_marble(), D.mat_gold()
     B.box((0, 10, 397), (120, 46, 6), "near", D.mat_floor("terracefloor"), name="terrace")
@@ -1188,8 +1191,8 @@ def v2_summit():
     G.tower(b, -220, 420, 120, 14, 200, rng, tiers=6, spire_ratio=2.2, depth=1)
     G.tower(b, 260, 560, 120, 12, 170, rng, tiers=5, spire_ratio=2.0, depth=1)
     b.flush("near", G.materials(), "summit")
-    for k, (x, y, z, s_) in enumerate([(-400, 600, 200, 300), (200, 700, 180, 340), (-100, 1200, 220, 420), (600, 1100, 240, 380),
-                                       (-700, 1500, 200, 420), (300, 1800, 260, 500)]):
+    for k, (x, y, z, s_) in enumerate([(-400, 600, 250, 300), (200, 700, 240, 340), (-100, 1200, 260, 420), (600, 1100, 270, 380),
+                                       (-700, 1500, 250, 420), (300, 1800, 290, 500), (-1100, 900, 240, 380), (1000, 800, 250, 360)]):
         D.cumulus((x, y, z), (s_ * 1.8, s_, s_ * 0.6), "mid" if y < 1000 else "far", 40 + k, density=0.014, name="fogcloud_s%d" % k)
     v2_sky(8, 120, clouds=(), mountains=True, valley=True)
     D.sparkles((0, 60, 410), (100, 60, 30), 80, "near", 41, size=0.15)
@@ -1232,33 +1235,52 @@ def v2_cloud_steps():
 
 @scene("sky-temple/sanctum")
 def v2_sanctum():
-    B.camera((0, -64, 14), (0, 40, 30), lens=22)
-    daylight2((-0.5, 0.3, 0.8), strength=1.5, sky_strength=0.15)
+    """Inside the temple's rotunda: a ring of clustered columns, tall stained-glass
+    windows all round, a gilt-ribbed dome with an oculus pouring light on the altar."""
+    B.camera((0, -18, 12), (0, 70, 36), lens=20)
+    daylight2((-0.5, 0.3, 0.8), strength=2.0, sky_strength=0.15)
     m, gold = D.mat_marble(), D.mat_gold()
+    glass = D.mat_stained((0.8, 0.88, 1.0), 1.9, "sanctumglass")
+    wall = D.mat_ashlar("sanctumashlar", colour=(0.92, 0.88, 0.8))
     B.cylinder((0, 40, -1), 90, 1, "mid", D.mat_floor("sanctumfloor", (0.9, 0.87, 0.82), (0.75, 0.66, 0.55), 0.18), sides=64, name="floor")
     b = G.Builder(); rng = random.Random(12)
     for k in range(14):
-        a = k / 14 * 2 * math.pi
-        x, y = 60 * math.cos(a), 40 + 60 * math.sin(a)
+        a_ = k / 14 * 2 * math.pi
+        x, y = 50 * math.cos(a_), 40 + 50 * math.sin(a_)
         b.prism("stone", x, y, 0, 3.4, 3.4, 1.8, sides=8)
-        b.prism("stone", x, y, 1.8, 2.6, 2.4, 44, sides=16)
+        b.prism("stone", x, y, 1.8, 2.4, 2.2, 44, sides=16)
+        for c in range(8):
+            ca = c * math.pi / 4
+            b.prism("stone", x + math.cos(ca) * 2.3, y + math.sin(ca) * 2.3, 1.8, 0.6, 0.55, 44, sides=6)
         b.prism("gold", x, y, 45.8, 3.6, 3.0, 2, sides=16)
-        G.pinnacle(b, x, y, 47.8, 1.2, 10, rng, 0)
-        b.lancet("gold", x * 1.18, 40 + (y - 40) * 1.18, 6, 10, 32, math.atan2(y - 40, x) + math.pi, depth=0.0)
+        # A window in the outer wall behind each bay.
+        wa = a_ + math.pi / 14
+        wx, wy = 70.5 * math.cos(wa), 40 + 70.5 * math.sin(wa)
+        B.arch_shape((wx, wy, 8), 13, 40, "mid", glass, rotation_z=wa - math.pi / 2, name="sanctumglass")
+        b.lancet("gold", 70.0 * math.cos(wa), 40 + 70.0 * math.sin(wa), 7, 15, 42, wa + math.pi, depth=0.0)
     b.flush("mid", G.materials(), "sanctum")
-    B.cylinder((0, 40, 0), 72, 54, "far", m, sides=64, name="drum")
-    B.lathe((0, 40, 54), [(72, 0), (70, 14), (58, 32), (36, 46), (12, 52), (12, 54)], "far", m, sides=64, name="dome")
+    # The wall (open at the top and bottom), the dome above it.
+    nu = 96
+    V, T = [], []
+    for k in range(nu):
+        a_ = k / nu * 2 * math.pi
+        V += [(72 * math.cos(a_), 40 + 72 * math.sin(a_), -1), (72 * math.cos(a_), 40 + 72 * math.sin(a_), 56)]
+        j = 2 * k; jn = 2 * ((k + 1) % nu)
+        T += [(j, jn, jn + 1), (j, jn + 1, j + 1)]
+    D.big_mesh("drum", np.array(V), np.array(T), "mid", wall)
+    B.lathe((0, 40, 54), [(72, 0), (70, 14), (58, 32), (36, 46), (12, 52), (12, 54)], "mid", m, sides=64, name="dome")
     for k in range(16):
-        a = k * 2 * math.pi / 16
-        D.arc(lambda t, a=a: (math.cos(a) * (70 - 58 * t), 40 + math.sin(a) * (70 - 58 * t), 54 + 52 * math.sin(t * math.pi / 2)), 12, 1.0, "far", gold, "domerib")
-    B.light("SPOT", (0, 40, 140), (1.0, 0.94, 0.8), 6.0e5, size=6, look_at=(0, 40, 0), name="oculus", spot=14)
-    fog = B.mat_fog(colour=(1.0, 0.96, 0.88), density=0.002, noise_scale=0.02, z0=0, z1=110, anisotropy=0.6, emission=0.0, emit_colour=(1, 1, 1))
-    B.fog_box((0, 40, 55), (150, 150, 110), "mid", fog)
+        a_ = k * 2 * math.pi / 16
+        D.arc(lambda t, a_=a_: (math.cos(a_) * (70 - 58 * t), 40 + math.sin(a_) * (70 - 58 * t), 54 + 52 * math.sin(t * math.pi / 2)), 12, 1.0, "mid", gold, "domerib")
+    B.light("SPOT", (0, 40, 160), (1.0, 0.94, 0.8), 6.0e5, size=6, look_at=(0, 40, 0), name="oculus", spot=14)
+    B.light("AREA", (0, 40, 50), (1.0, 0.93, 0.82), 1.6e4, size=60, look_at=(0, 40, 0), name="fill")
+    fog = B.mat_fog(colour=(1.0, 0.96, 0.88), density=0.0012, noise_scale=0.02, z0=0, z1=110, anisotropy=0.6, emission=0.0, emit_colour=(1, 1, 1))
+    B.fog_box((0, 40, 55), (140, 140, 110), "mid", fog)
     B.lathe((0, 40, 0), [(12, 0), (11, 6), (5, 7), (5, 15), (0, 16)], "mid", m, sides=32, name="altar")
     B.cylinder((0, 40, 16), 3, 0.6, "mid", B.mat_emission((1.0, 0.92, 0.7), 8.0, "altarflame"), sides=24, name="flame")
     D.sparkles((0, 40, 40), (50, 50, 60), 220, "mid", 13, size=0.25)
-    return meta((480, 60), spots3(3, [(0, -20, 10), (0, 40, 20), (40, 60, 30)]) + [lightpt((0, 40, 18), 24, "fire"), lightpt((0, 40, 100), 20, "glint")],
-                horizon=300, clouds=0.0, rays=0.0, haze=0.2)
+    return meta((480, 60), spots3(3, [(-30, 60, 12), (0, 40, 20), (30, 70, 30)]) + [lightpt((0, 40, 18), 24, "fire"), lightpt((0, 40, 100), 20, "glint")],
+                horizon=300, clouds=0.0, rays=0.0, haze=0.15)
 
 
 @scene("sky-temple/bell-garden")
@@ -1364,7 +1386,7 @@ def v2_canopy():
 def v2_prism():
     glass = B.mat_crystal((0.78, 0.86, 1.0), 0.2)
     v2_interior(31, length=240, width=74, height=90, window=(0.75, 0.88, 1.0), bays=6, stone=D.mat_marble("prismmarble", colour=(0.9, 0.9, 0.95)),
-                floor=D.mat_floor("prismfloor", (0.92, 0.93, 0.98), (0.72, 0.76, 0.86)))
+                floor=D.mat_floor("prismfloor", (0.92, 0.93, 0.98), (0.72, 0.76, 0.86)), wall_colour=(0.88, 0.9, 0.96))
     D.crystal_cluster(0, 200, 0, 26, 14, "mid", 31, colour=(0.85, 0.78, 1.0))
     for k, c in enumerate([(1.0, 0.45, 0.45), (1.0, 0.8, 0.35), (0.45, 0.95, 0.55), (0.45, 0.6, 1.0), (0.8, 0.5, 1.0)]):
         B.light("SPOT", (-60 + k * 4, 100 + k * 8, 120), c, 1.2e5, size=2, look_at=(-12 + k * 6, 130, 0), name="prismlight", spot=10)
@@ -1405,6 +1427,18 @@ def v2_vault():
         D.crystal_cluster(rng.uniform(-55, 55), rng.uniform(130, 190), 0, rng.uniform(8, 22), 6, "mid", 360 + k,
                           colour=[(0.8, 0.9, 1.0), (1.0, 0.85, 0.95), (0.85, 1.0, 0.95)][k % 3])
     B.light("SPOT", (0, 150, 120), (1.0, 0.95, 0.9), 5.0e5, size=8, look_at=(0, 160, 0), name="oculus", spot=30)
+    B.light("AREA", (0, 140, 70), (0.92, 0.95, 1.0), 1.4e4, size=90, look_at=(0, 140, 0), name="fill")
+    glass = D.mat_stained((0.75, 0.85, 1.0), 2.0, "vaultglass", tint_mix=0.3)
+    gold = D.mat_gold()
+    for k in range(18):
+        a = k * 2 * math.pi / 18
+        if math.sin(a) < -0.3:
+            continue
+        wx, wy = 79.2 * math.cos(a), 120 + 79.2 * math.sin(a)
+        B.arch_shape((wx, wy, 3), 14, 26, "far", glass, rotation_z=a - math.pi / 2, name="vaultglass")
+    for k in range(10):
+        D.crystal_cluster(rng.uniform(-70, 70), rng.uniform(170, 196), 0, rng.uniform(20, 34), 7, "far", 380 + k,
+                          colour=[(0.8, 0.9, 1.0), (1.0, 0.85, 0.95), (0.85, 1.0, 0.95)][k % 3])
     D.sparkles((0, 160, 20), (90, 60, 40), 300, "mid", 37, size=0.2)
     return meta((480, 200), spots3(3, [(0, 100, 10), (-30, 150, 20), (25, 170, 25)]) + [lightpt((x, 150, 18), 12, "glint") for x in (-35, -10, 15, 40)],
                 horizon=300, clouds=0.0, rays=0.0)
@@ -1449,23 +1483,40 @@ def v2_glade():
 
 @scene("blossom-meadow/wildflower-hill")
 def v2_hill():
-    B.camera((0, -20, 40), (0, 700, -10), lens=24)
-    v2_light((-0.5, -0.3, 0.55), strength=5.0, sky=0.25)
-    slope = rolling(43, 2, 0, 0.02)
-    f = lambda x, y: slope(x, y) - max(0.0, y - 60) * 0.32
-    B.heightfield(f, -200, 200, -10, 260, 160, 120, "near", D.mat_ground())
-    D.grass(f, -90, 90, -8, 200, 260000, "near", 43, height=(0.3, 0.7))
-    D.flowers(f, -80, 80, -6, 180, 20000, "near", 44, size=0.25, kinds=BLOOM, stem=0.5)
-    D.tree((40, 40, f(40, 40)), 26, 430, "near", kind="blossom", leaves=24000)
-    vz = -80
-    B.ground(vz, 9000, "far", D.mat_ground("valley3", (0.22, 0.38, 0.12)))
-    B.heightfield(lambda x, y: vz + 0.2 + 4 * math.sin(x * 0.01), -40, 40, 400, 2400, 8, 200, "far", water((0.5, 0.7, 0.88)), name="river")
-    forest(lambda x, y: vz, 43, 30, x=(-600, 600), y=(500, 1400), h=(40, 70), layer="far", blossom=0.3)
+    """High on a flowering hillside: the slope falls away to rolling sunlit country, a
+    river winding through it, woods, and a white castle on a far hill; mountains beyond."""
+    B.camera((0, -16, 14), (0, 900, -30), lens=26)
+    v2_light((-0.5, -0.3, 0.6), strength=5.2, sky=0.22)
+    slope = rolling(43, 1.6, 0, 0.03)
+    f = lambda x, y: slope(x, y) - max(0.0, y - 30) * 0.12
+    B.heightfield(f, -160, 160, -10, 300, 170, 140, "near", D.mat_ground())
+    D.grass(f, -70, 70, -8, 160, 240000, "near", 43, height=(0.25, 0.6))
+    D.flowers(f, -14, 14, -4, 12, 9000, "near", 47, size=0.17, kinds=BLOOM, stem=0.32)
+    D.flowers(f, -70, 70, -6, 150, 22000, "near", 44, size=0.24, kinds=BLOOM, stem=0.5)
+    D.tree((34, 46, f(34, 46)), 24, 430, "near", kind="blossom", leaves=26000)
+    D.tree((-46, 90, f(-46, 90)), 20, 431, "near", kind="green", leaves=16000)
+    D.flowers(f, -160, 160, 150, 300, 14000, "mid", 48, size=0.5, kinds=BLOOM)
+    B.heightfield(f, -900, 900, 150, 360, 160, 50, "mid", D.mat_ground(), name="lowerslope")
+    vz = f(0, 330) + 6
+    h = D.valley(43, vz, y0=260, amp=40)
+    # The river: a ribbon winding away through the valley.
+    ys = np.linspace(320, 3200, 220)
+    xs = 160 * np.sin(ys * 0.0021 + 0.6) + 60 * np.sin(ys * 0.006)
+    wid = 10 + ys * 0.012
+    V, T = [], []
+    for k, (x, y, w) in enumerate(zip(xs, ys, wid)):
+        V += [(x - w, y, h(x - w, y) + 1.2), (x + w, y, h(x + w, y) + 1.2)]
+        if k:
+            a_ = 2 * (k - 1)
+            T += [(a_, a_ + 1, a_ + 3), (a_, a_ + 3, a_ + 2)]
+    D.big_mesh("river", np.array(V), np.array(T), "far", water((0.55, 0.74, 0.9)))
+    D.grove(h, -1600, 1600, 400, 2600, 320, "far", 49, size=(14, 30), blossom=0.25, name="valleywood")
+    cx, cy = -320, 1500
     b = G.Builder()
-    G.citadel(b, -280, 1300, vz, 0.8, 45)
+    G.citadel(b, cx, cy, h(cx, cy) - 5, 0.55, 45)
     b.flush("far", G.materials(), "valleycastle")
-    v2_sky(44, vz, valley=False)
-    return meta((250, 120), spots3(3, [(-50, 60, f(-50, 60) + 8), (60, 200, -20), (0, 900, -40)]), horizon=250, clouds=0.4)
+    v2_sky(44, vz, valley=False, clouds=((-900, 2600, 520, 600), (500, 3000, 640, 800), (1300, 2600, 480, 560)))
+    return meta((250, 120), spots3(3, [(-50, 70, f(-50, 70) + 6), (60, 220, f(60, 220) + 8), (cx, cy, h(cx, cy) + 60)]), horizon=250, clouds=0.4, haze=0.3)
 
 
 # ============================================================ GOLDEN CATHEDRAL (v2)
@@ -1492,7 +1543,9 @@ def v2_loft():
 
 @scene("golden-cathedral/stained-glass-chapel")
 def v2_chapel():
-    b = v2_interior(53, length=200, width=70, height=80, window=(0.9, 0.55, 0.85), bays=5, cam=((0, -15, 18), (0, 200, 40)))
+    b = v2_interior(53, length=200, width=70, height=80, window=(0.9, 0.55, 0.85), bays=5, cam=((-18, -12, 16), (34, 150, 46)))
+    B.steps((0, 170, 0), 30, 6, 1.4, 3, "mid", D.mat_marble())
+    B.box((0, 186, 6.6), (14, 6, 6), "mid", D.mat_gold(), name="altar")
     for k, c in enumerate([(1.0, 0.35, 0.35), (1.0, 0.75, 0.25), (0.35, 0.9, 0.45), (0.35, 0.55, 1.0), (0.75, 0.4, 1.0)]):
         for side in (-1, 1):
             B.light("SPOT", (side * 70, 20 + k * 40, 70), c, 1.5e5, size=3, look_at=(-side * 10, 30 + k * 40, 0), name="glasslight", spot=16)
@@ -1541,7 +1594,7 @@ def v2_windswept():
 
 @scene("floating-isles/sky-harbour")
 def v2_harbour():
-    isles_world(63, ((0, -40, 200), (0, 400, 200)))
+    isles_world(63, ((150, 330, 238), (262, 500, 236)))
     m, gold = D.mat_marble(), D.mat_gold()
     B.box((250, 480, 229), (90, 22, 3), "mid", m, name="pier")
     sail = D.mat_vegetation("sailcloth", 0.5, 0.6)
@@ -1555,7 +1608,8 @@ def v2_harbour():
     b = G.Builder(); rng = random.Random(63)
     G.tower(b, 285, 520, 230, 7, 50, rng, tiers=3, spire_ratio=1.8, depth=1)
     b.flush("mid", G.materials(), "harbourtower")
-    return meta((640, 120), spots3(3, [(-200, 420, 200), (0, 900, 300), (230, 470, 250)]) + [lightpt((230, 470, 260), 16, "glint")], horizon=380, clouds=0.35)
+    D.sparkles((250, 480, 250), (120, 60, 40), 80, "mid", 64, size=0.3)
+    return meta((640, 120), spots3(3, [(244, 470, 250), (285, 520, 290), (420, 1100, 200)]) + [lightpt((244, 470, 260), 16, "glint")], horizon=380, clouds=0.35)
 
 
 # ================================================================ ROYAL GARDENS (v2)
@@ -1590,7 +1644,10 @@ def v2_fountain():
     B.camera((0, -10, 8), (0, 200, 30), lens=24)
     v2_light()
     ground = gentle(72, amp=0.2, rise=0.0)
-    B.box((0, 200, -0.2), (300, 400, 0.4), "mid", D.mat_floor("courtfloor", (0.9, 0.87, 0.82), (0.8, 0.74, 0.66), 0.06), name="court")
+    v2_meadow(72, ground, kinds=BLOOM, grass_n=160000, flowers_n=9000, trees=((-36, 40, 22, "blossom"), (38, 50, 20, "blossom")))
+    v2_mid_meadow(72, ground)
+    B.cylinder((0, 160, -0.1), 48, 0.5, "mid", B.mat_stone("paving2", (0.82, 0.78, 0.7), rough=0.7, bump=0.5, scale=1.5), sides=64, name="paving")
+    B.box((0, 90, 0.0), (12, 140, 0.5), "mid", B.mat_stone("gravel2", (0.86, 0.8, 0.68), rough=0.9, bump=0.6, scale=6.0), name="path")
     b = G.Builder(); rng = random.Random(72)
     # A three-tier fountain with a gilt crown.
     for k, (r, z) in enumerate([(30, 0), (15, 12), (7, 22)]):
@@ -1622,33 +1679,41 @@ def v2_fountain():
 
 @scene("royal-gardens/marble-colonnade")
 def v2_colonnade():
-    B.camera((-60, -20, 16), (20, 300, 30), lens=24)
+    """A long double colonnade of fluted marble columns with gilt capitals and pointed
+    arches, seen from the flowering garden beside it, receding into the light."""
+    B.camera((-34, -14, 9), (14, 260, 26), lens=24)
     v2_light((-0.6, -0.5, 0.5), strength=5.5, sky=0.2)
     ground = gentle(73, amp=0.3, rise=0.0)
-    v2_meadow(73, ground, kinds=BLOOM, grass_n=120000, flowers_n=8000, trees=((60, 40, 20, "blossom"),))
+    v2_meadow(73, ground, kinds=BLOOM, grass_n=180000, flowers_n=12000, trees=((-44, 60, 22, "blossom"),))
+    v2_mid_meadow(73, ground)
+    marble = D.mat_marble()
     b = G.Builder(); rng = random.Random(73)
-    for k in range(14):
-        x, y = -40 + k * 3, 30 + k * 26
-        b.prism("stone", x, y, 0, 3.4, 3.4, 2, sides=8)
-        b.prism("stone", x, y, 2, 2.4, 2.2, 40, sides=16)
-        for c in range(6):
-            a = c * math.pi / 3
-            b.prism("stone", x + math.cos(a) * 2.3, y + math.sin(a) * 2.3, 2, 0.35, 0.3, 40, sides=6)
-        b.prism("gold", x, y, 42, 3.6, 3.0, 2, sides=16)
-        if k < 13:
-            D.pointed_arch(y, y + 26, x + 1.5, 44, 12, 1.0, "mid", D.mat_marble(), name="colarch")
-    b.box("stone", -22, 200, 56, 6, 360, 6)
-    b.box("gold", -19, 200, 58, 0.4, 360, 1)
-    for x in range(10, 92, 2):
-        b.prism("stone", x, 60, 0, 0.45, 0.35, 3.6, sides=8)
-    b.box("stone", 50, 60, 3.6, 84, 1.6, 0.8)
+    n = 16
+    for row, x in enumerate((12, 30)):
+        for k in range(n):
+            y = 20 + k * 22
+            b.prism("stone", x, y, 0, 2.6, 2.6, 1.6, sides=8)
+            b.prism("stone", x, y, 1.6, 1.7, 1.55, 30, sides=20)
+            for c in range(10):
+                ca = c * math.pi / 5
+                b.prism("stone", x + math.cos(ca) * 1.65, y + math.sin(ca) * 1.65, 1.6, 0.22, 0.2, 30, sides=5)
+            b.prism("gold", x, y, 31.6, 2.6, 2.1, 1.6, sides=16)
+            b.prism("gold", x, y, 1.6, 2.0, 2.0, 0.5, sides=16)
+            if k < n - 1:
+                D.pointed_arch(y, y + 22, x, 33.2, 9, 0.8, "mid", marble, name="colarch")
+        b.box("stone", x, 20 + (n - 1) * 11, 44, 4, (n - 1) * 22 + 6, 3)
+        b.box("gold", x - 2.1, 20 + (n - 1) * 11, 44.5, 0.3, (n - 1) * 22 + 6, 0.8)
+    b.box("stone", 21, 20 + (n - 1) * 11, 46, 22, (n - 1) * 22 + 6, 1.2)
+    for k in range(n):
+        G.pinnacle(b, 12, 20 + k * 22, 45.5, 0.8, 6, rng, 0)
+    b.box("stone", 21, 20 + (n - 1) * 11, 0.0, 26, (n - 1) * 22 + 8, 1.2)
     b.flush("mid", G.materials(), "colonnade")
     for ob in [o for o in bpy.data.objects if o.name.startswith("colarch")]:
         for v in ob.data.vertices:
             x0, y0 = v.co.x, v.co.y
-            v.co.x, v.co.y = y0 - 0.0, x0
+            v.co.x, v.co.y = y0, x0
     v2_sky(74, 0)
-    return meta((300, 110), spots3(3, [(60, 100, 10), (80, 300, 20), (-30, 200, 30)]), horizon=320, clouds=0.35)
+    return meta((300, 110), spots3(3, [(-20, 60, 6), (12, 140, 20), (30, 300, 30)]), horizon=320, clouds=0.35)
 
 
 # ================================================================== FAIRY GLADE (v2)
@@ -1694,8 +1759,9 @@ def v2_court():
     v2_light((-0.4, 0.3, 0.7), strength=4.5, sky=0.25)
     ground = gentle(83, amp=0.4, rise=0.0)
     B.heightfield(ground, -90, 90, -20, 160, 140, 140, "mid", D.mat_ground())
-    D.grass(ground, -60, 60, -18, 140, 160000, "mid", 83, height=(0.1, 0.3))
-    D.flowers(ground, -50, 50, -16, 130, 10000, "mid", 84, size=0.12, kinds=BLOOM, stem=0.2)
+    D.grass(ground, -60, 60, -18, 140, 220000, "mid", 83, height=(0.3, 0.75))
+    D.flowers(ground, -50, 50, -16, 130, 14000, "mid", 84, size=0.2, kinds=BLOOM, stem=0.4)
+    forest(ground, 830, 22, x=(-200, 200), y=(130, 360), h=(40, 70), blossom=0.3)
     for k in range(9):
         a = k / 8 * math.pi
         x, y = -55 * math.cos(a), 80 + 40 * math.sin(a)
@@ -1737,43 +1803,79 @@ def v2_eyrie():
 
 @scene("dragons-peak/golden-nest")
 def v2_nest():
-    B.camera((0, -40, 40), (0, 160, 20), lens=24)
+    B.camera((0, -10, 40), (0, 160, 16), lens=24)
     v2_light((-0.5, -0.4, 0.6), strength=5.0, sky=0.25)
     D.mesa(0, 160, -170, 160, 170, "mid", 92)
     B.lathe((0, 150, 0), [(46, 0), (50, 6), (40, 10), (0, 8)], "mid", B.mat_stone("nest2", (0.6, 0.46, 0.3), bump=0.9, scale=6.0), sides=64, name="nest")
     rng = random.Random(92)
     for k in range(200):
-        B.cylinder((rng.uniform(-38, 38), 150 + rng.uniform(-30, 30), rng.uniform(8, 12)), rng.uniform(0.8, 2.0), 0.35, "mid", D.mat_gold(0.18), sides=12, name="coin")
-    golden_dragon((0, 160, 10), 4.0, "mid", rotation_z=-0.6)
+        B.cylinder((rng.uniform(-38, 38), 150 + rng.uniform(-30, 30), rng.uniform(8, 12)), rng.uniform(0.8, 2.0), 0.35, "mid", D.mat_gold(rough=0.18), sides=12, name="coin")
+    golden_dragon((6, 172, 9), 5.0, "mid", rotation_z=-0.6)
+    # A heap of gold under the dragon: a mound and coins strewn over it.
+    B.lathe((0, 150, 7), [(38, 0), (30, 2.5), (18, 5), (6, 6.5), (0, 6.8)], "mid", D.mat_gold(rough=0.3), sides=64, name="hoard")
+    for k in range(260):
+        rr = 36 * math.sqrt(rng.random()); a = rng.uniform(0, 2 * math.pi)
+        hz = 7 + 6.8 * max(0.0, 1 - rr / 38) ** 1.2
+        B.cylinder((rr * math.cos(a), 150 + rr * math.sin(a), hz), rng.uniform(0.8, 1.6), 0.3, "mid", D.mat_gold(rough=0.18), sides=12, name="coin",
+                   rotation=(rng.uniform(-0.4, 0.4), rng.uniform(-0.4, 0.4), 0))
     D.mesa(-400, 900, -200, 150, 420, "far", 93)
     D.mesa(380, 1000, -200, 160, 460, "far", 94)
     v2_sky(95, -200)
     D.sparkles((0, 150, 20), (90, 70, 30), 200, "mid", 96, size=0.3)
-    return meta((650, 110), spots3(3, [(-100, 300, 60), (0, 150, 30), (100, 300, 80)]) + [lightpt((x, 150, 12), 12, "glint") for x in (-25, 0, 25)],
+    return meta((650, 110), spots3(3, [(-40, 200, 40), (0, 150, 22), (40, 210, 40)]) + [lightpt((x, 150, 12), 12, "glint") for x in (-25, 0, 25)],
                 horizon=300, clouds=0.35)
 
 
 @scene("dragons-peak/summit-of-winds")
 def v2_winds():
-    peak_world(97, ((0, -40, 440), (0, 500, 380)), sun=(-0.4, -0.5, 0.45))
-    B.rock((0, 120, 382), 34, 97, "near", D.mat_cliff("summitrock", 97), squash=(1.6, 1.2, 0.6))
-    golden_dragon((10, 140, 400), 3.5, "near", rotation_z=2.6)
-    return meta((360, 110), spots3(3, [(0, 500, 300), (-120, 500, 300), (0, 40, 420)]) + [lightpt((-30, 120, 420), 18, "glint")],
-                horizon=330, clouds=0.4, rays=0.9, haze=0.4)
+    """The highest peak: a wind-carved ridge of rock and snow in front, a sea of cloud far
+    below with other sharp peaks rising through it, the golden dragon soaring past."""
+    B.camera((0, -30, 560), (0, 700, 480), lens=24)
+    v2_light((-0.4, -0.5, 0.45), strength=5.5, sky=0.25)
+    D.peak(230, 160, 300, 220, 210, "near", 97, snow_line=0.6, name="ridge")
+    for k, (x, y, r, hgt) in enumerate([(-460, 900, 380, 640), (420, 1150, 420, 700), (-60, 1800, 520, 820), (1000, 1900, 460, 620), (-1100, 1700, 480, 660)]):
+        D.peak(x, y, 0, r, hgt, "mid" if y < 1200 else "far", 100 + k, name="peak%d" % k)
+    for k in range(9):
+        x = -1400 + k * 350; y = 600 + (k % 3) * 500
+        D.cumulus((x, y, 240), (520, 380, 170), "mid" if y < 1200 else "far", 970 + k, density=0.016, name="fogcloud_w%d" % k)
+    D.mountains(99, y=2600, height=900, base_z=0)
+    golden_dragon((-60, 420, 520), 6.0, "mid", rotation_z=2.2)
+    D.sparkles((0, 200, 540), (200, 120, 60), 60, "near", 96, size=0.3)
+    return meta((360, 110), spots3(3, [(-60, 420, 540), (-460, 900, 600), (30, 90, 545)]) + [lightpt((-60, 420, 530), 18, "glint")],
+                horizon=330, clouds=0.4, rays=0.9, haze=0.3)
 
 
 # ========================================================================= MAP (v2)
 @scene("map")
 def v2_map():
+    """The bright world from high above: a patchwork of sunlit fields and woods, a river
+    winding from the snowy mountains in the north to a sea in the south-west, cumulus
+    drifting over the edges; each location a luminous landmark."""
     B.camera((0, -520, 470), (0, 820, 40), lens=28)
     v2_light((-0.5, -0.4, 0.6), strength=5.0, sky=0.3)
-    f = rolling(3, 40, 0, 0.003)
-    land = lambda x, y: f(x, y) + max(0.0, (y - 600) * 0.12)
-    B.heightfield(land, -1600, 1600, -300, 2200, 260, 200, "mid", D.mat_ground())
-    B.cylinder((-900, 0, 8), 700, 1, "mid", water((0.35, 0.58, 0.75)), sides=96, name="sea")
-    D.flowers(land, -900, 900, -250, 500, 30000, "mid", 5, size=1.6, kinds=BLOOM, stem=0.5)
-    far_mountains(9, y=2600, height=700)
+    f = rolling(3, 30, 0, 0.003)
+
+    def land(x, y):
+        d = math.hypot(x + 1150, y + 120)
+        sea = 90 * min(1.0, max(0.0, (820 - d) / 260))
+        return f(x, y) + max(0.0, (y - 600) * 0.12) - sea
+    B.heightfield(land, -1700, 1700, -400, 2300, 300, 240, "mid", D.mat_fields("mapfields", (0.22, 0.38, 0.12)))
+    B.box((-900, 0, -42), (1800, 1600, 2), "mid", water((0.38, 0.62, 0.8)), name="sea")
+    # The river: from the mountains to the sea.
+    ys = np.linspace(2200, -60, 200)
+    xs = -420 + 260 * np.sin(ys * 0.0019 + 1.2) - 300 * np.clip((600 - ys) / 660, 0, 1)
+    V, T = [], []
+    for k, (x, y) in enumerate(zip(xs, ys)):
+        w = 7 + (2200 - y) * 0.006
+        V += [(x - w, y, land(x - w, y) + 1.5), (x + w, y, land(x + w, y) + 1.5)]
+        if k:
+            a_ = 2 * (k - 1); T += [(a_, a_ + 1, a_ + 3), (a_, a_ + 3, a_ + 2)]
+    D.big_mesh("river", np.array(V), np.array(T), "mid", water((0.5, 0.72, 0.9)))
     L = [(0, 1100), (520, 1300), (-560, 700), (700, 650), (-200, 350), (300, 500), (-420, 1450), (120, 150), (-760, 300), (900, 1500)]
+    # Woods everywhere (clumped), not on the landmarks or in the sea.
+    D.grove(land, -1600, 1600, -200, 2000, 1100, "mid", 41, size=(14, 26), blossom=0.12, name="mapwood", clump=0.8,
+            avoid=[(x, y, 120) for x, y in L], min_z=-30)
+    D.mountains(9, y=2250, height=760, base_z=land(0, 2250) - 40, x0=-3000, x1=3000)
     anchors = []
     rng = random.Random(3)
     b = G.Builder()
@@ -1783,15 +1885,17 @@ def v2_map():
             D.mesa(x, y, z - 30, 80, 120, "mid", 300)
             G.citadel(b, x, y, z + 90, 0.55, 301)
         elif i == 1:
-            D.mesa(x, y, z - 20, 50, 90, "mid", 302)
-            G.tower(b, x, y, z + 70, 14, 30, rng, tiers=2, spire_ratio=1.5, depth=1)
+            D.cumulus((x, y, z + 40), (190, 130, 60), "mid", 302, density=0.02, name="fogcloud_temple")
+            G.tower(b, x, y, z + 60, 14, 30, rng, tiers=2, spire_ratio=1.5, depth=1)
+            b.prism("stone", x, y, z + 52, 36, 36, 8, sides=32)
         elif i == 2:
-            forest(land, 303, 10, x=(x - 80, x + 80), y=(y - 50, y + 50), h=(50, 80))
-            B.cylinder((x, y - 30, z + 2), 22, 2, "mid", water((0.5, 0.7, 0.85)), sides=48, name="well")
+            D.grove(land, x - 90, x + 90, y - 60, y + 60, 70, "mid", 303, size=(40, 70), blossom=0.0, name="elvenwood", clump=0.2)
+            B.cylinder((x, y - 70, z + 2), 20, 2, "mid", water((0.5, 0.7, 0.85)), sides=48, name="well")
         elif i == 3:
             D.crystal_cluster(x, y, z, 90, 14, "mid", 304)
         elif i == 4:
-            forest(land, 305, 6, x=(x - 80, x + 80), y=(y - 30, y + 30), h=(40, 60), blossom=0.8)
+            D.grove(land, x - 90, x + 90, y - 40, y + 40, 40, "mid", 305, size=(18, 30), blossom=1.0, name="blossomwood", clump=0.3)
+            D.flowers(land, x - 100, x + 100, y - 60, y + 60, 6000, "mid", 5, size=1.4, kinds=BLOOM, stem=0.5)
         elif i == 5:
             G.tower(b, x, y, z, 16, 70, rng, tiers=3, spire_ratio=2.2, depth=1)
             G.tower(b, x - 40, y + 10, z, 9, 50, rng, tiers=2, spire_ratio=2.0, depth=0)
@@ -1800,14 +1904,17 @@ def v2_map():
             for k in range(3):
                 D.isle2(x + (k - 1) * 120, y + 40 * k, z + 120 + 50 * k, 45, 70, "mid", 306 + k, trees=2)
         elif i == 7:
-            for k in range(8):
-                D.tree((x - 80 + k * 22, y + 40, land(x - 80 + k * 22, y + 40)), 24, 310 + k, "mid", kind="green", leaves=4000)
-            b.prism("stone", x, y, z, 26, 22, 6, sides=32)
+            hedge = B.mat_stone("maphedge", (0.1, 0.26, 0.07), rough=0.9, bump=0.8, scale=0.5)
+            for k in range(-3, 4):
+                B.box((x + k * 22, y, z + 3), (16, 70, 6), "mid", hedge, name="parterre")
+            b.prism("stone", x, y - 50, z, 16, 14, 5, sides=32)
+            G.pinnacle(b, x, y - 50, z + 5, 1.6, 16, rng, 0)
         elif i == 8:
             for k in range(5):
                 D.mushroom2(x + (k - 2) * 26, y + 10 * (k % 2), z, 30, "mid", 320 + k, cap=CAPS[k % 3])
+            D.grove(land, x - 80, x + 80, y + 30, y + 90, 25, "mid", 321, size=(20, 34), name="fairywood")
         elif i == 9:
-            D.mesa(x, y, z - 40, 90, 260, "mid", 330)
+            D.peak(x, y, z - 40, 160, 300, "mid", 330, snow_line=0.7, name="dragonpeak")
             G.tower(b, x, y, z + 215, 10, 40, rng, tiers=2, spire_ratio=1.6, depth=1)
         anchors.append({"kind": "landmark", "index": i, "world": (x, y, z + 80)})
     b.flush("mid", G.materials(), "maplandmarks")
@@ -1815,4 +1922,4 @@ def v2_map():
         D.cumulus((x, y, z), (400, 260, 180), "far", 340 + k, density=0.012, name="fogcloud_m%d" % k)
     anchors += [lightpt((0, 1100, 260), 30, "glint"), lightpt((300, 500, 120), 20, "glint"), lightpt((700, 650, 90), 18, "glint"),
                 lightpt((0, 1100, 200), 24, "fire"), lightpt((300, 500, 90), 18, "fire"), lightpt((-760, 300, 50), 16, "fire")]
-    return meta((760, 40), anchors, horizon=120, clouds=0.3, rays=0.5, haze=0.35)
+    return meta((760, 40), anchors, horizon=120, clouds=0.3, rays=0.5, haze=0.3)

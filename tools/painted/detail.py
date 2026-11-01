@@ -213,6 +213,9 @@ def mat_ground(name="ground2", base=(0.16, 0.32, 0.07)):
     return m
 
 
+CLOUD_GLOW = 0.65
+
+
 def mat_cloud(name="cumulus", density=6.0, w=0.0):
     """A cumulus volume: a billowing shape from distorted noise inside the object's box,
     flat-bottomed, bright white scattering with a faint warm forward glow."""
@@ -254,6 +257,12 @@ def mat_cloud(name="cumulus", density=6.0, w=0.0):
     dens.inputs["To Min"].default_value = 0.0; dens.inputs["To Max"].default_value = density
     nt.links.new(mul.outputs[0], dens.inputs["Value"])
     nt.links.new(dens.outputs["Result"], vol.inputs["Density"])
+    # A soft self-glow in proportion to the density: stands in for the many bounces of
+    # light inside a real cloud (one volume bounce alone leaves them grey).
+    glow = nt.nodes.new("ShaderNodeMath"); glow.operation = "MULTIPLY"
+    nt.links.new(dens.outputs["Result"], glow.inputs[0]); glow.inputs[1].default_value = CLOUD_GLOW   # radiance inside = CLOUD_GLOW
+    nt.links.new(glow.outputs[0], vol.inputs["Emission Strength"])
+    vol.inputs["Emission Color"].default_value = (1.0, 0.97, 0.93, 1)
     nt.links.new(vol.outputs[0], out.inputs["Volume"])
     _mats[key] = m
     return m
@@ -640,13 +649,13 @@ def mat_cliff(name="cliff3", seed=0):
     e = els.new(0.5); e.color = (0.68, 0.57, 0.43, 1)          # ochre
     L(patches.outputs["Fac"], tones.inputs["Fac"])
     # Cracks: Voronoi distance to the edge, thin dark lines.
-    vor = nt.nodes.new("ShaderNodeTexVoronoi"); vor.feature = "DISTANCE_TO_EDGE"; vor.inputs["Scale"].default_value = 0.35
+    vor = nt.nodes.new("ShaderNodeTexVoronoi"); vor.feature = "DISTANCE_TO_EDGE"; vor.inputs["Scale"].default_value = 0.6
     warp = noise(0.2, 4, 0.5, w=7)
     mixv = nt.nodes.new("ShaderNodeVectorMath"); mixv.operation = "ADD"
     sc = nt.nodes.new("ShaderNodeVectorMath"); sc.operation = "SCALE"; sc.inputs["Scale"].default_value = 3.0
     L(warp.outputs["Color"], sc.inputs[0]); L(tc.outputs["Object"], mixv.inputs[0]); L(sc.outputs[0], mixv.inputs[1])
     L(mixv.outputs[0], vor.inputs["Vector"])
-    crack = nt.nodes.new("ShaderNodeMapRange"); crack.inputs["From Min"].default_value = 0.0; crack.inputs["From Max"].default_value = 0.06
+    crack = nt.nodes.new("ShaderNodeMapRange"); crack.inputs["From Min"].default_value = 0.0; crack.inputs["From Max"].default_value = 0.04
     L(vor.outputs["Distance"], crack.inputs["Value"])
     # Vertical stains: noise stretched along z.
     stretch = nt.nodes.new("ShaderNodeVectorMath"); stretch.operation = "MULTIPLY"; stretch.inputs[1].default_value = (1.0, 1.0, 0.08)
@@ -751,15 +760,37 @@ def isle2(cx, cy, z, radius, depth, layer, seed, trees=3, blossom=0.4):
     a = idx[:-1, :]; b = np.roll(idx[:-1, :], -1, 1); c = np.roll(idx[1:, :], -1, 1); d = idx[1:, :]
     tris = np.concatenate([np.stack([a, c, b], -1).reshape(-1, 3), np.stack([a, d, c], -1).reshape(-1, 3)])
     big_mesh("isle", verts, tris, layer, mat_cliff("islecliff%d" % seed, seed), smooth=True)
-    top = lambda x, y: z + 0.6 * math.sin(x * 0.3) * math.cos(y * 0.3)
-    B.cylinder((cx, cy, z - 1.2), radius * 1.01, 1.4, layer, mat_ground(), sides=64, name="isletop")
-    grass(lambda x, y: z + 0.2, cx - radius * 0.7, cx + radius * 0.7, cy - radius * 0.7, cy + radius * 0.7, int(radius * radius * 60), layer, seed,
-          height=(0.3, 0.8))
-    flowers(lambda x, y: z + 0.2, cx - radius * 0.6, cx + radius * 0.6, cy - radius * 0.6, cy + radius * 0.6, int(radius * radius * 4), layer, seed + 1,
-            size=0.25)
+    # The top: a gentle grassy dome following the rock's own outline, its rim rolling over.
+    rim = r[-1]                                            # the outline radius per angle
+    nr = 24
+    rho = np.linspace(0, 1, nr + 1)[1:, None]
+    tx = cx + rho * rim[None, :] * 1.02 * np.cos(u[0])[None, :]
+    ty = cy + rho * rim[None, :] * 1.02 * np.sin(u[0])[None, :]
+    tz = z + radius * 0.07 * (1 - rho ** 2) - 1.2 * rho ** 8 + 0.4 * _fbm2(u[:nr] * 3, rho.repeat(nu, 1) * 2, seed + 21, 3)
+    tv = np.concatenate([[[cx, cy, z + radius * 0.07]], np.stack([tx, ty, tz], -1).reshape(-1, 3)])
+    T = [(0, 1 + k, 1 + (k + 1) % nu) for k in range(nu)]
+    for j in range(nr - 1):
+        for k in range(nu):
+            a_ = 1 + j * nu + k; b_ = 1 + j * nu + (k + 1) % nu
+            T += [(a_, a_ + nu, b_ + nu), (a_, b_ + nu, b_)]
+    big_mesh("isletop", tv, np.array(T), layer, mat_ground("isleground", (0.12, 0.24, 0.06)), smooth=True)
+    def top(x, y):
+        q = min(1.0, math.hypot(x - cx, y - cy) / (radius * 0.98))
+        return z + radius * 0.07 * (1 - q * q) - 1.2 * q ** 8
+    # Grass and flowers in strips that fill the round top (not a square patch).
+    for k in range(10):
+        y0 = -1.0 + k * 0.2; y1 = y0 + 0.2
+        half = math.sqrt(max(0.0, 1 - min(y0 ** 2, y1 ** 2))) * 0.98
+        if half <= 0.05:
+            continue
+        grass(top, cx - radius * half, cx + radius * half, cy + radius * y0, cy + radius * y1, int(radius * radius * 9 * half), layer, seed + k,
+              height=(0.3, 0.8))
+        flowers(top, cx - radius * half, cx + radius * half, cy + radius * y0, cy + radius * y1, int(radius * radius * 0.7 * half), layer, seed + 40 + k,
+                size=0.25)
     rng = random.Random(seed)
     for k in range(trees):
-        tree((cx + rng.uniform(-0.5, 0.5) * radius, cy + rng.uniform(-0.4, 0.4) * radius, z), radius * rng.uniform(0.4, 0.7), seed * 7 + k, layer,
+        tx_, ty_ = cx + rng.uniform(-0.5, 0.5) * radius, cy + rng.uniform(-0.4, 0.4) * radius
+        tree((tx_, ty_, top(tx_, ty_)), radius * rng.uniform(0.4, 0.7), seed * 7 + k, layer,
              kind="blossom" if rng.random() < blossom else "green", leaves=6000)
 
 
@@ -768,7 +799,7 @@ def mushroom2(x, y, z, size, layer, seed, cap=(0.92, 0.42, 0.5)):
     rng = random.Random(seed)
     stem = mat_marble("stem%.2f" % size, colour=(0.95, 0.92, 0.85), vein=(0.85, 0.82, 0.76))
     B.lathe((x, y, z), [(size * 0.2, 0), (size * 0.15, size * 0.35), (size * 0.13, size * 0.7), (size * 0.18, size * 0.82), (0.0, size * 0.83)], layer, stem, sides=24, name="stem")
-    capm = B.mat_stone("cap%.2f" % cap[0], cap, rough=0.4, bump=0.2, scale=4.0)
+    capm = mat_cap(cap)
     B.lathe((x, y, z + size * 0.72), [(size * 0.16, 0), (size * 0.7, size * 0.04), (size * 0.66, size * 0.2), (size * 0.5, size * 0.38),
                                       (size * 0.25, size * 0.48), (0.0, size * 0.5)], layer, capm, sides=40, name="cap")
     spot = B.mat_stone("spot", (0.98, 0.97, 0.94), rough=0.5, bump=0.1)
@@ -799,3 +830,317 @@ def butterflies(centre, extent, count, layer, seed):
                 verts.append((x + (ca * px - sa * py) * s, y + (sa * px + ca * py) * s, z + pz * s)); colsv.append(c)
             tris += [(b0, b0 + 1, b0 + 2), (b0, b0 + 2, b0 + 3), (b0, b0 + 4, b0 + 1), (b0, b0 + 5, b0 + 4)]
     return big_mesh("butterflies", np.array(verts), np.array(tris), layer, mat_vegetation("wing", 0.5, 0.4), np.array(colsv))
+
+
+# ------------------------------------------------------------------ distance (v3)
+def _ridged(x, y, seed, octaves=6):
+    """Ridged fractal noise on numpy arrays (mathutils per vertex: fine for ~100k)."""
+    from mathutils import noise as mn
+    out = np.empty(x.shape, np.float32)
+    fx, fy = x.ravel(), y.ravel()
+    o = out.ravel()
+    for i in range(fx.size):
+        o[i] = mn.ridged_multi_fractal(Vector((fx[i], fy[i], seed * 7.31)), 0.9, 2.1, octaves, 1.0, 2.0)
+    return out
+
+
+def mat_range(name="range3", rock=(0.38, 0.39, 0.46), snow=(0.97, 0.96, 0.98), snow_line=0.62, top=700.0, base_z=0.0):
+    """Distant mountains: blue-grey rock with darker gullies (noise), snow on the upper
+    slopes where they are not too steep, a soft grassy foot."""
+    key = ("range", name, rock, snow_line, top)
+    if key in _mats:
+        return _mats[key]
+    m, nt, out, bsdf = _principled(name)
+    L = nt.links.new
+    geo = nt.nodes.new("ShaderNodeNewGeometry")
+    sep = nt.nodes.new("ShaderNodeSeparateXYZ"); L(geo.outputs["Position"], sep.inputs[0])
+    nsep = nt.nodes.new("ShaderNodeSeparateXYZ"); L(geo.outputs["Normal"], nsep.inputs[0])
+    nz = nt.nodes.new("ShaderNodeTexNoise"); nz.inputs["Scale"].default_value = 0.012; nz.inputs["Detail"].default_value = 8
+    L(geo.outputs["Position"], nz.inputs["Vector"])
+    ramp = nt.nodes.new("ShaderNodeValToRGB"); els = ramp.color_ramp.elements
+    els[0].position = 0.35; els[0].color = (rock[0] * 0.55, rock[1] * 0.55, rock[2] * 0.62, 1)
+    els[1].position = 0.7; els[1].color = (rock[0] * 1.25, rock[1] * 1.22, rock[2] * 1.15, 1)
+    L(nz.outputs["Fac"], ramp.inputs["Fac"])
+    # Snow: height above the snow line (jittered by noise) and a not-too-steep slope.
+    h = nt.nodes.new("ShaderNodeMapRange")
+    h.inputs["From Min"].default_value = base_z + top * snow_line; h.inputs["From Max"].default_value = base_z + top * (snow_line + 0.08)
+    L(sep.outputs["Z"], h.inputs["Value"])
+    jit = nt.nodes.new("ShaderNodeMath"); jit.operation = "MULTIPLY_ADD"
+    L(nz.outputs["Fac"], jit.inputs[0]); jit.inputs[1].default_value = 0.9; jit.inputs[2].default_value = -0.45
+    hh = nt.nodes.new("ShaderNodeMath"); hh.operation = "ADD"; hh.use_clamp = True
+    L(h.outputs["Result"], hh.inputs[0]); L(jit.outputs[0], hh.inputs[1])
+    flat = nt.nodes.new("ShaderNodeMapRange")
+    flat.inputs["From Min"].default_value = 0.45; flat.inputs["From Max"].default_value = 0.7
+    L(nsep.outputs["Z"], flat.inputs["Value"])
+    sn = nt.nodes.new("ShaderNodeMath"); sn.operation = "MULTIPLY"
+    L(hh.outputs[0], sn.inputs[0]); L(flat.outputs["Result"], sn.inputs[1])
+    mix = nt.nodes.new("ShaderNodeMix"); mix.data_type = "RGBA"
+    L(sn.outputs[0], mix.inputs["Factor"]); L(ramp.outputs["Color"], mix.inputs["A"])
+    mix.inputs["B"].default_value = (*snow, 1)
+    # A green foot.
+    foot = nt.nodes.new("ShaderNodeMapRange")
+    foot.inputs["From Min"].default_value = base_z + top * 0.12; foot.inputs["From Max"].default_value = base_z + top * 0.02
+    L(sep.outputs["Z"], foot.inputs["Value"])
+    mix2 = nt.nodes.new("ShaderNodeMix"); mix2.data_type = "RGBA"
+    L(foot.outputs["Result"], mix2.inputs["Factor"]); L(mix.outputs["Result"], mix2.inputs["A"])
+    mix2.inputs["B"].default_value = (0.2, 0.32, 0.14, 1)
+    L(mix2.outputs["Result"], bsdf.inputs["Base Color"])
+    bsdf.inputs["Roughness"].default_value = 0.9
+    bump = nt.nodes.new("ShaderNodeBump"); bump.inputs["Strength"].default_value = 0.5
+    L(nz.outputs["Fac"], bump.inputs["Height"]); L(bump.outputs["Normal"], bsdf.inputs["Normal"])
+    L(bsdf.outputs[0], out.inputs["Surface"])
+    _mats[key] = m
+    return m
+
+
+def mountains(seed, y=2600, height=700, x0=-4200, x1=4200, depth=900, base_z=-40, layer="far", nx=520, ny=90, name="range"):
+    """A real mountain range: a ridged-noise height field with peaks, ridges and gullies,
+    rising from a foot at base_z, snow-capped, receding in depth (three staggered ridges)."""
+    xs = np.linspace(x0, x1, nx + 1, dtype=np.float32)
+    ys = np.linspace(y, y + depth, ny + 1, dtype=np.float32)
+    X, Y = np.meshgrid(xs, ys)
+    f = 1.6 / height
+    r = _ridged(X * f, Y * f, seed)
+    r = np.clip(r / 1.6, 0, None) ** 1.5
+    # Ridges: an envelope rising from the front edge, with staggered crests in depth.
+    t = (Y - y) / depth
+    env = np.clip(np.sin(np.clip(t, 0, 1) * np.pi * 0.9) * 1.1, 0, 1)
+    crest = 0.55 + 0.45 * np.sin(X * 0.0011 + seed) * np.cos(X * 0.0023 + seed * 2)
+    Z = base_z + height * env * (0.25 + 0.95 * r * crest)
+    Z[0, :] = base_z - 20
+    verts = np.stack([X, Y, Z], -1).reshape(-1, 3)
+    i = np.arange(nx); j = np.arange(ny)
+    I, J = np.meshgrid(i, j)
+    a = (J * (nx + 1) + I).ravel()
+    tris = np.concatenate([np.stack([a, a + 1, a + nx + 2], -1), np.stack([a, a + nx + 2, a + nx + 1], -1)])
+    return big_mesh(name, verts, tris, layer, mat_range("range%d" % seed, top=height * 1.2, base_z=base_z), smooth=True)
+
+
+def mat_fields(name="fields3", base=(0.2, 0.36, 0.12)):
+    """A sunlit valley floor from far away: meadows in several greens and gold, darker
+    groves, at two scales."""
+    key = ("fields", name, base)
+    if key in _mats:
+        return _mats[key]
+    m, nt, out, bsdf = _principled(name)
+    L = nt.links.new
+    geo = nt.nodes.new("ShaderNodeNewGeometry")
+    vor = nt.nodes.new("ShaderNodeTexVoronoi"); vor.inputs["Scale"].default_value = 0.004
+    L(geo.outputs["Position"], vor.inputs["Vector"])
+    ramp = nt.nodes.new("ShaderNodeValToRGB"); els = ramp.color_ramp.elements
+    els[0].position = 0.0; els[0].color = (base[0] * 0.8, base[1] * 0.85, base[2] * 0.7, 1)
+    els[1].position = 1.0; els[1].color = (base[0] * 1.9 + 0.1, base[1] * 1.3 + 0.04, base[2] * 0.8, 1)
+    e = els.new(0.55); e.color = (base[0] * 1.2, base[1] * 1.15, base[2] * 1.1, 1)
+    bw = nt.nodes.new("ShaderNodeRGBToBW"); L(vor.outputs["Color"], bw.inputs[0]); L(bw.outputs[0], ramp.inputs["Fac"])
+    nz = nt.nodes.new("ShaderNodeTexNoise"); nz.inputs["Scale"].default_value = 0.02; nz.inputs["Detail"].default_value = 6
+    L(geo.outputs["Position"], nz.inputs["Vector"])
+    dark = nt.nodes.new("ShaderNodeMapRange"); dark.inputs["From Min"].default_value = 0.58; dark.inputs["From Max"].default_value = 0.66
+    L(nz.outputs["Fac"], dark.inputs["Value"])
+    mix = nt.nodes.new("ShaderNodeMix"); mix.data_type = "RGBA"
+    L(dark.outputs["Result"], mix.inputs["Factor"]); L(ramp.outputs["Color"], mix.inputs["A"])
+    mix.inputs["B"].default_value = (0.05, 0.13, 0.04, 1)
+    L(mix.outputs["Result"], bsdf.inputs["Base Color"])
+    bsdf.inputs["Roughness"].default_value = 0.95
+    bump = nt.nodes.new("ShaderNodeBump"); bump.inputs["Strength"].default_value = 0.4; bump.inputs["Distance"].default_value = 2.0
+    L(nz.outputs["Fac"], bump.inputs["Height"]); L(bump.outputs["Normal"], bsdf.inputs["Normal"])
+    L(bsdf.outputs[0], out.inputs["Surface"])
+    _mats[key] = m
+    return m
+
+
+def valley(seed, z0, x0=-5000, x1=5000, y0=300, y1=4000, amp=45, layer="far", nx=240, ny=160, name="valley"):
+    """Rolling sunlit country: low hills (ridged and smooth noise) with fields and groves."""
+    from mathutils import noise as mn
+    xs = np.linspace(x0, x1, nx + 1, dtype=np.float32)
+    # Rows denser near the viewer.
+    ys = (y0 + (y1 - y0) * np.linspace(0, 1, ny + 1) ** 1.6).astype(np.float32)
+    X, Y = np.meshgrid(xs, ys)
+    Z = np.empty(X.shape, np.float32)
+    for idx in np.ndindex(X.shape):
+        x, y_ = float(X[idx]), float(Y[idx])
+        Z[idx] = z0 + amp * (mn.noise(Vector((x * 0.0016, y_ * 0.0016, seed))) + 0.4 * mn.noise(Vector((x * 0.005, y_ * 0.005, seed + 3))))
+    verts = np.stack([X, Y, Z], -1).reshape(-1, 3)
+    I, J = np.meshgrid(np.arange(nx), np.arange(ny))
+    a = (J * (nx + 1) + I).ravel()
+    tris = np.concatenate([np.stack([a, a + 1, a + nx + 2], -1), np.stack([a, a + nx + 2, a + nx + 1], -1)])
+    big_mesh(name, verts, tris, layer, mat_fields("fields%d" % seed), smooth=True)
+
+    def h(x, y_):
+        return z0 + amp * (mn.noise(Vector((x * 0.0016, y_ * 0.0016, seed))) + 0.4 * mn.noise(Vector((x * 0.005, y_ * 0.005, seed + 3))))
+    return h
+
+
+def grove(fn, x0, x1, y0, y1, count, layer, seed, size=(10, 22), blossom=0.2, name="grove", clump=0.6, avoid=(), min_z=None):
+    """Distant trees: each a trunk and a crown of 4-7 lumpy lobes (vertex colours: sunlit
+    tops, shaded undersides); clumped into woods. One mesh: hundreds of trees cheaply."""
+    rng = np.random.default_rng(seed)
+    # A low-poly lumpy sphere template.
+    import bmesh
+    bm = bmesh.new(); bmesh.ops.create_icosphere(bm, subdivisions=2, radius=1.0)
+    sv = np.array([v.co[:] for v in bm.verts], np.float32)
+    st = np.array([[v.index for v in f.verts] for f in bm.faces], np.int32)
+    bm.free()
+    centres = rng.uniform((x0, y0), (x1, y1), (max(1, int(count * (1 - clump) / 6) + 3), 2))
+    V, T, C = [], [], []
+    base_n = 0
+    for k in range(count):
+        if rng.random() < clump:
+            c = centres[rng.integers(len(centres))]
+            x, y = c[0] + rng.normal(0, (x1 - x0) * 0.03), c[1] + rng.normal(0, (y1 - y0) * 0.03)
+        else:
+            x, y = rng.uniform(x0, x1), rng.uniform(y0, y1)
+        z = fn(x, y)
+        s = rng.uniform(*size)
+        bl = rng.random() < blossom
+        if any(math.hypot(x - ax, y - ay) < ar for ax, ay, ar in avoid) or (min_z is not None and z < min_z):
+            continue
+        top = np.array((1.0, 0.78, 0.86) if bl else (0.26 + rng.uniform(-0.05, 0.08), 0.45 + rng.uniform(-0.06, 0.06), 0.12), np.float32)
+        # Trunk: a thin box.
+        tw = s * 0.06
+        tv = np.array([[-tw, -tw, 0], [tw, -tw, 0], [tw, tw, 0], [-tw, tw, 0], [-tw, -tw, s * 0.55], [tw, -tw, s * 0.55], [tw, tw, s * 0.55], [-tw, tw, s * 0.55]], np.float32)
+        tt = np.array([[0, 1, 5], [0, 5, 4], [1, 2, 6], [1, 6, 5], [2, 3, 7], [2, 7, 6], [3, 0, 4], [3, 4, 7]], np.int32)
+        V.append(tv + (x, y, z)); T.append(tt + base_n); C.append(np.tile((0.22, 0.15, 0.09), (8, 1))); base_n += 8
+        for lobe in range(rng.integers(4, 8)):
+            r = s * rng.uniform(0.22, 0.36)
+            off = np.array((rng.normal(0, s * 0.16), rng.normal(0, s * 0.16), s * (0.55 + rng.uniform(0, 0.35))), np.float32)
+            v = sv * r * (1 + 0.18 * rng.standard_normal(sv.shape).astype(np.float32))
+            v[:, 2] *= 0.85
+            shade = np.clip(0.55 + 0.45 * sv[:, 2:3], 0.3, 1.0)
+            V.append(v + off + (x, y, z)); T.append(st + base_n); C.append(top * shade); base_n += len(sv)
+    return big_mesh(name, np.concatenate(V), np.concatenate(T), layer, mat_vegetation(name + "mat", translucency=0.2), colours=np.concatenate(C))
+
+
+# ------------------------------------------------------------------ interiors (v3)
+STAINED = ((1.0, 0.78, 0.3), (0.95, 0.42, 0.5), (0.35, 0.55, 1.0), (1.0, 0.92, 0.7), (0.55, 0.85, 0.7), (0.8, 0.5, 0.95), (1.0, 0.6, 0.25))
+
+
+def mat_stained(tint=(1.0, 0.85, 0.55), strength=1.6, name="stained3", scale=0.42, tint_mix=0.45):
+    """Stained glass: leaded cells of jewel colours (gold, rose, sapphire, cream, mint,
+    violet, amber) mixed towards the window's tint, dark lead lines between the cells,
+    glowing (the daylight behind it)."""
+    key = ("stained", name, tint, strength)
+    if key in _mats:
+        return _mats[key]
+    m = bpy.data.materials.new(name)
+    nt, out = B._nodes(m)
+    L = nt.links.new
+    geo = nt.nodes.new("ShaderNodeNewGeometry")
+    vor = nt.nodes.new("ShaderNodeTexVoronoi"); vor.inputs["Scale"].default_value = scale
+    L(geo.outputs["Position"], vor.inputs["Vector"])
+    edge = nt.nodes.new("ShaderNodeTexVoronoi"); edge.feature = "DISTANCE_TO_EDGE"; edge.inputs["Scale"].default_value = scale
+    L(geo.outputs["Position"], edge.inputs["Vector"])
+    bw = nt.nodes.new("ShaderNodeSeparateColor"); L(vor.outputs["Color"], bw.inputs[0])
+    ramp = nt.nodes.new("ShaderNodeValToRGB"); ramp.color_ramp.interpolation = "CONSTANT"
+    els = ramp.color_ramp.elements
+    els[0].position = 0.0; els[0].color = (*STAINED[0], 1)
+    els[1].position = 0.9; els[1].color = (*STAINED[-1], 1)
+    for k, c in enumerate(STAINED[1:-1]):
+        e = els.new((k + 1) / len(STAINED)); e.color = (*c, 1)
+    L(bw.outputs[0], ramp.inputs["Fac"])
+    mix = nt.nodes.new("ShaderNodeMix"); mix.data_type = "RGBA"; mix.inputs["Factor"].default_value = tint_mix
+    L(ramp.outputs["Color"], mix.inputs["A"]); mix.inputs["B"].default_value = (*tint, 1)
+    lead = nt.nodes.new("ShaderNodeMapRange"); lead.inputs["From Min"].default_value = 0.02; lead.inputs["From Max"].default_value = 0.07
+    L(edge.outputs["Distance"], lead.inputs["Value"])
+    # Brighter in the middle of each cell (the glass's own sheen).
+    sheen = nt.nodes.new("ShaderNodeMapRange"); sheen.inputs["From Min"].default_value = 0.0; sheen.inputs["From Max"].default_value = 0.6
+    sheen.inputs["To Min"].default_value = 0.75; sheen.inputs["To Max"].default_value = 1.15
+    L(edge.outputs["Distance"], sheen.inputs["Value"])
+    st = nt.nodes.new("ShaderNodeMath"); st.operation = "MULTIPLY"
+    L(lead.outputs["Result"], st.inputs[0]); L(sheen.outputs["Result"], st.inputs[1])
+    st2 = nt.nodes.new("ShaderNodeMath"); st2.operation = "MULTIPLY"; st2.inputs[1].default_value = strength
+    L(st.outputs[0], st2.inputs[0])
+    em = nt.nodes.new("ShaderNodeEmission")
+    L(mix.outputs["Result"], em.inputs["Color"]); L(st2.outputs[0], em.inputs["Strength"])
+    L(em.outputs[0], out.inputs["Surface"])
+    _mats[key] = m
+    return m
+
+
+def mat_ashlar(name="ashlar3", colour=(0.88, 0.83, 0.74), block=(3.2, 1.6), rough=0.6):
+    """Cut-stone walls: courses of blocks (each a slightly different tone), fine mortar
+    joints, worn faces (noise bump), faint warm staining."""
+    key = ("ashlar", name, colour, block)
+    if key in _mats:
+        return _mats[key]
+    m, nt, out, bsdf = _principled(name)
+    L = nt.links.new
+    geo = nt.nodes.new("ShaderNodeNewGeometry")
+    # Walls face x or y: brick coordinates from (y + x, z) so both read as courses.
+    sep = nt.nodes.new("ShaderNodeSeparateXYZ"); L(geo.outputs["Position"], sep.inputs[0])
+    add = nt.nodes.new("ShaderNodeMath"); add.operation = "ADD"; L(sep.outputs["X"], add.inputs[0]); L(sep.outputs["Y"], add.inputs[1])
+    comb = nt.nodes.new("ShaderNodeCombineXYZ"); L(add.outputs[0], comb.inputs["X"]); L(sep.outputs["Z"], comb.inputs["Y"])
+    br = nt.nodes.new("ShaderNodeTexBrick")
+    br.inputs["Scale"].default_value = 1.0
+    br.inputs["Brick Width"].default_value = block[0]; br.inputs["Row Height"].default_value = block[1]
+    br.inputs["Mortar Size"].default_value = 0.05; br.inputs["Mortar Smooth"].default_value = 0.4
+    br.offset = 0.5
+    c = colour
+    br.inputs["Color1"].default_value = (c[0], c[1], c[2], 1)
+    br.inputs["Color2"].default_value = (c[0] * 0.88, c[1] * 0.86, c[2] * 0.84, 1)
+    br.inputs["Mortar"].default_value = (c[0] * 0.62, c[1] * 0.6, c[2] * 0.58, 1)
+    L(comb.outputs[0], br.inputs["Vector"])
+    nz = nt.nodes.new("ShaderNodeTexNoise"); nz.inputs["Scale"].default_value = 0.6; nz.inputs["Detail"].default_value = 8
+    L(geo.outputs["Position"], nz.inputs["Vector"])
+    stain = nt.nodes.new("ShaderNodeMix"); stain.data_type = "RGBA"; stain.blend_type = "MULTIPLY"
+    fac = nt.nodes.new("ShaderNodeMapRange"); fac.inputs["From Min"].default_value = 0.45; fac.inputs["From Max"].default_value = 0.75
+    fac.inputs["To Max"].default_value = 0.35
+    L(nz.outputs["Fac"], fac.inputs["Value"]); L(fac.outputs["Result"], stain.inputs["Factor"])
+    L(br.outputs["Color"], stain.inputs["A"]); stain.inputs["B"].default_value = (0.8, 0.7, 0.55, 1)
+    L(stain.outputs["Result"], bsdf.inputs["Base Color"])
+    bsdf.inputs["Roughness"].default_value = rough
+    h = nt.nodes.new("ShaderNodeMath"); h.operation = "MULTIPLY_ADD"
+    L(br.outputs["Fac"], h.inputs[0]); h.inputs[1].default_value = -0.6
+    L(nz.outputs["Fac"], h.inputs[2])
+    bump = nt.nodes.new("ShaderNodeBump"); bump.inputs["Strength"].default_value = 0.45; bump.inputs["Distance"].default_value = 0.15
+    L(h.outputs[0], bump.inputs["Height"]); L(bump.outputs["Normal"], bsdf.inputs["Normal"])
+    L(bsdf.outputs[0], out.inputs["Surface"])
+    _mats[key] = m
+    return m
+
+
+def peak(cx, cy, z0, radius, height, layer, seed, snow_line=0.62, name="peak", n=220):
+    """A single sharp mountain: a ridged-noise cone (arêtes, gullies, a pointed summit),
+    snow above the snow line on the gentler faces."""
+    xs = np.linspace(-radius, radius, n + 1, dtype=np.float32)
+    X, Y = np.meshgrid(xs, xs)
+    r = np.sqrt(X ** 2 + Y ** 2) / radius
+    rid = _ridged(X / radius * 2.2, Y / radius * 2.2, seed)
+    rid = np.clip(rid / 1.6, 0, None)
+    cone = np.clip(1 - r, 0, 1) ** 1.25
+    Z = z0 + height * cone * (0.75 + 0.45 * rid) - height * 1.5 * np.clip(r - 1, 0, None)
+    verts = np.stack([X + cx, Y + cy, Z], -1).reshape(-1, 3)
+    I, J = np.meshgrid(np.arange(n), np.arange(n))
+    a = (J * (n + 1) + I).ravel()
+    tris = np.concatenate([np.stack([a, a + 1, a + n + 2], -1), np.stack([a, a + n + 2, a + n + 1], -1)])
+    return big_mesh(name, verts, tris, layer, mat_range("peak%d" % seed, snow_line=snow_line, top=height * 1.15, base_z=z0), smooth=True)
+
+
+def mat_cap(cap, name=None):
+    """A mushroom cap: a deeper tone at the crown fading to a pale rim, mottled, with a
+    soft waxy sheen and fine bumps."""
+    name = name or "cap3_%.2f_%.2f" % (cap[0], cap[2])
+    key = ("cap", name)
+    if key in _mats:
+        return _mats[key]
+    m, nt, out, bsdf = _principled(name)
+    L = nt.links.new
+    tc = nt.nodes.new("ShaderNodeTexCoord")
+    sep = nt.nodes.new("ShaderNodeSeparateXYZ"); L(tc.outputs["Generated"], sep.inputs[0])
+    ramp = nt.nodes.new("ShaderNodeValToRGB"); els = ramp.color_ramp.elements
+    els[0].position = 0.2; els[0].color = (min(1, cap[0] * 1.15 + 0.12), min(1, cap[1] * 1.15 + 0.12), min(1, cap[2] * 1.15 + 0.12), 1)
+    els[1].position = 0.95; els[1].color = (cap[0] * 0.7, cap[1] * 0.62, cap[2] * 0.7, 1)
+    L(sep.outputs["Z"], ramp.inputs["Fac"])
+    nz = nt.nodes.new("ShaderNodeTexNoise"); nz.inputs["Scale"].default_value = 6.0; nz.inputs["Detail"].default_value = 8
+    L(tc.outputs["Generated"], nz.inputs["Vector"])
+    mott = nt.nodes.new("ShaderNodeMix"); mott.data_type = "RGBA"; mott.blend_type = "OVERLAY"; mott.inputs["Factor"].default_value = 0.35
+    L(ramp.outputs["Color"], mott.inputs["A"]); L(nz.outputs["Color"], mott.inputs["B"])
+    L(mott.outputs["Result"], bsdf.inputs["Base Color"])
+    bsdf.inputs["Roughness"].default_value = 0.35
+    bsdf.inputs["Subsurface Weight"].default_value = 0.15
+    bsdf.inputs["Subsurface Radius"].default_value = (0.5, 0.25, 0.2)
+    bsdf.inputs["Coat Weight"].default_value = 0.3
+    bump = nt.nodes.new("ShaderNodeBump"); bump.inputs["Strength"].default_value = 0.25
+    L(nz.outputs["Fac"], bump.inputs["Height"]); L(bump.outputs["Normal"], bsdf.inputs["Normal"])
+    L(bsdf.outputs[0], out.inputs["Surface"])
+    _mats[key] = m
+    return m
