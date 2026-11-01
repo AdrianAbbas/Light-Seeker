@@ -57,3 +57,59 @@ Check especially (report-only in the tests, see DEVLOG): the long-tailed places 
 voice or piano (Nave of Light, Spire Summit, Summit of Winds, Eyrie, Mirror Lake) stay
 usable in a mix; Firefly Hollow, Stained Glass Chapel and Starlit Canopy are not too
 fizzy on a voice; Diamond Vault and Starlit Canopy are obvious enough.
+
+## M3: visuals (look at)
+
+1. **The map on opening:** a bright painterly world from above at an angle (meadows, a
+   river, the sea in the south-west, snowy peaks, cloud banks), ten luminous landmarks with
+   small serif names; the current one in gold with a diamond. Hover: a ring and the name.
+2. **A click on a landmark:** a golden path, then the zoom into the place with parallax (the
+   layers move at different speeds); "‹ Map" zooms back out.
+3. **Every place** (31): its own painting, rings for the location's places and the list top
+   right; a click on a ring crossfades to that place.
+4. **Life, gently:** light motes drifting up from glowing spots, glints twinkling on gold,
+   crystal and water, white mist drifting low, the sun's glow breathing; now and then a few
+   doves cross the sky (exterior scenes and the map). Nothing flickers; the MacBook Air stays
+   cool (Activity Monitor: GarageBand's CPU barely changes with the window open). ⚙ → Eco
+   stops all animation.
+5. **The controls:** pearl and ivory panel, dark sepia text, gold value tracks and caps'
+   centre lines, readable values under every fader; menus and tooltips pearl.
+
+## M4: Atmosphere (listen for)
+
+Off by default. Raise **Atmosphere** to 50–100 % (and Journey panel → Density): sparse,
+quiet, synthesised sounds of the place: soft wind (Spire Summit, the isles, Dragon's Peak),
+distant bells (the Citadel, the Sky Temple, the Cathedral), birdsong-like chirps (the
+meadow, the gardens), fountain shimmer (the Moonwell, the Fountain Court), chimes and harp
+glints (the Crystal Palace, the Fairy Glade), leaves and a brook. Never busy, never a riser;
+they step back when you play loud; the same seed gives the same sounds at the same bars.
+
+## M5: presets and polish
+
+1. **Presets:** the preset name ▾ → Favourite spots / Journeys: 27 factory presets. ◀ ▶ step
+   through them. Each sounds as named; "Init / No preset" returns everything to default.
+2. **A click always wins:** load "Grand Citadel Tour" (a journey: the badge says "Journey
+   active"), press play, then click "‹ Map" and another landmark: you go there at once, the
+   note says "Journey stopped", the name shows a star ("Grand Citadel Tour *"). Load
+   "Meadow Wander" (roaming) and click each Blossom Meadow place in the list: each one stays.
+   The badge's **Stop** ends a journey where it is.
+3. **Every panel closes four ways:** the Journey panel and the Advanced drawer close with ✕,
+   a second click on their button, Esc (when the window has focus) and a click outside them;
+   while open they never cover their own button, Journey, Advanced or ▾.
+4. **Workflow:** A/B and A→B, undo/redo of your edits, Save as your preset… (appears under
+   Your presets), window size 75–200 % (⚙ or the corner), Eco/Standard/High.
+5. **State:** save the GarageBand project, close and reopen it: the place, every control,
+   the route and the window size come back; duplicate the track: the copy is identical.
+
+## Release check (15 minutes)
+
+- [ ] Install from a fresh browser download with `install-mac.sh`; DUNGEON CRAWLER (if
+      installed) still loads.
+- [ ] GarageBand: insert on a guitar, a synth, a piano and a voice track; play each through
+      a few places of every location: obvious, beautiful, no loudness jumps, no clicks when
+      travelling, tails ring on.
+- [ ] Intensity 50 %: still clearly audible; 0 %, Mix 0 % and Bypass: the dry sound.
+- [ ] The map, every location's scene, the zooms; the life is gentle; Eco stops it.
+- [ ] Atmosphere at 60 %: sparse and quiet.
+- [ ] A journey preset with the transport playing, a click on another place, Stop.
+- [ ] Save, reopen, duplicate.

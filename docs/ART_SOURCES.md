@@ -6,7 +6,7 @@ and light only; they are not copied or committed.
 
 | Art | Source |
 |---|---|
-| Painted map and scenes | scripted Blender scenes (`tools/painted`), rendered as depth layers and painted by a post-process (Milestone 3) |
+| Painted map and scenes | scripted Blender scenes (`tools/painted/scenes.py`: 32 scenes, original geometry, daylight), rendered with Cycles as depth layers and painted by a post-process (`tools/painted/paint.py`); shipped in every bundle (`Contents/Resources/Painted`) |
 | Fallback scenes | drawn in code (`Source/UI/Scenes.cpp`): a luminous wash per place, shown when a scene's painted files are missing |
 | Icon | `tools/icon/make_icon.py` |
 | Fonts | Cinzel, Cormorant Garamond (SIL Open Font License, `assets/fonts`) |

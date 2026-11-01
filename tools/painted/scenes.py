@@ -316,7 +316,9 @@ def world_map():
         anchors.append({"kind": "landmark", "index": i, "world": (x, y, z + 80)})
     for k, (x, y, z) in enumerate([(-300, 1900, 260), (500, 2000, 300), (-1000, 1200, 220), (1100, 900, 200)]):
         cloud_bank((x, y, z), 160, 100 + k, "far", count=8)
-    anchors += [lightpt((0, 1100, 260), 30, "glint"), lightpt((300, 500, 120), 20, "glint"), lightpt((700, 650, 90), 18, "glint")]
+    anchors += [lightpt((0, 1100, 260), 30, "glint"), lightpt((300, 500, 120), 20, "glint"), lightpt((700, 650, 90), 18, "glint"),
+                # Glowing landmarks: light motes rise from them.
+                lightpt((0, 1100, 200), 24, "fire"), lightpt((300, 500, 90), 18, "fire"), lightpt((-760, 300, 50), 16, "fire")]
     return meta(sun, anchors, horizon=120, clouds=0.6, rays=0.5, haze=0.5)
 
 
@@ -346,9 +348,16 @@ def citadel_hall(seed, sun, hall_colour=1.0, mirrors=False, throne=False):
         B.box((0, 10 + k * 34, 79), (88, 3, 3), "mid", gold(), name="rib")
     B.arch_shape((0, 288.9, 10), 30, 60, "far", B.mat_emission((1.0, 0.92, 0.75), 3.0, "greatwin"))
     if throne:
-        B.steps((0, 250, 0), 30, 6, 1.2, 3, "mid", pearl())
-        B.box((0, 262, 7.2), (8, 6, 16), "mid", gold(0.2), name="throne")
-        B.box((0, 265, 18), (10, 1.5, 22), "mid", gold(0.2), name="throneback")
+        B.steps((0, 200, 0), 50, 8, 1.4, 4, "mid", pearl())
+        B.box((0, 234, 14), (16, 10, 6), "mid", gold(0.2), name="throne")
+        B.box((0, 240, 30), (20, 2.5, 36), "mid", gold(0.2), name="throneback")
+        B.cone((0, 240, 48), 6, 14, "mid", gold(0.2), name="crown")
+        drape = B.mat_stone("drape", (0.95, 0.72, 0.62), rough=0.8, bump=0.2, haze=0.15, haze_colour=(1.0, 0.8, 0.7))
+        for side in (-1, 1):
+            B.box((side * 22, 244, 40), (12, 2, 80), "mid", drape, name="drape")
+        cam = bpy.context.scene.camera
+        cam.location = Vector((0, 60, 8))
+        cam.rotation_euler = (Vector((0, 240, 30)) - cam.location).to_track_quat("-Z", "Y").to_euler()
     return m
 
 
@@ -380,6 +389,10 @@ def citadel_gates():
 def citadel_mirrors():
     sun = (480, 220)
     citadel_hall(2, sun, mirrors=True)
+    # An angled view: across the hall onto the wall of mirrors (unlike the throne's nave).
+    cam = bpy.context.scene.camera
+    cam.location = Vector((22, -10, 16))
+    cam.rotation_euler = (Vector((-40, 150, 26)) - cam.location).to_track_quat("-Z", "Y").to_euler()
     return meta(sun, [hotspot(0, (0, 20, 10)), hotspot(1, (0, 150, 30)), hotspot(2, (0, 280, 25)), hotspot(3, (0, 288, 60)),
                       lightpt((-42, 90, 36), 16, "glint"), lightpt((42, 150, 36), 16, "glint"), lightpt((-42, 210, 36), 14, "glint")],
                 horizon=300, clouds=0.0, rays=0.9, haze=0.35)
@@ -389,8 +402,8 @@ def citadel_mirrors():
 def citadel_throne():
     sun = (480, 180)
     citadel_hall(3, sun, throne=True)
-    return meta(sun, [hotspot(0, (0, 30, 10)), hotspot(1, (-30, 150, 40)), hotspot(2, (0, 262, 20)), hotspot(3, (0, 288, 66)),
-                      lightpt((0, 262, 18), 22, "fire"), lightpt((0, 265, 30), 16, "glint")],
+    return meta(sun, [hotspot(0, (-30, 120, 10)), hotspot(1, (-30, 180, 40)), hotspot(2, (0, 234, 20)), hotspot(3, (26, 200, 50)),
+                      lightpt((0, 234, 22), 22, "fire"), lightpt((0, 240, 50), 16, "glint")],
                 horizon=300, clouds=0.0, rays=1.0, haze=0.35)
 
 
@@ -488,12 +501,20 @@ def temple_steps():
 
 @scene("sky-temple/sanctum")
 def temple_sanctum():
-    sun = (480, 160)
-    interior(12, sun, wall=pearl(), window=(0.95, 0.9, 1.0), end_window=(1.0, 0.95, 0.85))
-    B.lathe((0, 230, 0), [(10, 0), (9, 6), (4, 7), (4, 14), (0, 15)], "mid", marble(), sides=24, name="altar")
-    for k in range(5):
-        B.cylinder((-12 + k * 6, 222, 15), 0.6, 3, "mid", pearl(), sides=8, name="candle")
-    return place_meta(sun, 3, HALL3, [lightpt((0, 230, 20), 24, "candle"), lightpt((-12, 222, 19), 8, "candle"), lightpt((12, 222, 19), 8, "candle")],
+    """A round, domed sanctum: a ring of columns, an oculus of sky, an altar of light."""
+    sun = (480, 60)
+    B.camera((0, -70, 16), (0, 40, 30), lens=22)
+    daylight(sun, strength=2.6, fill=1.4, ambient=1.3)
+    B.cylinder((0, 40, -1), 80, 1, "near", pearl(1.05), sides=64, name="floor")
+    for k in range(14):
+        a = k / 14 * 2 * math.pi
+        column((60 * math.cos(a), 40 + 60 * math.sin(a), 0), 2.8, 46, "mid", marble(), capital=gold())
+    B.lathe((0, 40, 52), [(72, 0), (70, 14), (58, 32), (36, 46), (12, 52), (12, 54)], "far", pearl(1.0), sides=64, name="dome")
+    B.cylinder((0, 40, 0), 72, 52, "far", pearl(0.96), sides=64, name="drum")
+    B.light("AREA", (0, 40, 100), (1.0, 0.95, 0.85), 1.2e5, size=24, look_at=(0, 40, 0), name="oculus")
+    B.lathe((0, 40, 0), [(10, 0), (9, 6), (4, 7), (4, 14), (0, 15)], "mid", marble(), sides=24, name="altar")
+    B.cylinder((0, 40, 15), 3, 0.5, "mid", B.mat_emission((1.0, 0.92, 0.7), 6.0, "altarlight"), sides=24, name="flame")
+    return place_meta(sun, 3, [(0, -20, 10), (0, 40, 20), (40, 60, 30)], [lightpt((0, 40, 18), 24, "fire"), lightpt((0, 40, 104), 20, "glint")],
                       horizon=300, clouds=0.0, rays=1.0, haze=0.35)
 
 
