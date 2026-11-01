@@ -1174,12 +1174,13 @@ void auAudioUnitInstrumentSuite(Report& r, AudioComponentDescription description
     if (!r.check([engine startAndReturnError: &e], "AVAudioEngine starts with the instrument connected", toString(e.description))) return;
     pump(0.3);
     AUScheduleMIDIEventBlock midiBlock = unit.scheduleMIDIEventBlock;
+    AVAudioUnit* const node = avUnit;   // a __block variable cannot be captured by a lambda
     r.check(midiBlock != nil, "the instrument takes MIDI (scheduleMIDIEventBlock)");
     const auto send = [&](UInt8 status, UInt8 d1, UInt8 d2) {
         const UInt8 bytes[3] { status, d1, d2 };
         if (midiBlock != nil) midiBlock(AUEventSampleTimeImmediate, 0, 3, bytes);
-        else if ([avUnit isKindOfClass: [AVAudioUnitMIDIInstrument class]]) {
-            auto* instrument = (AVAudioUnitMIDIInstrument*) avUnit;
+        else if ([node isKindOfClass: [AVAudioUnitMIDIInstrument class]]) {
+            auto* instrument = (AVAudioUnitMIDIInstrument*) node;
             if ((status & 0xf0) == 0x90) [instrument startNote: d1 withVelocity: d2 onChannel: 0];
             else [instrument stopNote: d1 onChannel: 0];
         }
