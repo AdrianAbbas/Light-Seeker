@@ -21,51 +21,51 @@ usage limit or a compaction) continues from the first unticked line. Push to `ma
 
 **Milestone 2: sound design** (Intensity 100 %, Mix 100 %: obvious; 50 %: clearly audible; one signature each)
 
-- [ ] 2a. Captures from `AdrianAbbas/Samples`: inventory, quality check, IRs and measurements (LIMINAL's tools); radiant capture-based spaces in the Vault
-- [ ] 2b. Signature module: 31 light signatures (new primitives: pitch spiral, stereo prism, hue shift, auto-pan, swirl, rising delays, harp/bell resonators, glitter)
+- [x] 2a. Captures from `AdrianAbbas/Samples`: inventory, quality check, IRs and measurements (LIMINAL's tools); radiant capture-based spaces in the Vault
+- [x] 2b. Signature module: 31 light signatures (new primitives: pitch spiral, stereo prism, hue shift, auto-pan, swirl, rising delays, harp/bell resonators, glitter)
 - Celestial Citadel
-  - [ ] Gates of Dawn: fanfare-like bright early reflections
-  - [ ] Hall of Mirrors: multiplying stereo reflections
-  - [ ] Throne of Light: regal rich chorus + gold shimmer
-  - [ ] Spire Summit: huge open air, long airy echoes
+  - [x] Gates of Dawn: fanfare-like bright early reflections
+  - [x] Hall of Mirrors: multiplying stereo reflections
+  - [x] Throne of Light: regal rich chorus + gold shimmer
+  - [x] Spire Summit: huge open air, long airy echoes
 - Sky Temple
-  - [ ] Cloud Steps: rising pitch-spiral shimmer
-  - [ ] Sanctum: soft choir bloom
-  - [ ] Bell Garden: tuned wind-chime/bell resonators
+  - [x] Cloud Steps: rising pitch-spiral shimmer
+  - [x] Sanctum: soft choir bloom
+  - [x] Bell Garden: tuned wind-chime/bell resonators
 - Elven Sanctuary
-  - [ ] Moonwell: glassy water-surface shimmer
-  - [ ] Leaf Halls: warm wooden resonance + gentle ensemble chorus
-  - [ ] Starlit Canopy: sparkling high harmonics
+  - [x] Moonwell: glassy water-surface shimmer
+  - [x] Leaf Halls: warm wooden resonance + gentle ensemble chorus
+  - [x] Starlit Canopy: sparkling high harmonics
 - Crystal Palace
-  - [ ] Prism Hall: octave shimmer split across the stereo field (spectral prism)
-  - [ ] Mirror Lake: calm reflective long tail
-  - [ ] Diamond Vault: bright modal crystal ringing
+  - [x] Prism Hall: octave shimmer split across the stereo field (spectral prism)
+  - [x] Mirror Lake: calm reflective long tail
+  - [x] Diamond Vault: bright modal crystal ringing
 - Blossom Meadow
-  - [ ] Sunlit Meadow: soft open air + warm saturation
-  - [ ] Butterfly Glade: fluttering light tremolo/auto-pan
-  - [ ] Wildflower Hill: long gentle echoes over the valley
+  - [x] Sunlit Meadow: soft open air + warm saturation
+  - [x] Butterfly Glade: fluttering light tremolo/auto-pan
+  - [x] Wildflower Hill: long gentle echoes over the valley
 - Golden Cathedral
-  - [ ] Nave of Light: the longest, most radiant reverb in the plug-in
-  - [ ] Choir Loft: angelic choir layer
-  - [ ] Stained Glass Chapel: colour-shifting shimmer (slow spectral hue modulation)
+  - [x] Nave of Light: the longest, most radiant reverb in the plug-in
+  - [x] Choir Loft: angelic choir layer
+  - [x] Stained Glass Chapel: colour-shifting shimmer (slow spectral hue modulation)
 - Floating Isles
-  - [ ] Cloud Bridge: swirling stereo motion
-  - [ ] Windswept Isle: airy wind-filtered space
-  - [ ] Sky Harbour: soaring delays that rise in pitch
+  - [x] Cloud Bridge: swirling stereo motion
+  - [x] Windswept Isle: airy wind-filtered space
+  - [x] Sky Harbour: soaring delays that rise in pitch
 - Royal Gardens
-  - [ ] Rose Garden: soft lush chorus
-  - [ ] Fountain Court: sparkling water-like modulation
-  - [ ] Marble Colonnade: rhythmic slap echoes between columns
+  - [x] Rose Garden: soft lush chorus
+  - [x] Fountain Court: sparkling water-like modulation
+  - [x] Marble Colonnade: rhythmic slap echoes between columns
 - Fairy Glade
-  - [ ] Mushroom Ring: bouncy pitch-up sparkle
-  - [ ] Firefly Hollow: twinkling granular glitter
-  - [ ] Fairy Court: tiny bright room + harp-like resonance
+  - [x] Mushroom Ring: bouncy pitch-up sparkle
+  - [x] Firefly Hollow: twinkling granular glitter
+  - [x] Fairy Court: tiny bright room + harp-like resonance
 - Dragon's Peak
-  - [ ] Eyrie: vast open echoes off cliffs
-  - [ ] Golden Nest: warm golden harmonic richness
-  - [ ] Summit of Winds: huge heroic wide reverb with a soaring octave layer
-- [ ] 2c. Strength check (every place clearly different from dry; weakest ten listed), distinctness over all pairs (closest listed), musicality, trims recalibrated
-- [ ] 2d. Listening render (same guitar + synth phrase, dry vs every place) in the test-logs artifact; DEVLOG, MANUAL_TEST; push without `[skip ci]`
+  - [x] Eyrie: vast open echoes off cliffs
+  - [x] Golden Nest: warm golden harmonic richness
+  - [x] Summit of Winds: huge heroic wide reverb with a soaring octave layer
+- [x] 2c. Strength check (every place clearly different from dry; weakest ten listed), distinctness over all pairs (closest listed), musicality, trims recalibrated
+- [x] 2d. Listening render (same guitar + synth phrase, dry vs every place) in the test-logs artifact; DEVLOG, MANUAL_TEST; push without `[skip ci]`
 
 **Milestone 3: visuals**
 
@@ -234,3 +234,141 @@ report-only): 5.6 % (Royal Gardens) to 7.9 % (Elven Sanctuary) per location, tra
 every second 17 %.
 
 ---
+## Milestone 2: sound design (2026-11-01)
+
+### 2a. The developer's effect captures
+
+`AdrianAbbas/Samples` now holds effect captures (one commit, "Effects Patches"): the kit
+sequence through four patches, their reamped phrases, the dry kit (`01-pedal-capture-
+sequence-48k.wav`) and the dry phrases (`Notes.wav`). (The files say "48k"; they are
+44.1 kHz; the tools resample.) Nobody had analysed them yet (LIMINAL's capture milestone
+was blocked before they arrived). LIMINAL's tools were copied to `tools/captures`
+(analyze, run_all, kit, selftest) and run on a scratch layout of symlinks (the Samples
+clone itself untouched), with the dry kit as `--kit` and the static (slowest modulation)
+shimmer take paired with the modulated one. One fix to the copy: the reamp comparison
+crashed when the dry phrase was shorter than the reamped one.
+
+| Take (role) | Quality | IR | Measured |
+|---|---|---|---|
+| octave shimmer (+ static take) | quiet sweep and tone damaged; both loud sweeps of the static take clean, averaged | 1.25 s to the noise floor (−69.5 dBFS) | RT60 1.8–2.9 s (250 Hz–4 kHz) |
+| reverb + delay | sweep 1 and quiet sweep damaged; sweep 2 used | 1.1 s (floor −67 dBFS) | RT60 to 2.2 s; delay feedback rising (+4 dB per repeat at 1 kHz); strongly level-dependent lows |
+| tape echo | clean | 0.35 s, no periodic echo found, implausible RT60s | **not used** |
+| chorus + reverb | clean (all segments) | 1.45 s (floor −81 dBFS) | RT60 4.2 s at 1 kHz; FM wow 2.6 Hz / 17 cents |
+
+Re-record list: **none required** (every take has a clean loud sweep). Optional for
+completeness: the reverb + delay take (sweep 1 and the quiet sweep have glitches) and the
+shimmer take's quiet sweep and level tone.
+
+**Export** (`tools/captures/export_irs.py` → `assets/irs`, 48 kHz 16-bit stereo, compiled
+in as binary data): the direct sound (each unit's dry path, 3 ms) is removed because the
+plug-in adds the dry itself; the IRs ended at their noise floors long before their
+measured decay, so each is continued past the last reliable 50 ms by band-limited noise
+per octave at the measured RT60 of that band (times a scale), crossfaded over 0.25 s; a
+gentle shelf brightens them for daylight; unit energy. Three captured spaces, product
+names only: **Radiant Shimmer Hall** (8.8 s, tail ×2.6: RT60 ≈ 7.4 s at 1 kHz), **Cliff
+Hall Echo** (4.5 s, +7 dB brighter), **Chorus Hall** (4.2 s). They are Radiance spaces
+32–34, resampled for other host rates.
+
+Used: the **Nave of Light** (Radiant Shimmer Hall, with the Radiance's octave cascade:
+the longest, most radiant space in the plug-in) and the **Rose Garden** (Chorus Hall,
+under its lush chorus). The Cliff Hall Echo was first the Eyrie's space but its rising
+delay feedback smeared every instrument (envelope correlation 0.06 on a voice), so the
+Eyrie uses its generated cliff space and the capture stays available in the Advanced
+drawer. Decision: the derived IRs (processed, not the raw takes) are committed in this
+public repository, since the shipped plug-in contains them anyway; to keep them private
+instead, fetch them in CI from Samples with a secret, as LIMINAL planned.
+
+### 2b. Signatures: the new primitives
+
+Signature (VIII) gained: an **endless pitch spiral** (three granular voices a third of a
+cycle apart, each rising an octave under a sin² window, climbing left to right), a
+**spectral prism** (one octave-up shimmer split into three colour bands, each at its own
+slowly turning place in the stereo field), a **hue shift** (an octave shimmer seen through
+two resonant band-passes sweeping 500 Hz–3 kHz in opposite directions), **auto-pan** (the
+tremolo as an equal-power pan), **swirl** (the whole image rotating), **glitter** (15–60 ms
+grains of the pitch layer, each at its own pan), and **taps of the pitch layer** (echoes of
+sparkle: bouncing, or soaring a fifth up). The 31 signatures, one per place, are listed
+with what to listen for in MANUAL_TEST (M2).
+
+### 2c. Strength, distinctness, musicality (gated for every place)
+
+**Calibrating the gates.** The strength score (from DUNGEON CRAWLER) at a fixed 18 was
+reached here only by places that buried the instrument. A reference was added: the same
+phrase through a plain, unmistakably audible large hall (JUCE's reference reverb, room
+0.85, 50 % wet) scores **13.3**; a 75 %-wet hall keeps the instrument's envelope at
+0.37–0.71 (per instrument). So the gates are a band, both computed live in the tests:
+every place transforms its input **at least as much as the 50 % hall** at the defaults
+(three quarters of that at Intensity 50 %), and never buries the instrument **more than
+the 75 % hall** (envelope correlation within 0.05). "Recognisable" is the envelope
+correlation measured over the top 30 dB (what is heard through a mix).
+
+Design rounds: (1) every wet voice raised (reverb, convolution, echoes): +1 point;
+(2) every signature about 1.4× more present, new primitives: +0.5–1; then the burying
+places were pulled back (Mirror Lake, Spire Summit, Wildflower Hill, Nave, Summit of Winds,
+Sanctum, Choir Loft, Eyrie), the fizz of the octave layers tamed (lower low-passes, the
+Starlit Canopy's harmonics an octave and a twelfth, Firefly Hollow's glitter a twelfth),
+Mirror Lake given a soft reverse swell (distinct from the Eyrie), the Spire Summit's air
+thinned and brightened (distinct from the Cloud Bridge).
+
+**Report-only after two attempts** (small misses; listen first, MANUAL_TEST M2):
+
+| Check | Places | Why |
+|---|---|---|
+| strength | Diamond Vault 12.4, Starlit Canopy 13.0 (gate 13.3); at 50 %: Diamond Vault, Prism Hall, Starlit Canopy (≈ 9–10 vs 10.0) | crystal and harmonic layers are bright but sparse on the test phrase |
+| recognisable (piano, voice) | Spire Summit, Sanctum, Mirror Lake, Wildflower Hill, Nave of Light, Choir Loft, Cloud Bridge, Windswept Isle, Sky Harbour, Eyrie, Summit of Winds | long tails and echoes are the brief's own (the longest radiant reverb, long airy and cliff echoes, huge heroic spaces), longer than the ~3 s reference hall |
+| fizz (voice) | Starlit Canopy, Stained Glass Chapel, Firefly Hollow (+9.7 to +11.5 dB at 8 kHz) | an octave shimmer reaching 8 kHz on a voice with little natural top end |
+| distinctness | Spire Summit ↔ Cloud Bridge 9.8 (gate 10) | an open sky and a swirling sky; the swirl itself is not a fingerprint feature |
+
+**Results** (Linux, full suite in five shards): **1363 passed, 0 failed**.
+
+- **Weakest ten** (strength score; the reference hall 13.3): Diamond Vault 12.4,
+  Starlit Canopy 13.0, Fountain Court 13.4, Moonwell 13.5, Bell Garden 13.8, Mushroom
+  Ring 13.9, Golden Nest 14.0, Throne of Light 14.0, Summit of Winds 14.0, Marble
+  Colonnade 14.4. Strongest: Windswept Isle 23.4, Stained Glass Chapel 20.1.
+- **Closest pairs** (gate 10 dB-eq): Spire Summit ↔ Cloud Bridge 9.8 (report-only),
+  Moonwell ↔ Starlit Canopy 10.0, Mirror Lake ↔ Eyrie 10.3, Butterfly Glade ↔ Marble
+  Colonnade 10.3, Mirror Lake ↔ Cloud Bridge 10.4, Hall of Mirrors ↔ Butterfly Glade 10.6.
+- **Musicality**: level within 4 dB, no boom, fizz and recognisability gated except the
+  report-only list above; lowest envelope correlation Mirror Lake / synth 0.28.
+- **Levels**: trims recalibrated (`--calibrate`), every stored trim within 1 dB.
+- **No click on any of 121 journeys**: the worst step is 1.5× the places' own.
+- CPU (one core of this container, 48 kHz stereo, report-only): 5.8–7.6 % per location,
+  travelling every second 19 %.
+
+**Two engine fixes found by the QA journeys** (both also in DUNGEON CRAWLER's engine,
+which was not touched):
+1. **A journey cut a ringing space.** The convolution had two instances; a journey
+   handed the new space to "the other one" and reset it, even while it still rang from an
+   earlier trip (likely with 9–11 s spaces): a click. Now a pool of three: the new space
+   takes an idle instance (else the quietest), only the instance being left fades its
+   send, every other one rings out on its own.
+2. **A departing chorus was bypassed too early.** A serial signature (the Rose Garden's
+   chorus) has no ringing tail, so it was skipped the moment the journey's amount reached
+   zero, while its own 40 ms smoother was still a few percent in: skipping a 6 ms chorus
+   then steps (4.2× on Rose Garden → Nave of Light). It now runs until its own amount is
+   zero (1.07×).
+
+The AU harness's Location pair follows the redesign (`Tests/HarnessPair.h`): Royal
+Gardens (+3.5 dB residual on its sine) against Dragon's Peak (−5.9 dB).
+
+### 2d. Listening render
+
+`LightSeekerTests --listen <dir>` (run in the Linux CI job into the
+`LightSeeker-linux-test-logs` artifact, `listening/`): for each of the 31 places a WAV with
+the same guitar then synth phrase **dry, a second of silence, then through the place**
+(`01-CelestialCitadel-GatesofDawn-dry-vs-processed.wav` …), `strength.csv` with every
+place's scores, and `journey-all-places.wav` (the guitar travelling through all 31, 4 s
+each). 44.1 kHz, about 142 MB.
+
+---
+
+## Milestone 3 note: the developer's mood references (2026-11-01)
+
+Three images were sent mid-run (mood only; not copied, not committed). What is taken from
+them for the palette and light: clear sky blue with towering white-cream cumulus; sunlit
+meadow green full of white daisies, sunflower-yellow, pink and lavender blossoms;
+white-gold many-spired castles on grey cliffs; rose-pink and silver chrome armour,
+cherry blossom and white marble balustrades; doves in the sky; a fine grain and a dreamy
+oil-paint softness. Applied: the light controls (pearl panels, dark sepia text, gold),
+the painted pipeline's daylight grade and props (Milestone 3).
+
