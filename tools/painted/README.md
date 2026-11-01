@@ -6,17 +6,23 @@ layers at different speeds while zooming (parallax) and animates light motes, mi
 the sun's glow and passing doves on top. The pipeline is DUNGEON CRAWLER's, relit for daylight.
 
 ```
-scenes.py   one function per scene (the map and all 31 places): composition from blib and the
-            light builders (white-gold castles and spires, marble halls with gold, colonnades,
-            balustrades, fountains, crystals, flower meadows, round and blossom trees, floating
-            isles, cloud banks, mushrooms, bells, a golden dragon); daylight (a warm key from
-            behind the viewer, a blue sky fill, a pale world); anchors (hotspots, landmarks, lights)
+scenes.py   one function per scene (the map and all 31 places): composition, camera, daylight,
+            anchors (hotspots, landmarks, lights); v2 templates for meadows, skies, gothic
+            interiors, isles and peaks (later registrations replace the first sketches)
+detail.py   the detail builders, numpy-fast: grass (100-250 thousand blades), meadow flowers,
+            branching trees with thousands of leaves or petals, cliff mesas, mountain ranges,
+            sharp peaks, rolling valleys, distant groves, volumetric cumulus, floating isles,
+            crystals, mushrooms, butterflies, sparkles; and the realistic materials (cliff
+            stone, marble, gold, ashlar, stained glass, fields, polished floors, foliage)
+gothic.py   a recursive gothic generator: towers with buttresses, string courses, lancets,
+            pinnacles on pinnacles, crocketed spires with gold finials, halls with flying
+            buttresses, whole citadels (~25 towers)
 blib.py     the base builders and materials (from DUNGEON CRAWLER)
 render.py   renders one scene's layers with Cycles (CPU) to multi-layer EXR + anchors.json
-paint.py    denoise (OIDN), haze by layer (pale blue-cream air), bloom, a lifted filmic tone
-            curve, a high-key grade (cream highlights, lavender shadows, pastels kept),
-            generalised Kuwahara (oil paint), brush strokes, dabs, fine grain; paints the sky
-            (blue to cream, the sun, sunlit cumulus, god rays); writes the finished layers
+paint.py    denoise (OIDN), haze by layer (pale blue-cream air), bloom, a lifted daylight tone
+            curve, a high-key grade (cream highlights, lavender shadows), a light-handed
+            Kuwahara (oil paint), brush streaks, dabs, fine grain; the sky where none is
+            rendered; writes the finished layers
 build.py    all of the above for every scene (or a list), then writes Source/UI/PaintedManifest.inc
 ```
 
@@ -38,8 +44,9 @@ python3 tools/painted/render.py sky-temple/sanctum /tmp/r --scale 0.25 --samples
 python3 tools/painted/paint.py /tmp/r /tmp/a --preview /tmp/sanctum.jpg
 ```
 
-Full size (1920 x 1120, 24 samples, OIDN-denoised) takes about 3 minutes per scene on 4
-CPU cores (the 32 scenes about 1.5 hours). Renders go to `build-art/` (ignored
+Full size (1920 x 1120, 24 samples, OIDN-denoised) takes several minutes per scene on 4
+CPU cores (`--jobs 2`); the 32 scenes a few hours. Every scene is built from scratch each
+time (no saved .blend files): the scripts are the source. Renders go to `build-art/` (ignored
 by git); the finished layers to `assets/painted/<location>/<place>/` and are committed.
 
 ## The layers
@@ -63,10 +70,14 @@ fringes). The plug-in joins them back into premultiplied images.
   marble, soft gold, blush pink, lavender and mint pastels, sunlit greens, white and yellow
   meadow flowers; radiant gold is the accent. (The developer's mood references informed the
   palette and the light only; they are never copied or committed.)
-- Light: a warm sun from behind the viewer's left (the painted sun keeps its place in the
-  sky), lavender shadows that never go black, aerial perspective into a pale blue-cream air.
-- Painting: generalised Kuwahara, light brush streaks along the structure, soft dabs, a
-  fine grain: a romantic oil-painting softness.
+- Light: Blender's physical sky and a warm sun from behind the viewer's left, a soft rim
+  sun; lavender shadows that never go black; aerial perspective into a pale blue-cream air;
+  light shafts through haze in the interiors.
+- Detail first: real geometry for every blade, petal, leaf, pinnacle and window; realistic
+  materials (cracked, stained cliff stone with moss on the ledges; veined marble; coursed
+  ashlar; leaded stained glass). The developer rejected the first, primitive renders as
+  "too fake and cartoony" and approved this approach.
+- Painting: a light hand (the detail must survive): Kuwahara, streaks, dabs, a fine grain.
 
 ## Drop-in art
 
