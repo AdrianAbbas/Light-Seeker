@@ -778,9 +778,9 @@ def isle2(cx, cy, z, radius, depth, layer, seed, trees=3, blossom=0.4):
         q = min(1.0, math.hypot(x - cx, y - cy) / (radius * 0.98))
         return z + radius * 0.07 * (1 - q * q) - 1.2 * q ** 8
     # Grass and flowers in strips that fill the round top (not a square patch).
-    for k in range(10):
-        y0 = -1.0 + k * 0.2; y1 = y0 + 0.2
-        half = math.sqrt(max(0.0, 1 - min(y0 ** 2, y1 ** 2))) * 0.98
+    for k in range(12):
+        y0 = -1.2 + k * 0.2; y1 = y0 + 0.2
+        half = math.sqrt(max(0.0, 1.3 - min(y0 ** 2, y1 ** 2)))
         if half <= 0.05:
             continue
         grass(top, cx - radius * half, cx + radius * half, cy + radius * y0, cy + radius * y1, int(radius * radius * 9 * half), layer, seed + k,
@@ -916,7 +916,7 @@ def mountains(seed, y=2600, height=700, x0=-4200, x1=4200, depth=900, base_z=-40
     return big_mesh(name, verts, tris, layer, mat_range("range%d" % seed, top=height * 1.2, base_z=base_z), smooth=True)
 
 
-def mat_fields(name="fields3", base=(0.2, 0.36, 0.12)):
+def mat_fields(name="fields3", base=(0.2, 0.36, 0.12), scale=0.004):
     """A sunlit valley floor from far away: meadows in several greens and gold, darker
     groves, at two scales."""
     key = ("fields", name, base)
@@ -925,8 +925,15 @@ def mat_fields(name="fields3", base=(0.2, 0.36, 0.12)):
     m, nt, out, bsdf = _principled(name)
     L = nt.links.new
     geo = nt.nodes.new("ShaderNodeNewGeometry")
-    vor = nt.nodes.new("ShaderNodeTexVoronoi"); vor.inputs["Scale"].default_value = 0.004
-    L(geo.outputs["Position"], vor.inputs["Vector"])
+    vor = nt.nodes.new("ShaderNodeTexVoronoi"); vor.inputs["Scale"].default_value = scale
+    # Field edges wander (noise-warped cells), never straight polygons.
+    warpn = nt.nodes.new("ShaderNodeTexNoise"); warpn.inputs["Scale"].default_value = scale * 3; warpn.inputs["Detail"].default_value = 4
+    L(geo.outputs["Position"], warpn.inputs["Vector"])
+    wsc = nt.nodes.new("ShaderNodeVectorMath"); wsc.operation = "SCALE"; wsc.inputs["Scale"].default_value = 0.45 / scale
+    L(warpn.outputs["Color"], wsc.inputs[0])
+    wadd = nt.nodes.new("ShaderNodeVectorMath"); wadd.operation = "ADD"
+    L(geo.outputs["Position"], wadd.inputs[0]); L(wsc.outputs[0], wadd.inputs[1])
+    L(wadd.outputs[0], vor.inputs["Vector"])
     ramp = nt.nodes.new("ShaderNodeValToRGB"); els = ramp.color_ramp.elements
     els[0].position = 0.0; els[0].color = (base[0] * 0.8, base[1] * 0.85, base[2] * 0.7, 1)
     els[1].position = 1.0; els[1].color = (base[0] * 1.9 + 0.1, base[1] * 1.3 + 0.04, base[2] * 0.8, 1)
@@ -939,7 +946,10 @@ def mat_fields(name="fields3", base=(0.2, 0.36, 0.12)):
     mix = nt.nodes.new("ShaderNodeMix"); mix.data_type = "RGBA"
     L(dark.outputs["Result"], mix.inputs["Factor"]); L(ramp.outputs["Color"], mix.inputs["A"])
     mix.inputs["B"].default_value = (0.05, 0.13, 0.04, 1)
-    L(mix.outputs["Result"], bsdf.inputs["Base Color"])
+    # Softer: the cells blended with the fine noise (meadow texture inside each field).
+    soft = nt.nodes.new("ShaderNodeMix"); soft.data_type = "RGBA"; soft.blend_type = "OVERLAY"; soft.inputs["Factor"].default_value = 0.45
+    L(mix.outputs["Result"], soft.inputs["A"]); L(nz.outputs["Color"], soft.inputs["B"])
+    L(soft.outputs["Result"], bsdf.inputs["Base Color"])
     bsdf.inputs["Roughness"].default_value = 0.95
     bump = nt.nodes.new("ShaderNodeBump"); bump.inputs["Strength"].default_value = 0.4; bump.inputs["Distance"].default_value = 2.0
     L(nz.outputs["Fac"], bump.inputs["Height"]); L(bump.outputs["Normal"], bsdf.inputs["Normal"])

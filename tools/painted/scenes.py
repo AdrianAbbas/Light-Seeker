@@ -1862,7 +1862,7 @@ def v2_map():
         d = math.hypot(x + 1150, y + 120)
         sea = 90 * min(1.0, max(0.0, (820 - d) / 260))
         return f(x, y) + max(0.0, (y - 600) * 0.12) - sea
-    B.heightfield(land, -1700, 1700, -400, 2300, 300, 240, "mid", D.mat_fields("mapfields", (0.22, 0.38, 0.12)))
+    B.heightfield(land, -1700, 1700, -400, 2300, 300, 240, "mid", D.mat_fields("mapfields", (0.22, 0.38, 0.12), scale=0.009))
     B.box((-900, 0, -42), (1800, 1600, 2), "mid", water((0.38, 0.62, 0.8)), name="sea")
     # The river: from the mountains to the sea.
     ys = np.linspace(2200, -60, 200)
@@ -1876,36 +1876,36 @@ def v2_map():
     D.big_mesh("river", np.array(V), np.array(T), "mid", water((0.5, 0.72, 0.9)))
     L = [(0, 1100), (520, 1300), (-560, 700), (700, 650), (-200, 350), (300, 500), (-420, 1450), (120, 150), (-760, 300), (900, 1500)]
     # Woods everywhere (clumped), not on the landmarks or in the sea.
-    D.grove(land, -1600, 1600, -200, 2000, 1100, "mid", 41, size=(14, 26), blossom=0.12, name="mapwood", clump=0.8,
+    D.grove(land, -1600, 1600, -200, 2000, 2200, "mid", 41, size=(22, 40), blossom=0.12, name="mapwood", clump=0.85,
             avoid=[(x, y, 120) for x, y in L], min_z=-30)
-    D.mountains(9, y=2250, height=760, base_z=land(0, 2250) - 40, x0=-3000, x1=3000)
+    D.mountains(9, y=2080, height=820, base_z=land(0, 2080) - 30, x0=-3000, x1=3000, layer="mid")   # same layer as the land: no shadow seam
     anchors = []
     rng = random.Random(3)
     b = G.Builder()
     for i, (x, y) in enumerate(L):
         z = land(x, y)
         if i == 0:
-            D.mesa(x, y, z - 30, 80, 120, "mid", 300)
-            G.citadel(b, x, y, z + 90, 0.55, 301)
+            D.mesa(x, y, z - 30, 100, 120, "mid", 300)
+            G.citadel(b, x, y, z + 90, 0.85, 301)
         elif i == 1:
             D.cumulus((x, y, z + 40), (190, 130, 60), "mid", 302, density=0.02, name="fogcloud_temple")
-            G.tower(b, x, y, z + 60, 14, 30, rng, tiers=2, spire_ratio=1.5, depth=1)
+            G.tower(b, x, y, z + 60, 18, 45, rng, tiers=2, spire_ratio=1.6, depth=1)
             b.prism("stone", x, y, z + 52, 36, 36, 8, sides=32)
         elif i == 2:
             D.grove(land, x - 90, x + 90, y - 60, y + 60, 70, "mid", 303, size=(40, 70), blossom=0.0, name="elvenwood", clump=0.2)
             B.cylinder((x, y - 70, z + 2), 20, 2, "mid", water((0.5, 0.7, 0.85)), sides=48, name="well")
         elif i == 3:
-            D.crystal_cluster(x, y, z, 90, 14, "mid", 304)
+            D.crystal_cluster(x, y, z, 140, 16, "mid", 304)
         elif i == 4:
             D.grove(land, x - 90, x + 90, y - 40, y + 40, 40, "mid", 305, size=(18, 30), blossom=1.0, name="blossomwood", clump=0.3)
             D.flowers(land, x - 100, x + 100, y - 60, y + 60, 6000, "mid", 5, size=1.4, kinds=BLOOM, stem=0.5)
         elif i == 5:
-            G.tower(b, x, y, z, 16, 70, rng, tiers=3, spire_ratio=2.2, depth=1)
+            G.tower(b, x, y, z, 22, 100, rng, tiers=3, spire_ratio=2.2, depth=1)
             G.tower(b, x - 40, y + 10, z, 9, 50, rng, tiers=2, spire_ratio=2.0, depth=0)
             G.tower(b, x + 40, y + 10, z, 9, 50, rng, tiers=2, spire_ratio=2.0, depth=0)
         elif i == 6:
             for k in range(3):
-                D.isle2(x + (k - 1) * 120, y + 40 * k, z + 120 + 50 * k, 45, 70, "mid", 306 + k, trees=2)
+                D.isle2(x + (k - 1) * 130, y + 40 * k, z + 120 + 50 * k, 60, 90, "mid", 306 + k, trees=2)
         elif i == 7:
             hedge = B.mat_stone("maphedge", (0.1, 0.26, 0.07), rough=0.9, bump=0.8, scale=0.5)
             for k in range(-3, 4):
@@ -1914,7 +1914,7 @@ def v2_map():
             G.pinnacle(b, x, y - 50, z + 5, 1.6, 16, rng, 0)
         elif i == 8:
             for k in range(5):
-                D.mushroom2(x + (k - 2) * 26, y + 10 * (k % 2), z, 30, "mid", 320 + k, cap=CAPS[k % 3])
+                D.mushroom2(x + (k - 2) * 34, y + 10 * (k % 2), z, 44, "mid", 320 + k, cap=CAPS[k % 3])
             D.grove(land, x - 80, x + 80, y + 30, y + 90, 25, "mid", 321, size=(20, 34), name="fairywood")
         elif i == 9:
             D.peak(x, y, z - 40, 160, 300, "mid", 330, snow_line=0.7, name="dragonpeak")
