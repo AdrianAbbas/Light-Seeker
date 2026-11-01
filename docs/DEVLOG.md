@@ -100,8 +100,8 @@ usage limit or a compaction) continues from the first unticked line. Push to `ma
 - [x] D3c. The instrument panel (pearl/ivory, gold tracks): name, choose, Lock, Tone/Attack/Release/Character, Level, Octave, Intensity, bend/mod/sustain, keyboard lit by the host; tests (`instrument` group); snapshot `docs/snapshots/instrument-window.png`
 - [x] D4. Instruments, first half: Celestial Citadel, Sky Temple, Elven Sanctuary, Crystal Palace, Blossom Meadow
 - [x] D5. Instruments, second half: Golden Cathedral, Floating Isles, Royal Gardens, Fairy Glade, Dragon's Peak
-- [ ] D6a. 30+ instrument presets
-- [ ] D6b. Tests (every instrument plays from MIDI, in tune, distinct from siblings, level-matched; no hung notes during travel; both plug-ins validate), listening render, DEVLOG handoff; push without `[skip ci]`
+- [x] D6a. 30+ instrument presets (50: 31 instruments at home, 2 dry/gentle, 8 carried elsewhere, 9 journeys)
+- [x] D6b. Tests (every instrument plays from MIDI, in tune, distinct from siblings, level-matched; no hung notes during travel; both plug-ins validate), listening render, DEVLOG handoff; push without `[skip ci]`
 
 ---
 
@@ -822,3 +822,85 @@ captured shimmer hall in the Nave of Light). Decision to revisit if the shimmer 
   two-octave keyboard. It now has the light look (pearl, gold tracks, serif labels), two
   rows (the instrument and its macros above; the bend and mod wheels, the sustain pedal and
   a full-width keyboard from C0 to C7 below) and is 196 px tall (the window 960 x 756).
+
+### Milestone 6: presets, polish, listening render
+
+- **50 instrument presets** (`Source/World/InstrumentPresets.cpp`), separate from the
+  effect's 27: every instrument in its own place (31), "Dry Concert Harp" (Intensity 0) and
+  "Gentle Strings (50 %)", eight instruments carried into another place (locked: Organ in
+  the Sky Temple, Guitar by the Moonwell, Kalimba in the Crystal Halls, Celesta in the Nave,
+  Trumpets from the Summit, Harp in the Hall of Mirrors, Pizzicato in the Bell Garden, Cloud
+  Pad on the Mirror Lake) and the nine journeys (the instrument follows each place). User
+  presets: `.lsinst` files in `~/Library/Application Support/LightSeeker/Instrument Presets`,
+  with the locked instrument. Tests: at least 30, names unique, each loads unmodified and
+  plays, carried ones play their instrument locked in the other place, together they reach
+  all 31 instruments, a user preset round trip (the organ in the Sanctum).
+- **CPU** (report only, one core of this container, the effect engine included): four notes
+  held in each place's space, 10.0 % on average, the worst 14.7 % (Shimmering Strings); the
+  effect alone measures 7.6 to 12.0 % per location.
+- **Listening render** (CI: `LightSeeker-linux-test-logs` → `instruments/`,
+  `LightSeekerTests --listen-instruments dir`): every instrument plays the same phrase (eight
+  notes, then a four-note chord) dry, then in its own place, one file each, and a chord held
+  while travelling through all ten locations. Measured here: the dry phrases' loudest
+  400 ms between -16.4 and -21.4 dBFS (the slow choirs lowest: their short notes do not reach
+  full voice), the places within 3 dB of dry; the highest peak -0.3 dBFS (the Fairy Harp's
+  chord; the safety limiter is behind it).
+- **The whole suite** (Linux, GCC, with the recordings, seven shards): **1700 passed, 0
+  failed** (the effect's 1639 checks unchanged and green, the instrument's 330, the
+  preset and switch checks). Without the recordings the instrument groups pass too (the
+  stand-ins).
+- **CI, first run of the two plug-ins** (`b1c9a09`): Linux green (full suite, listening
+  renders); macOS failed to compile the tests: `std::vector<X> v(std::size_t(n));` is a
+  function declaration to Clang (the most vexing parse; GCC accepted it). Fixed, and every
+  changed file now also checked with `clang++ -fsyntax-only` here (it reproduces the six
+  errors before the fix and none after). That run also predated the `SAMPLES_TOKEN` secret
+  ("Samples token missing"); the developer has since added it, so the next run ships the
+  recordings.
+
+## Handoff (Direction Update 1): what to listen for and look at in GarageBand
+
+Install the `LightSeeker-macOS-Universal` artifact with `bash install-mac.sh`: one package,
+two plug-ins. The full checklist is in [MANUAL_TEST.md](MANUAL_TEST.md), "Instrument
+edition"; the short version:
+
+1. **Two plug-ins.** Software Instrument track → Veil Audio → **LIGHT SEEKER** (the
+   instrument); any track's Audio Effect slot → **LIGHT SEEKER FX** (the effect, unchanged;
+   old projects find it). DUNGEON CRAWLER still loads beside them.
+2. **Look**: the map with the instrument panel under it (pearl and ivory, gold tracks,
+   `docs/snapshots/instrument-window.png`); playing must never make GarageBand stutter.
+3. **Listen to all 31 instruments** with the same phrase and chord, dry (Intensity 0 % on the
+   panel) and in their places. They were designed by measurement in a Linux container (in
+   tune, distinct from their siblings, level-matched, releasing cleanly), **not by ear**:
+   tell me which ones are not uplifting, majestic or realistic enough and why; each is one
+   block in `Source/Synth/Patches.cpp`. The ones to listen to first: the brass (Fanfare
+   Trumpets, Soaring Horn, Heroic Horns: modelled brass is the hardest), the Pastoral Oboe,
+   the Glass Harp and Glass Harmonica Pad (rubbed glass is modelled with bowed modes), the
+   Grand Organ, and the five that play your recordings (guitar twice, kalimba, violin
+   pizzicato and sustain, the Minilogue soft pad).
+4. **Hold a chord and travel** (click places, run a journey preset): the chord carries on in
+   each new instrument, no clicks, nothing left hanging after you let go. **Lock instrument**:
+   only the space moves.
+5. **Your keyboard**: velocity, sustain pedal, pitch bend (a whole tone), mod wheel (vibrato;
+   tremolo on struck and plucked instruments), and the panel's own wheels, pedal and keys.
+
+### Known issues and decisions to revisit
+
+- **The recordings in CI need the `SAMPLES_TOKEN` secret** (added by the developer during
+  this session, after the first run). If a run's log ever shows "Samples token missing" or
+  "Samples fetch failed" (an expired token), that package's recorded instruments play their
+  modelled stand-ins and the panel says "synthesised (recordings not found)".
+- **Nothing was heard or hosted on a Mac.** The Linux suite drives the real processBlock;
+  the macOS job builds, validates both plug-ins with auval and the AU harness (the instrument
+  played over MIDI on all three hosting routes: new code, first compiled by that job).
+- **DUNGEON CRAWLER's instrument edition** did not exist yet, so nothing of it was copied;
+  if it appears later, its integration can be compared with this one.
+- **Prism Hall's shimmer** is WORLDBUILDER's algorithmic octave shimmer, not your Astral
+  Shimmer capture (see above).
+- **Recorded ranges**: the kalimba covers C4 to E6, the violin's sustain only its open
+  strings (G3, D4, A4, E5: other notes are pitched up to a few semitones from them, the
+  modelled section underneath carries the body), the pizzicato G3 to about A#5, the guitar
+  E2 to A#5. Outside, the nearest note is resampled (in tune, duller far away).
+- **Cloud Steps' glissando** climbs *after* each note (a run above it): a run before the
+  note would delay what you play.
+- The closest pair of instruments overall (not siblings) is Airy Flute / Breathy Wind Flute;
+  they differ mainly in breath. Worth a listen.

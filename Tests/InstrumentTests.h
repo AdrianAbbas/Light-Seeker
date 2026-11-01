@@ -534,8 +534,8 @@ constexpr double instrumentTargetDb = -18.0;   // a held chord's loudest 400 ms,
 constexpr double instrumentLevelTolerance = 2.0;
 
 void testInstrumentRange(Suite& s, int first, int last, bool gateLevels) {
-    std::vector<InstrumentRender> renders(std::size_t(ls::inst::instrumentCount));
-    std::vector<std::vector<double>> prints(std::size_t(ls::inst::instrumentCount));
+    std::vector<InstrumentRender> renders(static_cast<std::size_t>(ls::inst::instrumentCount));
+    std::vector<std::vector<double>> prints(static_cast<std::size_t>(ls::inst::instrumentCount));
     std::vector<double> levels;
     for (int i = first; i <= last; ++i) {
         const auto name = instrumentName(i);
