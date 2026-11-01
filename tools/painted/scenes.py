@@ -891,3 +891,97 @@ def dragon_summit():
     golden_dragon((10, 140, 400), 3.5, "near", rotation_z=2.6)
     return place_meta(sun, 3, [(0, 500, 300), (-120, 500, 300), (0, 40, 420)], [lightpt((-30, 120, 420), 18, "glint")],
                       horizon=330, clouds=0.9, rays=0.9, haze=0.65)
+
+
+# ================================================================ DETAIL PASS (v2)
+import detail as D  # noqa: E402
+
+
+def daylight2(sun_dir=(-0.6, 0.55, 0.32), strength=5.0, sky_strength=0.9):
+    """Golden-morning daylight: a low warm sun from the side and behind (rim light on
+    every tower and leaf), a physical multiple-scattering sky lighting the shadows blue,
+    one diffuse bounce kept warm."""
+    d = Vector(sun_dir).normalized()
+    B.sun(d, (1.0, 0.86, 0.66), strength, angle=1.5, name="sun")
+    w = bpy.context.scene.world
+    w.use_nodes = True
+    nt = w.node_tree
+    for n in list(nt.nodes):
+        if n.type != "OUTPUT_WORLD":
+            nt.nodes.remove(n)
+    sky = nt.nodes.new("ShaderNodeTexSky")
+    sky.sky_type = "MULTIPLE_SCATTERING"
+    sky.sun_elevation = math.asin(max(0.05, d.z))
+    sky.sun_rotation = math.atan2(d.x, d.y)
+    try:
+        sky.sun_disc = False
+    except Exception:
+        pass
+    bg = nt.nodes.new("ShaderNodeBackground")
+    bg.inputs["Strength"].default_value = sky_strength
+    nt.links.new(sky.outputs[0], bg.inputs[0])
+    nt.links.new(bg.outputs[0], nt.nodes["World Output"].inputs["Surface"])
+    return d
+
+
+def haze2(y0, y1, z0, z1, layer, density=0.0025, colour=(0.82, 0.88, 1.0), width=6000):
+    """A sunlit atmosphere between the layers: depth, and beams where the sun is blocked."""
+    fog = B.mat_fog(colour=colour, density=density, noise_scale=0.004, z0=z0, z1=z1, anisotropy=0.55, emission=0.0, emit_colour=colour)
+    B.fog_box((0, (y0 + y1) / 2, (z0 + z1) / 2), (width, y1 - y0, z1 - z0), layer, fog)
+
+
+@scene("celestial-citadel/gates-of-dawn")
+def citadel_gates_v2():
+    """The Gates of Dawn: a meadow thick with flowers below tall layered cliffs; at their
+    foot the golden gates between two gothic gate towers; above, the many-spired
+    white-gold citadel; cumulus towering behind; light motes in the air."""
+    import gothic as G
+    sun_xy = (230, 70)
+    B.camera((0, -10, 4.0), (0, 400, 120), lens=24)
+    daylight2((-0.55, -0.35, 0.75), strength=5.5, sky_strength=0.2)
+    B.sun(Vector((0.5, 0.8, 0.35)), (1.0, 0.85, 0.6), 1.4, angle=2.0, name="rim")   # warm rim from behind right
+    f = rolling(7, 1.5, 0, 0.03)
+    ground = lambda x, y: f(x, y) + max(0.0, y - 10) * 0.07
+    # Near: the meadow, thick with flowers.
+    B.heightfield(ground, -80, 80, -10, 70, 160, 110, "near", D.mat_ground())
+    D.grass(ground, -45, 45, -8, 70, 220000, "near", 11, height=(0.2, 0.55))
+    D.flowers(ground, -12, 12, -4, 10, 12000, "near", 15, size=0.16,
+              kinds=(D.BUTTERCUP, D.BUTTERCUP, D.DAISY, D.PINK, D.LAVENDER, D.CORAL), stem=0.3)
+    D.flowers(ground, -40, 40, -6, 60, 16000, "near", 12, size=0.22,
+              kinds=(D.BUTTERCUP, D.BUTTERCUP, D.DAISY, D.PINK, D.LAVENDER, D.CORAL), stem=0.45)
+    D.tree((-24, 34, ground(-24, 34)), 20, 3, "near", kind="green", leaves=18000)
+    D.tree((26, 44, ground(26, 44)), 17, 4, "near", kind="blossom", leaves=26000)
+    # Mid: more meadow, the cliffs, the gate towers, the citadel.
+    B.heightfield(ground, -400, 400, 70, 300, 140, 70, "mid", D.mat_ground())
+    D.flowers(ground, -160, 160, 70, 220, 9000, "mid", 14, size=0.35, kinds=(D.BUTTERCUP, D.DAISY, D.PINK, D.LAVENDER))
+    gz = ground(0, 260)
+    D.mesa(0, 380, gz - 10, 120, 140, "mid", 4)
+    D.mesa(-150, 430, gz - 20, 80, 110, "mid", 5)
+    D.mesa(155, 440, gz - 20, 85, 115, "mid", 6)
+    # Bushes and small trees on the ledges and the plateau rims.
+    rr = random.Random(31)
+    for k in range(26):
+        a_ = rr.uniform(math.pi * 1.1, math.pi * 1.9)
+        rad = rr.uniform(0.75, 0.95)
+        vz = rr.uniform(0.35, 0.98)
+        bx, by = 120 * rad * (1 - 0.28 * vz ** 1.6) * math.cos(a_), 380 + 90 * rad * (1 - 0.28 * vz ** 1.6) * math.sin(a_) * 0.75
+        D.tree((bx, by, gz - 10 + 140 * vz), rr.uniform(6, 12), 300 + k, "mid", kind="blossom" if k % 4 == 0 else "green", leaves=2500)
+    b = G.Builder()
+    rng = random.Random(9)
+    for side in (-1, 1):
+        G.tower(b, side * 16, 230, gz, 4.0, 34, rng, tiers=3, spire_ratio=1.4, depth=1)
+    G.hall(b, -12, 12, 232, gz, 16, 5, rng, bays=3)
+    G.citadel(b, 0, 385, gz + 128, 1.05, 7)
+    b.flush("mid", G.materials(), "citadel")
+    B.arch_shape((0, 229.2, gz), 6, 11, "mid", D.mat_gold(), name="gate")
+    D.sparkles((0, 60, 8), (60, 80, 14), 140, "near", 21, size=0.12)
+    D.sparkles((0, 300, 90), (260, 120, 120), 90, "mid", 22, size=0.5)
+    # Far: valley, mountains, cumulus.
+    B.ground(gz - 60, 9000, "far", D.mat_ground("valley2", (0.2, 0.36, 0.12)))
+    far_mountains(2, y=2600, height=700)
+    for k, (x, y, z, s_) in enumerate([(-900, 2200, 380, 700), (350, 2800, 560, 1000), (1100, 2300, 340, 650), (-500, 3300, 720, 1100)]):
+        D.cumulus((x, y, z), (s_ * 1.6, s_, s_ * 0.9), "far", 100 + k, density=0.012, name="fogcloud%d" % k)
+    return meta(sun_xy, [hotspot(0, (0, 229, gz + 8)), hotspot(1, (-60, 380, gz + 200)), hotspot(2, (0, 380, gz + 280)),
+                         hotspot(3, (0, 380, gz + 420)),
+                         lightpt((0, 229, gz + 6), 20, "glint"), lightpt((0, 380, gz + 330), 14, "glint"), lightpt((-16, 230, gz + 40), 10, "fire")],
+                horizon=330, clouds=0.35, rays=0.9, haze=0.25)

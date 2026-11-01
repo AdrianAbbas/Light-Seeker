@@ -119,7 +119,7 @@ def tonemap(rgb, exposure=1.0, white=6.0):
     out = x * (lt / np.maximum(l, 1e-6))
     out = np.clip(out, 0, None) ** (1 / 2.2)
     # Lift the floor: the darkest shade is a soft lavender-grey, not black.
-    return np.clip(0.10 + 0.92 * out, 0, 1)
+    return np.clip(0.035 + 0.97 * out, 0, 1)
 
 
 def grade(rgb):
@@ -127,11 +127,13 @@ def grade(rgb):
     pastels (blush, lavender, mint, sky) kept and gently enriched, greens sunlit."""
     L = lum(rgb)[..., None]
     grey = np.repeat(L, 3, axis=2)
-    out = grey + (rgb - grey) * 1.35                       # richer colour
+    out = grey + (rgb - grey) * 1.3                        # richer colour
+    out = np.clip(out, 0, 1)
+    out = out * out * (3 - 2 * out) * 0.35 + out * 0.65        # a gentle S-curve: more contrast
     shadow = np.clip(1 - L / 0.5, 0, 1)
     light = np.clip((L - 0.55) / 0.45, 0, 1)
-    out = out * (1 - 0.15 * shadow) + np.array([0.6, 0.6, 0.8], np.float32) * shadow * 0.15   # lavender shadows
-    out = out * (1 - 0.18 * light) + np.array([1.0, 0.95, 0.84], np.float32) * light * 0.18     # cream highlights
+    out = out * (1 - 0.05 * shadow) + np.array([0.45, 0.42, 0.6], np.float32) * shadow * 0.05   # lavender shadows
+    out = out * (1 - 0.14 * light) + np.array([1.0, 0.92, 0.75], np.float32) * light * 0.14     # warm cream highlights
     return np.clip(out, 0, 1)
 
 
@@ -215,7 +217,7 @@ def dabs(img, seed, scale):
     return out
 
 
-def painterly(img, radius, stroke, seed, scale, streak=0.035, sharpen=0.0, horizontal=False):
+def painterly(img, radius, stroke, seed, scale, streak=0.015, sharpen=0.0, horizontal=False):
     """img: premultiplied RGBA in display space."""
     out = kuwahara(dabs(img, seed, scale), radius)
     if stroke > 0:
@@ -295,12 +297,12 @@ def paint_sky(h, w, p, seed):
 
 # -------------------------------------------------------------------- per layer
 LAYER_STYLE = {
-    #        haze  kuwahara stroke sharpen grain speckle
-    "sky":  (0.00, 8, 10, 0.0, 0.016, 0.0),
-    "far":  (0.22, 8, 10, 0.0, 0.016, 0.0008),
-    "mid":  (0.10, 5, 8, 0.3, 0.014, 0.0005),
-    "near": (0.02, 4, 6, 0.5, 0.014, 0.0004),
-    "fog":  (0.00, 9, 14, 0.0, 0.010, 0.0),
+    #        haze  kuwahara stroke sharpen grain speckle   (detail pass: detail first)
+    "sky":  (0.00, 4, 6, 0.0, 0.010, 0.0),
+    "far":  (0.10, 2, 4, 0.2, 0.008, 0.0),
+    "mid":  (0.03, 1, 2, 0.6, 0.006, 0.0),
+    "near": (0.00, 1, 2, 0.6, 0.006, 0.0),
+    "fog":  (0.00, 3, 6, 0.0, 0.006, 0.0),
 }
 
 
