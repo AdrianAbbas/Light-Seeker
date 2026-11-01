@@ -123,7 +123,7 @@ void LightSeekerView::HotspotButton::paintButton(juce::Graphics& g, bool highlig
     const auto ring = juce::Rectangle<float>(22.0f, 22.0f).withCentre({ r.getCentreX(), 14.0f });
     const bool here = getToggleState();
     // A dark halo, a hairline ring and a small centre: crimson where you are.
-    g.setGradientFill(juce::ColourGradient(juce::Colours::black.withAlpha(0.55f), ring.getCentre(), juce::Colours::black.withAlpha(0.0f),
+    g.setGradientFill(juce::ColourGradient(colours::ink.withAlpha(0.55f), ring.getCentre(), colours::ink.withAlpha(0.0f),
                                            ring.getCentre().translated(ring.getWidth() * 0.9f, 0.0f), true));
     g.fillEllipse(ring.expanded(8.0f));
     if (here) {
@@ -139,7 +139,7 @@ void LightSeekerView::HotspotButton::paintButton(juce::Graphics& g, bool highlig
         const auto text = getButtonText();
         const float width = juce::GlyphArrangement::getStringWidth(font, text) + 18.0f;
         const auto plate = juce::Rectangle<float>(width, 20.0f).withCentre({ r.getCentreX(), 38.0f });
-        g.setGradientFill(juce::ColourGradient(juce::Colours::black.withAlpha(0.75f), plate.getCentre(), juce::Colours::black.withAlpha(0.0f),
+        g.setGradientFill(juce::ColourGradient(colours::ink.withAlpha(0.75f), plate.getCentre(), colours::ink.withAlpha(0.0f),
                                                plate.getCentre().translated(plate.getWidth() * 0.62f, 0.0f), true));
         g.fillRect(plate.expanded(8.0f, 4.0f));
         g.setFont(font);
@@ -282,7 +282,7 @@ LightSeekerView::LightSeekerView(LightSeekerProcessor& p)
     notice.setFont(titleFont(13.0f));
     notice.setJustificationType(juce::Justification::centred);
     notice.setColour(juce::Label::textColourId, colours::ivory);
-    notice.setColour(juce::Label::backgroundColourId, juce::Colours::black.withAlpha(0.72f));
+    notice.setColour(juce::Label::backgroundColourId, colours::ink.withAlpha(0.72f));
     notice.setInterceptsMouseClicks(false, false);
     addChildComponent(notice);
     follower.startTimerHz(10);
@@ -414,7 +414,7 @@ void LightSeekerView::pointerDown(juce::Component* target) {
 
 void LightSeekerView::SteerBadge::paint(juce::Graphics& g) {
     const auto r = getLocalBounds().toFloat();
-    g.setColour(juce::Colours::black.withAlpha(0.78f));
+    g.setColour(colours::ink.withAlpha(0.78f));
     g.fillRoundedRectangle(r, 4.0f);
     g.setColour(colours::blood.withAlpha(0.8f));
     g.drawRoundedRectangle(r.reduced(0.5f), 4.0f, 1.0f);
@@ -1055,7 +1055,7 @@ void LightSeekerView::paintMapOverlay(juce::Graphics& g) {
         const juce::String title("LIGHT SEEKER");
         const auto box = juce::Rectangle<float>(static_cast<float>(getWidth()) * 0.5f - 160.0f, 14.0f, 320.0f, 26.0f).translated(150.0f, 0.0f);
         g.setFont(font);
-        g.setColour(juce::Colours::black.withAlpha(0.6f));
+        g.setColour(colours::ink.withAlpha(0.6f));
         g.drawText(title, box.translated(0.0f, 1.5f), juce::Justification::centred);
         g.setColour(colours::ivory.withAlpha(0.88f));
         g.drawText(title, box, juce::Justification::centred);
@@ -1087,7 +1087,7 @@ void LightSeekerView::paintMapOverlay(juce::Graphics& g) {
         auto box = juce::Rectangle<float>(width, 16.0f).withCentre({ c.x, c.y + l.radius * sx * 0.62f + 14.0f });
         box = box.withX(juce::jlimit(4.0f, static_cast<float>(getWidth()) - width - 4.0f, box.getX()));
         if (!g.clipRegionIntersects(box.expanded(14.0f, 8.0f).getSmallestIntegerContainer())) continue;
-        g.setGradientFill(juce::ColourGradient(juce::Colours::black.withAlpha(0.6f), box.getCentre(), juce::Colours::black.withAlpha(0.0f),
+        g.setGradientFill(juce::ColourGradient(colours::ink.withAlpha(0.6f), box.getCentre(), colours::ink.withAlpha(0.0f),
                                                box.getCentre().translated(box.getWidth() * 0.62f, 0.0f), true));
         g.fillRect(box.expanded(10.0f, 4.0f));
         g.setFont(font);
@@ -1144,7 +1144,7 @@ void LightSeekerView::paintMapOverlay(juce::Graphics& g) {
         }
         for (std::size_t k = 0; k < stops.size(); ++k) {
             const auto c = toLocal(marks[static_cast<std::size_t>(stops[k].location)].position).translated(18.0f, -18.0f);
-            g.setColour(juce::Colours::black.withAlpha(0.7f));
+            g.setColour(colours::ink.withAlpha(0.7f));
             g.fillEllipse(juce::Rectangle<float>(16, 16).withCentre(c));
             g.setColour(colours::blood.brighter(0.3f));
             g.setFont(labelFont(11.0f));
@@ -1161,7 +1161,7 @@ void LightSeekerView::paintMapOverlay(juce::Graphics& g) {
         const float width = juce::GlyphArrangement::getStringWidth(font, juce::String::fromUTF8(text.toRawUTF8())) + 24.0f;
         auto plate = juce::Rectangle<float>(width, 28.0f).withCentre({ c.x, c.y - l.radius * static_cast<float>(getWidth()) / dc::art::virtualWidth - 22.0f });
         plate = plate.withX(juce::jlimit(6.0f, static_cast<float>(getWidth()) - width - 6.0f, plate.getX()));
-        g.setGradientFill(juce::ColourGradient(juce::Colours::black.withAlpha(0.82f), plate.getCentre(), juce::Colours::black.withAlpha(0.0f),
+        g.setGradientFill(juce::ColourGradient(colours::ink.withAlpha(0.82f), plate.getCentre(), colours::ink.withAlpha(0.0f),
                                                plate.getCentre().translated(plate.getWidth() * 0.6f, 0.0f), true));
         g.fillRect(plate.expanded(14.0f, 6.0f));
         juce::ColourGradient rule(colours::blood.withAlpha(0.0f), plate.getX(), 0, colours::blood.withAlpha(0.0f), plate.getRight(), 0, false);
@@ -1203,8 +1203,8 @@ void LightSeekerView::paint(juce::Graphics& g) {
         static const juce::Image falloff = [] {
             juce::Image image(juce::Image::ARGB, 64, 64, true, juce::SoftwareImageType());
             juce::Graphics ig(image);
-            juce::ColourGradient shade(juce::Colours::black.withAlpha(0.72f), 32.0f, 32.0f, juce::Colours::black.withAlpha(0.0f), 64.0f, 32.0f, true);
-            shade.addColour(0.55, juce::Colours::black.withAlpha(0.5f));
+            juce::ColourGradient shade(colours::ink.withAlpha(0.72f), 32.0f, 32.0f, colours::ink.withAlpha(0.0f), 64.0f, 32.0f, true);
+            shade.addColour(0.55, colours::ink.withAlpha(0.5f));
             ig.setGradientFill(shade);
             ig.fillAll();
             return image;
@@ -1228,8 +1228,8 @@ void LightSeekerView::paint(juce::Graphics& g) {
     if (controlsShown && g.clipRegionIntersects(controlsArea().withTop(controlsArea().getY() - 36.0f).getSmallestIntegerContainer())) {
         const auto strip = controlsArea();
         const auto veil = strip.withTop(strip.getY() - 36.0f);
-        juce::ColourGradient fade(juce::Colours::black.withAlpha(0.0f), 0.0f, veil.getY(), juce::Colours::black.withAlpha(0.9f), 0.0f, strip.getY() + 30.0f, false);
-        fade.addColour(0.45, juce::Colours::black.withAlpha(0.55f));
+        juce::ColourGradient fade(colours::ink.withAlpha(0.0f), 0.0f, veil.getY(), colours::ink.withAlpha(0.9f), 0.0f, strip.getY() + 30.0f, false);
+        fade.addColour(0.45, colours::ink.withAlpha(0.55f));
         g.setGradientFill(fade);
         g.fillRect(veil);
         juce::ColourGradient line(colours::blood.withAlpha(0.0f), strip.getX(), 0.0f, colours::blood.withAlpha(0.0f), strip.getRight(), 0.0f, false);

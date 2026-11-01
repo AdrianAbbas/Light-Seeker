@@ -6,15 +6,15 @@
 
 namespace dc {
 inline constexpr std::array<std::array<float, 4>, 10> levelTrimsDb {{
-    {{ -2.42f, -0.15f, 7.96f, 2.05f }},   // Celestial Citadel
-    {{ 2.95f, -6.32f, 2.05f, 0.00f }},   // Sky Temple
-    {{ 6.51f, -2.02f, 3.23f, 0.00f }},   // Elven Sanctuary
-    {{ 3.01f, -1.70f, 2.40f, 0.00f }},   // Crystal Palace
-    {{ -1.17f, 2.81f, -1.31f, 0.00f }},   // Blossom Meadow
-    {{ 2.30f, -0.90f, -1.72f, 0.00f }},   // Golden Cathedral
-    {{ 1.44f, 8.69f, -0.23f, 0.00f }},   // Floating Isles
-    {{ 2.23f, 4.05f, -0.78f, 0.00f }},   // Royal Gardens
-    {{ 1.92f, 3.06f, 0.65f, 0.00f }},   // Fairy Glade
-    {{ -2.53f, 1.19f, 0.61f, 0.00f }},   // Dragon's Peak
+    {{ -4.55f, -0.46f, 9.06f, 1.45f }},   // Celestial Citadel
+    {{ 3.77f, -5.86f, 2.12f, 0.00f }},   // Sky Temple
+    {{ 7.39f, -3.63f, 5.10f, 0.00f }},   // Elven Sanctuary
+    {{ 3.60f, -2.54f, 2.77f, 0.00f }},   // Crystal Palace
+    {{ -2.67f, 2.61f, -1.76f, 0.00f }},   // Blossom Meadow
+    {{ -2.16f, -1.55f, -0.92f, 0.00f }},   // Golden Cathedral
+    {{ 0.88f, 8.70f, -2.11f, 0.00f }},   // Floating Isles
+    {{ 0.84f, 4.93f, -1.36f, 0.00f }},   // Royal Gardens
+    {{ 2.17f, 3.91f, 1.02f, 0.00f }},   // Fairy Glade
+    {{ -3.01f, 1.70f, -0.07f, 0.00f }},   // Dragon's Peak
 }};
 }

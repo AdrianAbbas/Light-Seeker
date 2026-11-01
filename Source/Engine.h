@@ -74,13 +74,13 @@ private:
     std::array<Slot, 6> slots;   // abyss, relics, choir, wraith, echoes, ensemble (Blood runs always: it carries the latency)
     // The Vault (Direction Update 2): two instances. A journey to another space starts it
     // clean in the other instance; the old one stops taking input and rings out.
-    static constexpr int vaultCount = 2;
+    static constexpr int vaultCount = 3;   // a pool: a journey never cuts a ringing space
     void runVaults(float* l, float* r, int n, float eased) noexcept;
     std::array<Vault, vaultCount> vaults;
-    std::array<bool, vaultCount> vaultIdle { true, true };
+    std::array<bool, vaultCount> vaultIdle { true, true, true };
     std::array<dsp::Smoothed, vaultCount> vaultSend;
     std::array<int, vaultCount> vaultWarmUp {};
-    int activeVault = 0;
+    int activeVault = 0, departingVault = -1;
     bool vaultCrossfade = false;
     float vaultFromSend = 0;
     dsp::Smoothed vaultDry;

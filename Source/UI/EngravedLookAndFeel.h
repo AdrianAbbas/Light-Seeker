@@ -1,20 +1,22 @@
 #pragma once
-// The look of the controls (visual overhaul): near-black and charcoal, slate greys,
-// ivory, and one crimson accent, to sit on the painted dark-fantasy art. Slim faders
-// with ivory caps and a crimson value track; text buttons without boxes (an underline
-// marks what is on); Cinzel for titles and Cormorant Garamond for labels (both SIL OFL,
-// embedded).
+// The look of the controls (light): pearl and ivory panels, warm taupe lines, readable
+// dark sepia text and one accent, radiant gold, to sit on the bright painted art. Slim
+// faders with pearl caps and a gold value track; text buttons without boxes (a gold
+// underline marks what is on); soft shadows; Cinzel for titles and Cormorant Garamond for
+// labels (both SIL OFL, embedded). The names below are roles: `ink` the deepest
+// background, `ivory` the main text, `blood` the accent (gold here).
 #include <juce_gui_basics/juce_gui_basics.h>
 
 namespace dc::ui {
 namespace colours {
-inline const juce::Colour ink { 0xff0b0a0d };
-inline const juce::Colour charcoal { 0xff17151b };
-inline const juce::Colour dust { 0xff5a5662 };
-inline const juce::Colour ash { 0xffaaa3a8 };
-inline const juce::Colour ivory { 0xffece4d4 };
-inline const juce::Colour blood { 0xffc0242c };
-inline const juce::Colour ember { 0xffe0482e };
+inline const juce::Colour ink { 0xfff8f4ec };        // pearl: panels, menus, tooltips
+inline const juce::Colour charcoal { 0xffefe7d8 };   // ivory: fields, the second panel tone
+inline const juce::Colour dust { 0xffb9ab92 };       // warm taupe: lines, disabled
+inline const juce::Colour ash { 0xff6f604a };        // soft sepia: secondary text
+inline const juce::Colour ivory { 0xff35291b };      // dark sepia: the main text
+inline const juce::Colour blood { 0xffc08a22 };      // radiant gold: the accent
+inline const juce::Colour ember { 0xfff2c75c };      // bright gold: glows and light motes
+inline const juce::Colour pearl { 0xfffffcf6 };      // the faders' caps
 }
 
 // Cinzel (titles, place names, group headings).

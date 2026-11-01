@@ -116,6 +116,8 @@ public:
     bool isDeparting() const noexcept { return departing; }
     bool ringing() const noexcept { return tail > 1.0e-4f; }
     float tailLevel() const noexcept { return tail; }
+    // The smoothed amount in use (a departing kind is skipped only once it reaches zero).
+    float amountNow() const noexcept { return amount.value; }
 private:
     bool departing = false;
     float heldOut = 0, tail = 0, tailDecay = 0.999f;

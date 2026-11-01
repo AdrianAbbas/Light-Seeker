@@ -112,7 +112,7 @@ void Engine::reset() {
     for (auto& v : vaults) v.reset();
     vaultIdle.fill(true);
     for (auto& v : vaultSend) v.snap(0.0f);
-    activeVault = 0; vaultCrossfade = false;
+    activeVault = 0; departingVault = -1; vaultCrossfade = false;
     vaultDry.snap(1.0f);
     for (auto& sig : signatures) sig.reset();
     for (auto& slot : sigSlots) { slot.gain.value = 0; slot.idle = true; slot.warmUp = 0; }
@@ -156,9 +156,18 @@ void Engine::swapSignature() noexcept {
 void Engine::startTravel(double seconds) noexcept {
     if (current[SigKind] != to[SigKind]) swapSignature();
     if (current[VaultKind] != to[VaultKind] && to[VaultKind] > 0.5f) {
-        // The new space starts clean in the other (quieter) instance.
+        // The new space starts clean in an idle instance of the pool (else the quietest);
+        // the one we leave fades its send and rings out, so does every other.
         vaultFromSend = vaultSend[static_cast<std::size_t>(activeVault)].target;
-        activeVault = 1 - activeVault;
+        departingVault = activeVault;
+        int best = -1;
+        float quietest = 1.0e9f;
+        for (int k = 0; k < vaultCount; ++k) {
+            if (k == activeVault) continue;
+            const float level = vaultIdle[static_cast<std::size_t>(k)] ? -1.0f : vaults[static_cast<std::size_t>(k)].level();
+            if (level < quietest) { quietest = level; best = k; }
+        }
+        activeVault = best;
         vaultIdle[static_cast<std::size_t>(activeVault)] = true;
         vaultCrossfade = true;
     }
@@ -280,7 +289,7 @@ void Engine::runVaults(float* l, float* r, int n, float eased) noexcept {
         auto& v = vaults[K];
         float send = 0;
         if (k == activeVault) send = std::sqrt(vaultCrossfade ? dsp::clamp01(to[VaultMix]) * eased : m);
-        else if (vaultCrossfade) send = vaultFromSend * (1.0f - eased);
+        else if (vaultCrossfade && k == departingVault) send = vaultFromSend * (1.0f - eased);
         vaultSend[K].set(send);
         if (send <= 1.0e-4f && vaultSend[K].value <= 1.0e-4f && (vaultIdle[K] || !v.ringing())) { vaultIdle[K] = true; continue; }
         if (vaultIdle[K]) {
@@ -326,7 +335,9 @@ void Engine::runSignatures(float* l, float* r, int n, float eased) noexcept {
         auto& f = sigFrames[K];
         f[SigAmount] = sigCrossfade && k == latestDeparting ? sigFromAmount * (1.0f - eased) : 0.0f;
         auto& sig = signatures[K];
-        if (f[SigAmount] <= 1.0e-4f && !sig.ringing()) {
+        // Skipped only once its own smoothed amount has reached zero too: bypassing a
+        // serial kind (a chorus) a few percent in would step.
+        if (f[SigAmount] <= 1.0e-4f && !sig.ringing() && sig.amountNow() <= 1.0e-5f) {
             sigSlots[K].idle = true; sigSlots[K].gain.value = 0; sigDeparting[K] = false;
             if (latestDeparting == k) latestDeparting = -1;
             continue;

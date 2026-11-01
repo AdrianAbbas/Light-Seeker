@@ -61,10 +61,10 @@ EngravedLookAndFeel::EngravedLookAndFeel() {
 void EngravedLookAndFeel::drawLinearSlider(juce::Graphics& g, int x, int y, int width, int height, float sliderPos, float,
                                            float, juce::Slider::SliderStyle style, juce::Slider& slider) {
     const bool hot = slider.isMouseOverOrDragging();
-    const auto trackColour = colours::ivory.withAlpha(0.24f);
+    const auto trackColour = colours::ivory.withAlpha(0.18f);
     const auto valueColour = slider.isEnabled() ? colours::blood : colours::dust;
     if (style == juce::Slider::LinearHorizontal) {
-        // A hairline track, the crimson value, a slim ivory cap. A bipolar range (an
+        // A hairline track, the gold value, a slim pearl cap. A bipolar range (an
         // Advanced offset) runs its value from zero.
         const auto area = juce::Rectangle<int>(x, y, width, height).toFloat();
         const float cy = area.getCentreY();
@@ -75,14 +75,16 @@ void EngravedLookAndFeel::drawLinearSlider(juce::Graphics& g, int x, int y, int 
         g.setColour(valueColour);
         g.fillRect(juce::Rectangle<float>::leftTopRightBottom(juce::jmin(origin, sliderPos), cy - 1.0f, juce::jmax(origin, sliderPos), cy + 1.0f));
         const auto cap = juce::Rectangle<float>(5.0f, juce::jmin(14.0f, area.getHeight() - 2.0f)).withCentre({ sliderPos, cy });
-        g.setColour(juce::Colours::black.withAlpha(0.5f));
+        g.setColour(juce::Colour(0xff5a4428).withAlpha(0.28f));
         g.fillRoundedRectangle(cap.translated(0.0f, 1.0f).expanded(0.5f), 2.0f);
-        g.setColour(hot ? colours::ivory.brighter(0.2f) : colours::ivory);
+        g.setColour(hot ? colours::pearl : colours::pearl.darker(0.03f));
         g.fillRoundedRectangle(cap, 2.0f);
+        g.setColour(colours::blood.withAlpha(0.7f));
+        g.drawRoundedRectangle(cap, 2.0f, 0.8f);
         return;
     }
-    // Vertical: a slim fader. A 2 px track, the crimson value rising from the bottom
-    // with a faint glow, an ivory cap with a dark centre line.
+    // Vertical: a slim fader. A 2 px track, the gold value rising from the bottom
+    // with a faint glow, a pearl cap with a gold centre line.
     const auto area = juce::Rectangle<int>(x, y, width, height).toFloat();
     const float capWidth = juce::jmin(24.0f, area.getWidth() - 6.0f), capHeight = 9.0f;
     const float cx = area.getCentreX();
@@ -105,11 +107,13 @@ void EngravedLookAndFeel::drawLinearSlider(juce::Graphics& g, int x, int y, int 
         g.fillRect(juce::Rectangle<float>(8.0f, 1.0f).withCentre({ cx, origin }));
     }
     const auto cap = juce::Rectangle<float>(capWidth, capHeight).withCentre({ cx, top });
-    g.setColour(juce::Colours::black.withAlpha(0.55f));
+    g.setColour(juce::Colour(0xff5a4428).withAlpha(0.3f));
     g.fillRoundedRectangle(cap.translated(0.0f, 1.5f).expanded(1.0f), 3.0f);
-    g.setColour(hot ? colours::ivory.brighter(0.25f) : colours::ivory);
+    g.setColour(hot ? colours::pearl : colours::pearl.darker(0.03f));
     g.fillRoundedRectangle(cap, 3.0f);
-    g.setColour(colours::ink.withAlpha(0.65f));
+    g.setColour(colours::dust.withAlpha(0.9f));
+    g.drawRoundedRectangle(cap, 3.0f, 0.8f);
+    g.setColour(colours::blood);
     g.fillRect(juce::Rectangle<float>(capWidth - 10.0f, 1.0f).withCentre(cap.getCentre()));
 }
 

@@ -55,105 +55,109 @@ const Recipe recipes[Signature::kinds] = {
     // ---- Celestial Citadel
     // 1 Gates of Dawn, Fanfare Reflections: bright, brassy first reflections thrown
     // left and right like a fanfare from the gate towers.
-    { .tone = ToneShelf, .toneHz = 3200, .toneDb = 3.5f,
-      .taps = 6, .tapMs = { 11, 19, 29, 41, 57, 76 }, .tapGain = { .55f, .5f, .45f, .4f, .34f, .28f }, .tapPan = { -.9f, .9f, -.7f, .7f, -.5f, .5f },
+    { .tone = ToneShelf, .toneHz = 3200, .toneDb = 5,
+      .modes = 4, .modeHz = { 440, 660, 880, 1320 }, .modeT60 = .45f, .modeGain = .35f,
+      .taps = 6, .tapMs = { 11, 19, 29, 41, 57, 76 }, .tapGain = { .75f, .7f, .63f, .56f, .48f, .4f }, .tapPan = { -.9f, .9f, -.7f, .7f, -.5f, .5f },
       .tapLp = 16000, .tapDarken = .96f },
     // 2 Hall of Mirrors, Mirror Multiplication: reflections multiplying outwards across
     // the stereo field, each mirror farther than the last.
-    { .taps = 6, .tapMs = { 31, 47, 71, 107, 160, 240 }, .tapGain = { .4f, .45f, .45f, .4f, .34f, .28f }, .tapPan = { -.3f, .4f, -.6f, .75f, -.9f, 1 },
+    { .taps = 6, .tapMs = { 31, 47, 71, 107, 160, 240 }, .tapGain = { .55f, .62f, .62f, .56f, .48f, .4f }, .tapPan = { -.3f, .4f, -.6f, .75f, -.9f, 1 },
       .tapLp = 14000, .tapDarken = .97f, .tapMode = TapsScatter, .tapRate = .2f },
     // 3 Throne of Light, Golden Chorus: a regal doubling with a halo of gold an octave up.
-    { .wobbleMs = 4.5f, .wobbleHz = .55f, .wobbleShape = Sine, .wobbleMix = .5f,
-      .pitches = 1, .pitchRatio = { 2.0f }, .pitchGain = .3f, .pitchHp = 1500, .pitchLp = 11000 },
-    // 4 Spire Summit, Sky Echoes: long airy echoes falling away from the spire.
-    { .taps = 3, .tapMs = { 690, 1380, 2070 }, .tapGain = { .45f, .3f, .2f }, .tapPan = { .8f, -.8f, .5f }, .tapLp = 9000, .tapDarken = .85f,
+    { .wobbleMs = 4.5f, .wobbleHz = .55f, .wobbleShape = Sine, .wobbleMix = .6f,
+      .pitches = 1, .pitchRatio = { 2.0f }, .pitchGain = .5f, .pitchHp = 1500, .pitchLp = 11000 },
+    // 4 Spire Summit, Sky Echoes: long airy echoes falling away from the spire, the air
+    // thin and bright.
+    { .tone = ToneShelf, .toneHz = 6000, .toneDb = 3, .taps = 3, .tapMs = { 690, 1380, 2070 }, .tapGain = { .62f, .45f, .32f }, .tapPan = { .8f, -.8f, .5f }, .tapLp = 12000, .tapDarken = .9f,
       .tapMode = TapsScatter, .tapRate = .3f },
     // ---- Sky Temple
     // 5 Cloud Steps, Rising Spiral: an endless spiral of shimmer climbing the steps,
     // three voices each rising through an octave, drifting from left to right.
-    { .spiralGain = .6f, .spiralHz = .07f, .spiralHp = 450 },
+    { .spiralGain = .9f, .spiralHz = .07f, .spiralHp = 450 },
     // 6 Sanctum, Choir Bloom: a soft sung "ah" blooming under the instrument.
-    { .pitches = 2, .pitchRatio = { 1.0035f, 2.0f }, .pitchGain = .45f, .pitchLp = 4200, .formant = FormantAh, .bloomMs = 800,
+    { .pitches = 2, .pitchRatio = { 1.0035f, 2.0f }, .pitchGain = .6f, .pitchLp = 4200, .formant = FormantAh, .bloomMs = 800,
       .smear = .5f, .smearMs = 45 },
     // 7 Bell Garden, Wind Chimes: tuned chimes (a pentatonic set) struck by the playing.
-    { .modes = 6, .modeHz = { 1046.5f, 1174.7f, 1396.9f, 1568.0f, 1760.0f, 2093.0f }, .modeT60 = 3.5f, .modeGain = .35f, .modeStruck = true },
+    { .modes = 6, .modeHz = { 1046.5f, 1174.7f, 1396.9f, 1568.0f, 1760.0f, 2093.0f }, .modeT60 = 5, .modeGain = .95f, .modeStruck = true },
     // ---- Elven Sanctuary
     // 8 Moonwell, Water Glass: a glassy shimmer moving on the water's surface.
-    { .wobbleMs = 1.2f, .wobbleHz = .4f, .wobbleShape = Slosh, .wobbleMix = .45f,
-      .pitches = 1, .pitchRatio = { 2.0f }, .pitchGain = .3f, .pitchMode = PitchTwinkle, .pitchHp = 2500, .pitchLp = 12000 },
+    { .wobbleMs = 1.4f, .wobbleHz = .4f, .wobbleShape = Slosh, .wobbleMix = .6f,
+      .pitches = 1, .pitchRatio = { 2.0f }, .pitchGain = .5f, .pitchMode = PitchTwinkle, .pitchHp = 2500, .pitchLp = 12000 },
     // 9 Leaf Halls, Living Wood: warm wooden body resonances and a gentle doubling.
     { .wobbleMs = 3, .wobbleHz = .35f, .wobbleShape = Sine, .wobbleMix = .35f,
-      .modes = 4, .modeHz = { 196, 277, 392, 554 }, .modeT60 = .5f, .modeGain = .5f },
-    // 10 Starlit Canopy, Star Harmonics: sparkling high harmonics, twinkling.
-    { .pitches = 2, .pitchRatio = { 3.0f, 4.0f }, .pitchGain = .35f, .pitchMode = PitchTwinkle, .pitchHp = 4000, .pitchLp = 13000 },
+      .modes = 4, .modeHz = { 196, 277, 392, 554 }, .modeT60 = .55f, .modeGain = .65f },
+    // 10 Starlit Canopy, Star Harmonics: sparkling harmonics (octave and twelfth), twinkling.
+    { .pitches = 2, .pitchRatio = { 2.0f, 3.0f }, .pitchGain = .55f, .pitchMode = PitchTwinkle, .pitchHp = 2000, .pitchLp = 6000 },
     // ---- Crystal Palace
     // 11 Prism Hall, Spectral Prism: an octave shimmer split into colour bands, each
     // band at its own place in the stereo field, the bands slowly turning.
-    { .prismGain = .7f, .prismHz = .05f },
-    // 12 Mirror Lake, Still Reflection: a calm reflection across the water, softened.
-    { .taps = 2, .tapMs = { 380, 760 }, .tapGain = { .4f, .25f }, .tapPan = { -.5f, .5f }, .tapLp = 6000, .tapDarken = .8f,
-      .smear = .4f, .smearMs = 60 },
+    { .prismGain = 1.0f, .prismHz = .05f },
+    // 12 Mirror Lake, Still Reflection: a calm reflection across the water, softened, and
+    // each phrase mirrored back in a soft reverse swell, as the lake mirrors the palace.
+    { .taps = 2, .tapMs = { 380, 760 }, .tapGain = { .45f, .3f }, .tapPan = { -.5f, .5f }, .tapLp = 6000, .tapDarken = .8f,
+      .smear = .45f, .smearMs = 60, .reverseMs = 620, .reverseGain = .5f, .reverseLp = 7000 },
     // 13 Diamond Vault, Crystal Modes: bright, inharmonic crystal modes ringing.
-    { .modes = 5, .modeHz = { 1568.0f, 2349.3f, 3136.0f, 3951.1f, 4698.6f }, .modeT60 = 4, .modeGain = .4f, .modeStruck = true },
+    { .modes = 5, .modeHz = { 1568.0f, 2349.3f, 3136.0f, 3951.1f, 4698.6f }, .modeT60 = 6, .modeGain = 1.0f, .modeStruck = true,
+      .pitches = 2, .pitchRatio = { 4.0f, 6.0f }, .pitchGain = .2f, .pitchMode = PitchTransient, .pitchHp = 2500, .pitchLp = 6000 },
     // ---- Blossom Meadow
     // 14 Sunlit Meadow, Sun Warmth: a sunny, gentle saturation, highs softened.
-    { .sat = SatWarm, .drive = 8, .tone = ToneShelf, .toneHz = 7000, .toneDb = -2 },
+    { .sat = SatWarm, .drive = 10, .tone = ToneShelf, .toneHz = 7000, .toneDb = -2.5f },
     // 15 Butterfly Glade, Butterfly Flutter: the sound flutters lightly from side to
     // side, like wings (an irregular auto-pan).
-    { .tremDepth = .8f, .tremHz = 4.5f, .tremShape = SmoothRandom, .autoPan = true },
+    { .tremDepth = .9f, .tremHz = 4.5f, .tremShape = SmoothRandom, .autoPan = true },
     // 16 Wildflower Hill, Valley Echoes: gentle echoes coming back over the valley.
-    { .taps = 3, .tapMs = { 520, 1040, 1560 }, .tapGain = { .45f, .3f, .2f }, .tapPan = { -.7f, .7f, -.4f }, .tapLp = 5000, .tapDarken = .8f },
+    { .taps = 3, .tapMs = { 520, 1040, 1560 }, .tapGain = { .6f, .42f, .3f }, .tapPan = { -.7f, .7f, -.4f }, .tapLp = 5000, .tapDarken = .8f },
     // ---- Golden Cathedral
     // 17 Nave of Light, Radiant Cascade: long diffused cascades from the golden vault.
-    { .taps = 4, .tapMs = { 210, 430, 660, 900 }, .tapGain = { .35f, .27f, .2f, .14f }, .tapPan = { -.9f, .9f, -.6f, .6f },
+    { .taps = 4, .tapMs = { 210, 430, 660, 900 }, .tapGain = { .5f, .38f, .28f, .2f }, .tapPan = { -.9f, .9f, -.6f, .6f },
       .tapLp = 9000, .tapDarken = .9f, .tapMode = TapsDiffuse },
     // 18 Choir Loft, Angel Choir: an angelic choir an octave and a fifth above.
-    { .pitches = 2, .pitchRatio = { 2.0f, 1.5f }, .pitchGain = .5f, .pitchLp = 6000, .formant = FormantAh, .bloomMs = 400 },
+    { .pitches = 2, .pitchRatio = { 2.0f, 1.5f }, .pitchGain = .65f, .pitchLp = 6000, .formant = FormantAh, .bloomMs = 400 },
     // 19 Stained Glass Chapel, Colour Shift: a shimmer seen through coloured glass, its
     // colour changing slowly (two band-passes sweeping in opposite directions).
-    { .smear = .3f, .smearMs = 40, .hueGain = .75f, .hueHz = .05f },
+    { .smear = .35f, .smearMs = 40, .hueGain = .6f, .hueHz = .05f },
     // ---- Floating Isles
     // 20 Cloud Bridge, Cloud Swirl: echoes swirling around the listener.
-    { .taps = 6, .tapMs = { 60, 120, 180, 240, 300, 360 }, .tapGain = { .45f, .4f, .34f, .28f, .23f, .18f },
-      .tapLp = 10000, .tapDarken = .92f, .tapMode = TapsCircle, .tapRate = .2f, .swirlDepth = .85f, .swirlHz = .13f },
+    { .taps = 6, .tapMs = { 60, 120, 180, 240, 300, 360 }, .tapGain = { .6f, .52f, .45f, .38f, .3f, .24f },
+      .tapLp = 10000, .tapDarken = .92f, .tapMode = TapsCircle, .tapRate = .2f, .swirlDepth = 1, .swirlHz = .13f },
     // 21 Windswept Isle, Wind Veil: the sound thinned and blown about by the wind.
     { .tone = ToneHigh, .toneHz = 380, .toneQ = .7f, .wobbleMs = 1.5f, .wobbleHz = .5f, .wobbleShape = SmoothRandom, .wobbleMix = .5f,
       .tremDepth = .3f, .tremHz = .4f, .tremShape = SmoothRandom },
     // 22 Sky Harbour, Soaring Echoes: echoes that soar a fifth higher as they sail away
     // (the pitch layer echoed), over the harbour's rising tape echoes.
-    { .pitches = 1, .pitchRatio = { 1.4983f }, .pitchGain = .3f, .pitchHp = 300,
-      .taps = 3, .tapMs = { 470, 940, 1410 }, .tapGain = { .55f, .4f, .28f }, .tapPan = { .7f, -.7f, .3f }, .tapLp = 12000, .tapDarken = .95f,
+    { .pitches = 1, .pitchRatio = { 1.4983f }, .pitchGain = .45f, .pitchHp = 300,
+      .taps = 3, .tapMs = { 470, 940, 1410 }, .tapGain = { .65f, .5f, .35f }, .tapPan = { .7f, -.7f, .3f }, .tapLp = 12000, .tapDarken = .95f,
       .tapsFromPitch = true },
     // ---- Royal Gardens
     // 23 Rose Garden, Lush Chorus: a soft, lush, wide chorus.
-    { .wobbleMs = 5, .wobbleHz = .45f, .wobbleShape = Sine, .wobbleMix = .5f },
+    { .wobbleMs = 6, .wobbleHz = .45f, .wobbleShape = Sine, .wobbleMix = .6f },
     // 24 Fountain Court, Fountain Sparkle: sparkling, water-like modulation.
-    { .wobbleMs = .6f, .wobbleHz = 5, .wobbleShape = Bubbling, .wobbleMix = .4f,
-      .pitches = 1, .pitchRatio = { 2.0f }, .pitchGain = .25f, .pitchMode = PitchTwinkle, .pitchHp = 3000 },
+    { .wobbleMs = .7f, .wobbleHz = 5, .wobbleShape = Bubbling, .wobbleMix = .5f,
+      .pitches = 1, .pitchRatio = { 2.0f }, .pitchGain = .45f, .pitchMode = PitchTwinkle, .pitchHp = 3000 },
     // 25 Marble Colonnade, Column Slaps: rhythmic slaps from column to column.
-    { .taps = 6, .tapMs = { 105, 210, 315, 420, 525, 630 }, .tapGain = { .5f, .42f, .35f, .28f, .22f, .17f }, .tapPan = { -.85f, .85f, -.85f, .85f, -.85f, .85f },
+    { .taps = 6, .tapMs = { 105, 210, 315, 420, 525, 630 }, .tapGain = { .65f, .55f, .45f, .36f, .28f, .22f }, .tapPan = { -.85f, .85f, -.85f, .85f, -.85f, .85f },
       .tapLp = 12000, .tapDarken = .93f },
     // ---- Fairy Glade
     // 26 Mushroom Ring, Bouncy Sparkle: every attack bounces up an octave and a fifth,
     // the sparkle bouncing left and right.
-    { .pitches = 2, .pitchRatio = { 2.0f, 3.0f }, .pitchGain = .5f, .pitchMode = PitchTransient, .pitchHp = 1200, .pitchLp = 12000,
+    { .pitches = 2, .pitchRatio = { 2.0f, 3.0f }, .pitchGain = .65f, .pitchMode = PitchTransient, .pitchHp = 1200, .pitchLp = 6000,
       .taps = 4, .tapMs = { 125, 250, 375, 500 }, .tapGain = { .6f, .45f, .32f, .22f }, .tapPan = { -.9f, .9f, -.9f, .9f }, .tapLp = 14000,
       .tapsFromPitch = true },
     // 27 Firefly Hollow, Firefly Glitter: tiny grains of light two octaves up, each a
     // firefly somewhere in the stereo field, blinking on and off.
-    { .pitches = 2, .pitchRatio = { 4.0f, 2.0f }, .pitchGain = .6f, .pitchMode = PitchGlitter, .pitchHp = 2500, .pitchLp = 14000,
+    { .pitches = 2, .pitchRatio = { 3.0f, 2.0f }, .pitchGain = .45f, .pitchMode = PitchGlitter, .pitchHp = 1500, .pitchLp = 5500,
       .smear = .3f, .smearMs = 25 },
     // 28 Fairy Court, Harp Resonance: harp strings (tuned combs) ringing in sympathy.
-    { .combs = 3, .combHz = { 523.3f, 659.3f, 784.0f }, .combFeedback = .92f, .combDamp = .1f, .combGain = .5f },
+    { .combs = 3, .combHz = { 523.3f, 659.3f, 784.0f }, .combFeedback = .92f, .combDamp = .1f, .combGain = .7f },
     // ---- Dragon's Peak
     // 29 Eyrie, Cliff Echoes: echoes thrown back off the cliffs, far and scattered.
-    { .taps = 4, .tapMs = { 310, 640, 1020, 1490 }, .tapGain = { .45f, .34f, .25f, .17f }, .tapPan = { -.8f, .6f, -.4f, .9f },
+    { .taps = 4, .tapMs = { 310, 640, 1020, 1490 }, .tapGain = { .48f, .36f, .26f, .18f }, .tapPan = { -.8f, .6f, -.4f, .9f },
       .tapLp = 7500, .tapDarken = .85f, .tapMode = TapsScatter, .tapRate = .15f },
     // 30 Golden Nest, Golden Harmonics: a warm golden harmonic richness.
-    { .sat = SatWarm, .drive = 7,
-      .modes = 6, .modeHz = { 110, 220, 330, 440, 550, 660 }, .modeT60 = .8f, .modeGain = .45f },
+    { .sat = SatWarm, .drive = 9,
+      .modes = 6, .modeHz = { 110, 220, 330, 440, 550, 660 }, .modeT60 = .8f, .modeGain = .6f },
     // 31 Summit of Winds, Soaring Octave: a heroic octave soaring above, blooming.
-    { .pitches = 1, .pitchRatio = { 2.0f }, .pitchGain = .45f, .pitchHp = 500, .bloomMs = 300 },
+    { .pitches = 1, .pitchRatio = { 2.0f }, .pitchGain = .6f, .pitchHp = 500, .bloomMs = 300 },
 };
 }
 
@@ -550,7 +554,7 @@ void Signature::process(float* l, float* r, int n, const Frame& p, const Context
                 huePhase += 32.0 * rc.hueHz * rate / sr;
                 huePhase -= std::floor(huePhase);
                 const double s0 = 0.5 + 0.5 * std::sin(dsp::twoPi * huePhase);
-                const double c1 = 700.0 * std::pow(9.0, s0), c2 = 700.0 * std::pow(9.0, 1.0 - s0);
+                const double c1 = 500.0 * std::pow(6.0, s0), c2 = 500.0 * std::pow(6.0, 1.0 - s0);   // 500 Hz - 3 kHz (x1.5 for the second)
                 for (int ch = 0; ch < 2; ++ch) {
                     auto keep = [this](Svf& f, double hz) { const float s1 = f.s1, s2 = f.s2; f.set(hz, sr, 0.35f); f.s1 = s1; f.s2 = s2; };
                     keep(hueFilters[static_cast<std::size_t>(ch)][0], ch == 0 ? c1 : c2);
