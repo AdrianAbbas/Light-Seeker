@@ -9,16 +9,16 @@ namespace dc::art {
 namespace {
 // Map landmarks, virtual coordinates. Order = Location order.
 const std::array<Landmark, LocationCount> landmarks {{
-    { CelestialCitadel, { 480, 150 }, 50 },
+    { CelestialCitadel, { 480, 140 }, 50 },
     { SkyTemple, { 700, 120 }, 44 },
-    { ElvenSanctuary, { 210, 230 }, 46 },
-    { CrystalPalace, { 820, 250 }, 44 },
-    { BlossomMeadow, { 390, 360 }, 46 },
-    { GoldenCathedral, { 610, 300 }, 46 },
+    { ElvenSanctuary, { 190, 230 }, 46 },
+    { CrystalPalace, { 820, 260 }, 44 },
+    { BlossomMeadow, { 370, 330 }, 46 },
+    { GoldenCathedral, { 620, 250 }, 46 },
     { FloatingIsles, { 300, 120 }, 44 },
-    { RoyalGardens, { 520, 410 }, 42 },
-    { FairyGlade, { 160, 380 }, 40 },
-    { DragonsPeak, { 860, 120 }, 46 },
+    { RoyalGardens, { 540, 350 }, 42 },
+    { FairyGlade, { 170, 345 }, 40 },
+    { DragonsPeak, { 860, 130 }, 46 },
 }};
 
 // Each location's palette: sky top, sky low, ground (high-key, pastel, sunlit).
@@ -72,7 +72,8 @@ void drawPlace(juce::Graphics& g, SceneId id) {
     const auto& pal = palettes[static_cast<std::size_t>(juce::jlimit(0, LocationCount - 1, id.location))];
     const auto seed = static_cast<std::uint32_t>(id.location * 13 + id.sub * 5 + 3);
     // Each place its own composition: horizon height, landmark position, size and form.
-    const float horizon = 250.0f + 35.0f * static_cast<float>((id.location * 3 + id.sub * 2) % 5);
+    const float horizon = 235.0f + 24.0f * static_cast<float>((id.location * 5 + id.sub * 3) % 7);
+    g.fillAll(juce::Colour(pal.ground).darker(0.15f));   // no gap under the hills (and the horizon stays legible)
     drawSky(g, pal, horizon, seed);
     // Rolling ground, lighter in the distance (aerial perspective).
     for (int layer = 0; layer < 3; ++layer) {

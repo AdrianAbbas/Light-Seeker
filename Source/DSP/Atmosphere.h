@@ -1,7 +1,7 @@
 #pragma once
-// IX. ATMOSPHERE (Milestone 10): an optional layer of sparse, synthesised sounds that
-// belong to a place: torch crackle, dripping water, distant wind, chains, a far-off
-// growl, bubbling, crows... Original synthesis only (no samples). Off by default
+// ATMOSPHERE (light, Milestone 4): an optional layer of sparse, synthesised sounds that
+// belong to a place: soft wind, distant bells, birdsong-like chirps, fountain shimmer,
+// chimes, gentle harp glints, leaves, a brook. Original synthesis only (no samples). Off by default
 // (Level 0); its own Level, Density and Seed. Events sit on an eighth-note grid of the
 // musical position and are chosen by a hash of (seed, slot, place), so the layer is
 // deterministic and follows the tempo. It ducks under the instrument and never rises
@@ -11,8 +11,7 @@
 
 namespace dc {
 enum class AtmosSound : int {
-    TorchCrackle, Drip, Wind, Chains, Growl, Bubbles, Crow, BellToll, Owl, Murmur,
-    Clink, Frog, Howl, IceCreak, Rustle, Tinkle, WaterLap, FireCrackle, Whisper, Count
+    SoftWind, DistantBell, Birdsong, FountainShimmer, Chimes, HarpGlint, Leaves, Brook, Count
 };
 const char* atmosSoundName(AtmosSound) noexcept;
 // The sounds of a place (up to three; their order is their weight, first = most often).
@@ -29,6 +28,7 @@ public:
     void process(float* l, float* r, int n, double beats, double beatsPerSample, int location, int sub,
                  float level, float density, int seed, const float* dryL, const float* dryR) noexcept;
     int activeVoices() const noexcept;
+    int eventsStarted() const noexcept { return started; }   // since reset (tests)
 
 private:
     struct Voice {
@@ -45,6 +45,7 @@ private:
     double sr = 48000;
     std::array<Voice, voiceCount> voices;
     long long lastSlot = -1;
+    int started = 0;
     float duck = 1, envelope = 0, attack = 0, release = 0, smoothLevel = 0;
 };
 }

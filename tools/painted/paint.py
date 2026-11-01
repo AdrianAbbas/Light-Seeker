@@ -31,7 +31,9 @@ _lib = None
 def _oidn():
     global _lib
     if _lib is None:
-        path = glob.glob(os.path.join(os.path.dirname(__import__("bpy").__file__), "lib", "libOpenImageDenoise.so.2"))
+        import site
+        roots = site.getsitepackages() + [os.path.dirname(__import__("bpy").__file__)]
+        path = [p for r in roots for p in glob.glob(os.path.join(r, "bpy", "lib", "libOpenImageDenoise.so.2"))]
         if not path:
             path = glob.glob("/opt/bvenv/lib/python3*/site-packages/bpy/lib/libOpenImageDenoise.so.2")
         lib = ctypes.CDLL(path[0])
@@ -108,34 +110,28 @@ def screen_xy(h, w):
 
 
 # ------------------------------------------------------------------ tone + grade
-def tonemap(rgb, exposure=1.0, white=4.0):
+def tonemap(rgb, exposure=1.0, white=6.0):
+    """A soft filmic curve for daylight: highlights roll off into cream, the shadows are
+    lifted (never black), mid-tones stay luminous."""
     x = rgb * exposure
     l = lum(x)[..., None]
     lt = l * (1 + l / (white * white)) / (1 + l)
     out = x * (lt / np.maximum(l, 1e-6))
     out = np.clip(out, 0, None) ** (1 / 2.2)
-    # Deep blacks: a black point and a contrast curve (most of the frame near-black).
-    out = np.clip((out - 0.045) / 0.955, 0, 1) ** 1.18
-    return out
+    # Lift the floor: the darkest shade is a soft lavender-grey, not black.
+    return np.clip(0.10 + 0.92 * out, 0, 1)
 
 
 def grade(rgb):
-    """Near-black and charcoal, cool slate/purple shadows, crimson kept intense; every
-    other hue desaturated."""
-    r, g, b = rgb[..., 0], rgb[..., 1], rgb[..., 2]
-    L = lum(rgb)
-    red = np.clip((r - np.maximum(g, b)) * 3.0, 0, 1)
-    # Desaturate non-red colours towards a cool grey.
-    cool = np.dstack([L * 0.92, L * 0.95, L * 1.1])
-    out = rgb * red[..., None] + (rgb * 0.25 + cool * 0.75) * (1 - red[..., None])
-    # Split toning: shadows towards slate-purple, a lifted (but dark) floor.
-    shadow = np.clip(1 - L / 0.35, 0, 1)[..., None]
-    tint = np.array([0.055, 0.05, 0.075], np.float32)
-    out = out * (1 - 0.35 * shadow) + tint * shadow * 0.35
-    # Reds: crimson, not salmon (gamma lifts the small green and blue of a bright red).
-    out[..., 1] = out[..., 1] * (1 - 0.75 * red)
-    out[..., 2] = out[..., 2] * (1 - 0.6 * red)
-    out[..., 0] = out[..., 0] * (1 - 0.08 * red)
+    """High-key romantic daylight: warm cream highlights, lavender-blue shadows, the
+    pastels (blush, lavender, mint, sky) kept and gently enriched, greens sunlit."""
+    L = lum(rgb)[..., None]
+    grey = np.repeat(L, 3, axis=2)
+    out = grey + (rgb - grey) * 1.35                       # richer colour
+    shadow = np.clip(1 - L / 0.5, 0, 1)
+    light = np.clip((L - 0.55) / 0.45, 0, 1)
+    out = out * (1 - 0.15 * shadow) + np.array([0.6, 0.6, 0.8], np.float32) * shadow * 0.15   # lavender shadows
+    out = out * (1 - 0.18 * light) + np.array([1.0, 0.95, 0.84], np.float32) * light * 0.18     # cream highlights
     return np.clip(out, 0, 1)
 
 
@@ -219,7 +215,7 @@ def dabs(img, seed, scale):
     return out
 
 
-def painterly(img, radius, stroke, seed, scale, streak=0.08, sharpen=0.0, horizontal=False):
+def painterly(img, radius, stroke, seed, scale, streak=0.035, sharpen=0.0, horizontal=False):
     """img: premultiplied RGBA in display space."""
     out = kuwahara(dabs(img, seed, scale), radius)
     if stroke > 0:
@@ -256,88 +252,72 @@ def grain(img, seed, amount=0.018, speckle=0.0012, scale=1.0):
 
 # --------------------------------------------------------------------------- sky
 def paint_sky(h, w, p, seed):
-    """The sky and moon (linear light): a near-black zenith, slate-purple horizon mist,
-    a huge crimson moon with maria and a halo, torn clouds lit red near it, stars."""
+    """The daylight sky (linear light): clear blue above fading to cream and blush at the
+    horizon, a radiant gold sun with a wide glow, soft cumulus lit from the sun's side
+    with lavender undersides, faint god rays. (`moon` holds the sun's place.)"""
     sx, sy = screen_xy(h, w)
     horizon = p.get("horizon", 300)
-    t = np.clip(sy / horizon, 0, 1.4)
-    zenith = np.array([0.006, 0.005, 0.01], np.float32)
-    hor = np.array([0.035, 0.03, 0.048], np.float32) * p.get("glow", 1.0)
-    sky = zenith + (hor - zenith) * (t[..., None] ** 1.6)
-    out = sky.copy()
-    mx, my, mr = p.get("moon", [0, -999, 0])
-    # Halo: wide crimson glow.
+    t = np.clip(sy / max(horizon, 1), 0, 1.4)
+    zenith = np.array([0.10, 0.30, 0.85], np.float32)
+    hor = np.array([0.85, 0.86, 0.9], np.float32)
+    out = zenith + (hor - zenith) * (np.clip(t, 0, 1)[..., None] ** 2.6)
+    mx, my, mr = p.get("moon", [480, 80, 60])
     d = np.sqrt((sx - mx) ** 2 + (sy - my) ** 2)
-    if mr > 0:
-        halo = np.exp(-np.maximum(d - mr, 0) / (mr * 1.1)) * 0.5 + np.exp(-np.maximum(d - mr, 0) / (mr * 0.18)) * 0.6
-        out += np.array([0.42, 0.025, 0.02], np.float32) * halo[..., None] * p.get("halo", 1.0)
-    # Clouds: horizontal torn bands.
-    cl = p.get("clouds", 0.6)
+    glow = np.exp(-d / 260.0) * 0.55 + np.exp(-d / 70.0) * 0.6
+    out = out + np.array([1.0, 0.85, 0.55], np.float32) * glow[..., None]
+    # Cumulus: puffy masses (thresholded fbm), lit on the sun's side.
+    cl = p.get("clouds", 0.7)
     if cl > 0:
-        n1 = fbm(h, w, 6, 2, 5, seed)
-        n2 = fbm(h, w, 14, 4, 4, seed + 7)
-        bands = np.clip((n1 * 0.7 + n2 * 0.3 - (0.62 - 0.25 * cl)) * 3.0, 0, 1)
-        bands *= np.clip(1.0 - np.abs(sy - horizon * 0.55) / (horizon * 0.7), 0, 1) ** 0.7
-        lit = np.exp(-np.maximum(d - mr * 0.6, 0) / (max(mr, 1) * 1.8)) if mr > 0 else 0 * d
-        cloud_col = np.array([0.02, 0.018, 0.028], np.float32)[None, None] + np.array([0.45, 0.03, 0.025], np.float32)[None, None] * lit[..., None]
-        out = out * (1 - 0.85 * bands[..., None]) + cloud_col * bands[..., None]
-    # The moon: a disc with maria, limb darkening, a bright rim.
-    if mr > 0:
-        inside = np.clip((mr - d) / 1.5 + 0.5, 0, 1)
-        u = np.clip(d / mr, 0, 1)
-        maria = fbm(h, w, 5, 9, 4, seed + 3)
-        crater = fbm(h, w, 20, 34, 2, seed + 5)
-        tone = 0.75 + 0.35 * (maria - 0.5) + 0.12 * (crater - 0.5)
-        limb = (1 - u ** 2) ** 0.25
-        moon = np.array([1.35, 0.075, 0.05], np.float32) * (tone * (0.55 + 0.45 * limb))[..., None]
-        # Clouds cross the lower moon.
-        if cl > 0:
-            cover = bands[..., None] * 0.8
-            moon = moon * (1 - cover) + cloud_col * cover
-        out = out * (1 - inside[..., None]) + moon * inside[..., None]
-    # Stars: sparse, only in the dark upper sky.
-    st = p.get("stars", 0.4)
-    if st > 0:
-        rng = np.random.default_rng(seed + 11)
-        stars = (rng.random((h, w)) < 0.0009 * st).astype(np.float32) * rng.random((h, w)).astype(np.float32)
-        stars = ndimage.gaussian_filter(stars, 0.6) * 4.0
-        fade = np.clip(1 - sy / (horizon * 0.8), 0, 1) * (np.clip((d - mr * 1.6) / (mr + 1), 0, 1) if mr > 0 else 1)
-        out += (stars * fade)[..., None] * np.array([0.8, 0.75, 0.85], np.float32)
-    # Interior backdrops: a crimson glow in the depth instead of the moon.
-    for gx, gy, gr, gs in p.get("glows", []):
-        dd = np.sqrt((sx - gx) ** 2 + (sy - gy) ** 2)
-        out += np.array([0.7, 0.07, 0.04], np.float32) * (np.exp(-dd / gr) * gs)[..., None]
+        n1 = fbm(h, w, 5, 3, 5, seed)
+        n2 = fbm(h, w, 12, 7, 4, seed + 7)
+        mass = n1 * 0.7 + n2 * 0.3
+        cover = np.clip((mass - (0.66 - 0.2 * cl)) * 4.5, 0, 1)
+        cover *= np.clip(1.15 - sy / (horizon * 1.05), 0, 1)
+        # Light from the sun's side: compare with the mass shifted towards the sun.
+        dx, dy = (mx - w * VW / w / 2) / VW, (my - horizon) / VH
+        shift = ndimage.shift(mass, (-dy * 0.03 * h, -dx * 0.03 * w), order=1, mode="nearest")
+        lit = np.clip(0.55 + (mass - shift) * 9.0, 0.25, 1.15)
+        cloud = np.array([1.0, 0.97, 0.93], np.float32) * lit[..., None] + np.array([0.62, 0.6, 0.82], np.float32) * (1 - np.clip(lit, 0, 1))[..., None] * 0.8
+        cloud = cloud + np.array([1.0, 0.8, 0.5], np.float32) * (np.exp(-d / 220.0) * 0.5)[..., None]
+        out = out * (1 - cover[..., None]) + cloud * cover[..., None]
+    # The sun: a bright disc with a soft rim.
+    disc = np.clip((mr * 0.55 - d) / 2.0 + 0.5, 0, 1)
+    out = out * (1 - disc[..., None]) + np.array([2.4, 2.1, 1.5], np.float32) * disc[..., None]
+    # God rays: soft radial streaks from the sun.
+    rays = p.get("rays", 0.5)
+    if rays > 0:
+        ang = np.arctan2(sy - my, sx - mx)
+        streak = fbm(1, 720, 1, 48, 3, seed + 21)[0]
+        idx = ((ang + np.pi) / (2 * np.pi) * 719).astype(int) % 720
+        out = out + np.array([1.0, 0.9, 0.7], np.float32) * (streak[idx] ** 3 * np.exp(-d / 500.0) * 0.35 * rays)[..., None]
     return np.dstack([out, np.ones((h, w), np.float32)])
 
 
 # -------------------------------------------------------------------- per layer
 LAYER_STYLE = {
     #        haze  kuwahara stroke sharpen grain speckle
-    "sky":  (0.00, 11, 14, 0.0, 0.020, 0.0016),
-    "far":  (0.30, 10, 12, 0.0, 0.018, 0.0010),
-    "mid":  (0.22, 7, 10, 0.25, 0.016, 0.0006),
-    "near": (0.03, 5, 8, 0.5, 0.016, 0.0004),
+    "sky":  (0.00, 8, 10, 0.0, 0.016, 0.0),
+    "far":  (0.22, 8, 10, 0.0, 0.016, 0.0008),
+    "mid":  (0.10, 5, 8, 0.3, 0.014, 0.0005),
+    "near": (0.02, 4, 6, 0.5, 0.014, 0.0004),
     "fog":  (0.00, 9, 14, 0.0, 0.010, 0.0),
 }
 
 
 def haze_colour(h, w, meta):
+    """Aerial perspective: a pale blue-cream air, golden towards the sun."""
     sx, sy = screen_xy(h, w)
-    base = np.array([0.05, 0.047, 0.066], np.float32)
-    col = np.broadcast_to(base, (h, w, 3)).copy()
-    moon = meta.get("sky", {}).get("moon")
-    if moon and moon[2] > 0:
-        d = np.sqrt((sx - moon[0]) ** 2 + (sy - moon[1]) ** 2)
-        col += np.array([0.35, 0.03, 0.02], np.float32) * np.exp(-d / (moon[2] * 2.2))[..., None]
-    for gx, gy, gr, gs in meta.get("sky", {}).get("glows", []):
-        d = np.sqrt((sx - gx) ** 2 + (sy - gy) ** 2)
-        col += np.array([0.3, 0.03, 0.02], np.float32) * (np.exp(-d / (gr * 1.5)) * gs * 0.5)[..., None]
+    col = np.broadcast_to(np.array([0.72, 0.8, 0.95], np.float32), (h, w, 3)).copy()
+    sun = meta.get("sky", {}).get("moon")
+    if sun:
+        d = np.sqrt((sx - sun[0]) ** 2 + (sy - sun[1]) ** 2)
+        col += np.array([0.35, 0.25, 0.08], np.float32) * np.exp(-d / 320.0)[..., None]
     return col
 
 
 def bloom(img, scale):
     """Glow around emissive light (linear, premultiplied)."""
-    bright = np.maximum(img[..., :3] - 1.5, 0)
+    bright = np.maximum(img[..., :3] - 1.2, 0)
     glow = np.zeros_like(bright)
     for sigma, wgt in ((3, 0.25), (10, 0.15), (28, 0.1)):
         glow += ndimage.gaussian_filter(bright, (sigma * scale, sigma * scale, 0)) * wgt
@@ -367,8 +347,8 @@ def process_layer(name, img, meta, seed, scale):
     exposure = meta.get("exposure", 1.0)
     rgb = grade(tonemap(rgb, exposure))
     if name == "fog":
-        # Fog: pale slate where it is lit by nothing, crimson where the lights reach it.
-        a = np.clip(a * meta.get("fog_opacity", 0.8), 0, 1)
+        # Mist: a soft bright veil.
+        a = np.clip(a * meta.get("fog_opacity", 0.6), 0, 1)
     img = np.dstack([rgb * a[..., None], a])
     img = painterly(img, max(1, int(round(rad * scale))), stroke * scale, seed, scale, sharpen=sharp, horizontal=name in ("fog", "sky"))
     if name in ("sky", "far"):

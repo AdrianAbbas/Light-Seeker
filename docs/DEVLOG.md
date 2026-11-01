@@ -69,7 +69,7 @@ usage limit or a compaction) continues from the first unticked line. Push to `ma
 
 **Milestone 3: visuals**
 
-- [ ] 3a. Light restyle of the controls (ivory/pearl panels, gold value tracks, dark text) and the map overlay (gold marker, serif labels)
+- [x] 3a. Light restyle of the controls (ivory/pearl panels, gold value tracks, dark text) and the map overlay (gold marker, serif labels)
 - [ ] 3b. Painted pipeline relit for daylight (sun + sky, clouds, god rays, bright haze, marble and gold, flowers); life: drifting clouds, light motes, glimmer, birds
 - [ ] 3c. The bright painterly map
 - [ ] 3d. Scenes: Celestial Citadel (4)
@@ -80,7 +80,7 @@ usage limit or a compaction) continues from the first unticked line. Push to `ma
 
 **Milestone 4: Atmosphere layer (light)**
 
-- [ ] 4a. Synthesised light sounds (soft wind, distant bells, birdsong-like chirps, fountain shimmer, chimes, harp glints), per place, off by default, sparse, never masking
+- [x] 4a. Synthesised light sounds (soft wind, distant bells, birdsong-like chirps, fountain shimmer, chimes, harp glints), per place, off by default, sparse, never masking
 - [ ] 4b. Tests, DEVLOG; push without `[skip ci]`
 
 **Milestone 5: presets and polish**

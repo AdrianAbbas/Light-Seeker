@@ -194,7 +194,7 @@ std::vector<LightSource> paintedLights(SceneId id) {
 
 const juce::Image& mistTexture() {
     // 384 x 128, tileable horizontally and vertically: periodic value noise, a few octaves,
-    // shaped into soft wisps, tinted slate; the editor fades it (opacity).
+    // shaped into soft wisps, white; the editor fades it (opacity).
     static const juce::Image texture = [] {
         constexpr int W = 384, H = 128;
         juce::Image image(juce::Image::ARGB, W, H, true, juce::SoftwareImageType());
@@ -225,7 +225,7 @@ const juce::Image& mistTexture() {
                 const float a = juce::jlimit(0.0f, 1.0f, (v - 0.45f) * 2.6f);
                 // Vertical fade (the sheet has no hard top or bottom edge), slate tint.
                 const float fade = std::pow(std::sin(juce::MathConstants<float>::pi * (static_cast<float>(y) + 0.5f) / H), 1.5f);
-                d.setPixelColour(x, y, juce::Colour(0xff8c88a0).withAlpha(a * a * fade * 0.16f));
+                d.setPixelColour(x, y, juce::Colour(0xfffdfbff).withAlpha(a * a * fade * 0.22f));   // soft white mist
             }
         return image;
     }();

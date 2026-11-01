@@ -267,7 +267,21 @@ private:
     // Painted scenes: the shown scene's planes, its ember sources and the embers aloft.
     dc::art::Planes planes;
     struct Ember { juce::Point<float> p, v; float age, life, size, phase; };
-    std::vector<Ember> embers;
+    std::vector<Ember> embers;   // light motes (daylight): drifting, twinkling
+    // Doves crossing the sky now and then (scenes with a visible sky): a small flock
+    // flying across in about 20 s, repainting only its own region.
+    struct Bird { juce::Point<float> p; float phase, size; };
+    std::vector<Bird> birds;
+    juce::Point<float> flockVelocity;
+    double nextFlock = 0;
+    bool skyVisible = false;
+    void stepBirds(float dt, double now);
+    void paintBirds(juce::Graphics&);
+    juce::Rectangle<int> birdsArea() const;
+public:
+    int birdCount() const noexcept { return static_cast<int>(birds.size()); }
+    void startFlockForTest() { nextFlock = 0; skyVisible = true; stepBirds(0.0f, 1.0e9); }
+private:
     std::vector<dc::art::LightSource> emberSources;
     juce::Random random { 7 };
 

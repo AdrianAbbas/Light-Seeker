@@ -77,6 +77,7 @@ public:
     // differ from the Location parameters), and whether one of them is steering.
     bool steering() const noexcept { return steered.load(std::memory_order_relaxed); }
     int atmosphereVoices() const noexcept { return atmosphere.activeVoices(); }
+    int atmosphereEvents() const noexcept { return atmosphere.eventsStarted(); }
     // Hotfix 1: whether a Journey (on, with a route) or Roam is set to steer.
     bool journeyRunning() const noexcept;
     bool roamRunning() const noexcept;

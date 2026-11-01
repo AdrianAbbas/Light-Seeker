@@ -55,7 +55,7 @@ LightSeekerView::Drawer::Drawer(juce::AudioProcessorValueTreeState& state) {
             row->slider = std::make_unique<juce::Slider>(juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight);
             row->slider->setTextBoxStyle(juce::Slider::TextBoxRight, true, 56, 18);
             row->slider->setDoubleClickReturnValue(true, 0.0);
-            row->slider->setColour(juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
+            row->slider->setColour(juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack); row->slider->setColour(juce::Slider::textBoxTextColourId, colours::ash);
             row->sliderAttachment = std::make_unique<juce::SliderParameterAttachment>(*parameter, *row->slider);
             content.addAndMakeVisible(*row->slider);
         }
@@ -216,7 +216,7 @@ LightSeekerView::LightSeekerView(LightSeekerProcessor& p)
     addAndMakeVisible(travelLabel);
     travelTime.setTextBoxStyle(juce::Slider::TextBoxRight, true, 62, 18);
     travelTime.setDoubleClickReturnValue(true, 1.5);
-    travelTime.setColour(juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
+    travelTime.setColour(juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack); travelTime.setColour(juce::Slider::textBoxTextColourId, colours::ash);
     travelTimeAttachment = std::make_unique<juce::SliderParameterAttachment>(*processor.parameters.getParameter(dc::ids::travelTime), travelTime);
     addAndMakeVisible(travelTime);
     atmosphereLabel.setText("Atmosphere", juce::dontSendNotification);
@@ -225,7 +225,7 @@ LightSeekerView::LightSeekerView(LightSeekerProcessor& p)
     atmosphereLabel.setTooltip("Sparse sounds of the place (soft wind, distant bells, birdsong, chimes...). Off at 0 %.");
     addAndMakeVisible(atmosphereLabel);
     atmosphere.setTextBoxStyle(juce::Slider::TextBoxRight, true, 48, 18);
-    atmosphere.setColour(juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
+    atmosphere.setColour(juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack); atmosphere.setColour(juce::Slider::textBoxTextColourId, colours::ash);
     atmosphere.setDoubleClickReturnValue(true, 0.0);
     atmosphereAttachment = std::make_unique<juce::SliderParameterAttachment>(*processor.parameters.getParameter(dc::ids::atmosLevel), atmosphere);
     addAndMakeVisible(atmosphere);
@@ -438,7 +438,7 @@ LightSeekerView::~LightSeekerView() {
 
 void LightSeekerView::setUpFader(Fader& fader, const juce::String& id, const juce::String& name) {
     fader.slider.setTextBoxStyle(juce::Slider::TextBoxBelow, true, 60, 15);
-    fader.slider.setColour(juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
+    fader.slider.setColour(juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack); fader.slider.setColour(juce::Slider::textBoxTextColourId, colours::ash);
     fader.slider.setDoubleClickReturnValue(true, static_cast<double>(
         processor.parameters.getParameter(id)->convertFrom0to1(processor.parameters.getParameter(id)->getDefaultValue())));
     fader.attachment = std::make_unique<juce::SliderParameterAttachment>(*processor.parameters.getParameter(id), fader.slider);
@@ -616,6 +616,13 @@ void LightSeekerView::timerCallback() {
                 for (const auto& r : dirty) repaint(r);
             }
         }
+        if (painted && skyVisible && (lifeTick & 1) == 0) {
+            const auto before = birdsArea();
+            stepBirds(2.0f / 30.0f, now);
+            const auto after = birdsArea();
+            if (!before.isEmpty()) repaint(before);
+            if (!after.isEmpty()) repaint(after);
+        }
         if (painted && lifeTick % 3 == 0 && !mistArea().isEmpty()) repaint(mistArea());
         if (painted && lifeTick % 6 == 0 && !moonArea().isEmpty()) repaint(moonArea());
     }
@@ -745,7 +752,71 @@ void LightSeekerView::refreshLights() {
     for (const auto& l : lights)
         if (planes.layered() && (l.kind == 0 || l.kind == 5)) emberSources.push_back(l);
     embers.clear();
+    birds.clear();
+    // A visible sky: the top of the back plane mostly blue (sampled once per scene).
+    skyVisible = false;
+    if (planes.layered() && planes.back.isValid()) {
+        int blue = 0, samples = 0;
+        for (int k = 0; k < 16; ++k) {
+            const auto c = planes.back.getPixelAt(planes.back.getWidth() * (2 * k + 1) / 32, planes.back.getHeight() / 12);
+            blue += c.getBlue() > c.getRed() + 12 ? 1 : 0;
+            ++samples;
+        }
+        skyVisible = blue * 2 > samples;
+    }
+    nextFlock = nowSeconds() + 6.0 + 10.0 * random.nextDouble();
     if (!lights.empty() || planes.layered()) wakeTimer();
+}
+
+juce::Rectangle<int> LightSeekerView::birdsArea() const {
+    if (birds.empty()) return {};
+    juce::Rectangle<float> box;
+    for (const auto& b : birds) box = box.getUnion(juce::Rectangle<float>(b.size * 3.0f, b.size * 2.0f).withCentre(b.p));
+    return box.expanded(2.0f).getSmallestIntegerContainer().getIntersection(getLocalBounds());
+}
+
+void LightSeekerView::stepBirds(float dt, double now) {
+    const float sx = static_cast<float>(getWidth()) / dc::art::virtualWidth;
+    if (birds.empty()) {
+        if (!skyVisible || now < nextFlock) return;
+        // A flock of three to five, in a loose V, from one side across the upper sky.
+        const bool fromLeft = random.nextBool();
+        const float y = (70.0f + 110.0f * random.nextFloat()) * sx;
+        const int count = 3 + random.nextInt(3);
+        for (int k = 0; k < count; ++k) {
+            Bird b;
+            const float back = static_cast<float>((k + 1) / 2) * 14.0f * sx, side = (k % 2 == 0 ? 1.0f : -1.0f) * static_cast<float>((k + 1) / 2) * 9.0f * sx;
+            b.p = { fromLeft ? -20.0f * sx - back : static_cast<float>(getWidth()) + 20.0f * sx + back, y + side };
+            b.phase = random.nextFloat() * 6.28f;
+            b.size = (5.0f + 2.0f * random.nextFloat()) * sx;
+            birds.push_back(b);
+        }
+        flockVelocity = { (fromLeft ? 1.0f : -1.0f) * 48.0f * sx, -2.0f * sx };
+        return;
+    }
+    for (auto& b : birds) { b.p += flockVelocity * dt; b.phase += dt * 9.0f; }
+    const float w = static_cast<float>(getWidth());
+    if (std::all_of(birds.begin(), birds.end(), [w, sx](const Bird& b) { return b.p.x < -40.0f * sx || b.p.x > w + 40.0f * sx; })) {
+        birds.clear();
+        nextFlock = now + 25.0 + 25.0 * random.nextDouble();
+    }
+}
+
+void LightSeekerView::paintBirds(juce::Graphics& g) {
+    for (const auto& b : birds) {
+        const auto box = juce::Rectangle<float>(b.size * 3.0f, b.size * 2.0f).withCentre(b.p);
+        if (!g.clipRegionIntersects(box.getSmallestIntegerContainer())) continue;
+        // A dove: two wing strokes flapping (a soft V), white with a faint shadow line.
+        const float flap = std::sin(b.phase) * 0.6f;
+        juce::Path wings;
+        wings.startNewSubPath(b.p.x - b.size, b.p.y - b.size * flap);
+        wings.quadraticTo(b.p.x - b.size * 0.4f, b.p.y - b.size * (0.2f + 0.3f * flap), b.p.x, b.p.y);
+        wings.quadraticTo(b.p.x + b.size * 0.4f, b.p.y - b.size * (0.2f + 0.3f * flap), b.p.x + b.size, b.p.y - b.size * flap);
+        g.setColour(juce::Colour(0xff7a7090).withAlpha(0.35f));
+        g.strokePath(wings, juce::PathStrokeType(1.8f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded), juce::AffineTransform::translation(0.0f, 0.8f));
+        g.setColour(juce::Colours::white.withAlpha(0.92f));
+        g.strokePath(wings, juce::PathStrokeType(1.3f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+    }
 }
 
 juce::Rectangle<int> LightSeekerView::lifeArea(const dc::art::LightSource& l) const {
@@ -759,7 +830,7 @@ juce::Rectangle<int> LightSeekerView::lifeArea(const dc::art::LightSource& l) co
 void LightSeekerView::paintLife(juce::Graphics& g, double now) {
     const float sx = static_cast<float>(getWidth()) / dc::art::virtualWidth;
     const auto t = static_cast<float>(std::fmod(now, 1000.0));
-    const juce::Colour pale = colours::ivory;
+    const juce::Colour pale { 0xfffffbea };   // glints and mist: warm white
     int index = 0;
     for (const auto& l : lights) {
         const auto area = lifeArea(l);
@@ -770,14 +841,14 @@ void LightSeekerView::paintLife(juce::Graphics& g, double now) {
         switch (l.kind) {
             case 0: case 1: {
                 const float r = l.radius * sx * (l.kind == 0 ? 1.05f : 0.9f);
-                const juce::Colour warm = planes.layered() ? colours::ember : juce::Colour(0xffd06a2a);
+                const juce::Colour warm = colours::ember;
                 const float alpha = (l.kind == 0 ? 0.05f : 0.035f) + (l.kind == 0 ? 0.12f : 0.07f) * n;
                 g.setGradientFill(juce::ColourGradient(warm.withAlpha(alpha), c, warm.withAlpha(0.0f), c.translated(r, 0), true));
                 g.fillEllipse(juce::Rectangle<float>(2 * r, 2 * r).withCentre(c));
                 break;
             }
             case 4: {
-                // A lit window: a slow, faint breathing of its red glow.
+                // A lit window: a slow, faint breathing of its golden glow.
                 const float r = l.radius * sx;
                 const float alpha = 0.04f + 0.09f * n;
                 g.setGradientFill(juce::ColourGradient(colours::blood.withAlpha(alpha), c, colours::blood.withAlpha(0.0f), c.translated(r, 0), true));
@@ -868,7 +939,7 @@ juce::Rectangle<int> LightSeekerView::mistArea() const {
 void LightSeekerView::paintMoonGlow(juce::Graphics& g, double now) {
     const auto area = moonArea();
     if (area.isEmpty() || !g.clipRegionIntersects(area)) return;
-    // A faint, slow pulse of crimson light around the moon (about 7 s per breath).
+    // A faint, slow breathing of golden light around the sun (about 7 s per breath).
     const float sx = static_cast<float>(getWidth()) / dc::art::virtualWidth;
     const auto c = toLocal(planes.moon);
     const float r = planes.moonRadius * sx;
@@ -925,9 +996,9 @@ void LightSeekerView::stepEmbers(float dt) {
         const float spread = juce::jmax(6.0f, src.radius * 0.8f) * sx;
         Ember e;
         e.p = toLocal(src.position) + juce::Point<float>((random.nextFloat() - 0.5f) * 2.0f * spread, (random.nextFloat() - 0.6f) * spread * 0.5f);
-        e.v = { (random.nextFloat() - 0.5f) * 8.0f * sx, -(10.0f + 22.0f * random.nextFloat()) * sx };
+        e.v = { (random.nextFloat() - 0.5f) * 8.0f * sx, -(4.0f + 9.0f * random.nextFloat()) * sx };   // light motes drift slowly up
         e.age = 0;
-        e.life = 1.8f + 3.0f * random.nextFloat();
+        e.life = 3.0f + 4.0f * random.nextFloat();
         e.size = (0.9f + 1.3f * random.nextFloat()) * sx;
         e.phase = random.nextFloat() * 6.28f;
         embers.push_back(e);
@@ -942,7 +1013,7 @@ void LightSeekerView::paintEmbers(juce::Graphics& g) {
         const float alpha = juce::jlimit(0.0f, 1.0f, std::min(u * 6.0f, 1.0f) * (1.0f - u));
         g.setGradientFill(juce::ColourGradient(colours::ember.withAlpha(0.35f * alpha), e.p, colours::blood.withAlpha(0.0f), e.p.translated(e.size * 3.5f, 0.0f), true));
         g.fillEllipse(juce::Rectangle<float>(e.size * 7.0f, e.size * 7.0f).withCentre(e.p));
-        g.setColour(juce::Colour(0xffff9a5a).withAlpha(0.9f * alpha));
+        g.setColour(juce::Colour(0xfffff3c8).withAlpha(0.9f * alpha * (0.6f + 0.4f * std::sin(e.phase * 3.0f))));
         g.fillEllipse(juce::Rectangle<float>(e.size, e.size).withCentre(e.p));
     }
 }
@@ -1193,6 +1264,7 @@ void LightSeekerView::paint(juce::Graphics& g) {
             paintLife(g, now);
             paintMist(g, now);
             paintEmbers(g);
+            paintBirds(g);
         } else if (view == View::Place && animateLife) paintLife(g, now);
         if (view == View::Map && !pending) paintMapOverlay(g);
     }
@@ -1346,12 +1418,12 @@ LightSeekerView::JourneyPanel::JourneyPanel(LightSeekerProcessor& p, std::functi
     octaveAttachment = std::make_unique<juce::ComboBoxParameterAttachment>(*state.getParameter(dc::ids::midiOctave), octave);
     for (auto* sl : { &bars, &randomness, &seed }) {
         sl->setTextBoxStyle(juce::Slider::TextBoxRight, true, 56, 18);
-        sl->setColour(juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
+        sl->setColour(juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack); sl->setColour(juce::Slider::textBoxTextColourId, colours::ash);
     }
     barsAttachment = std::make_unique<juce::SliderParameterAttachment>(*state.getParameter(dc::ids::journeyBars), bars);
     for (auto* sl : { &atmosDensity, &atmosSeed }) {
         sl->setTextBoxStyle(juce::Slider::TextBoxRight, true, 56, 18);
-        sl->setColour(juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
+        sl->setColour(juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack); sl->setColour(juce::Slider::textBoxTextColourId, colours::ash);
     }
     atmosDensityAttachment = std::make_unique<juce::SliderParameterAttachment>(*state.getParameter(dc::ids::atmosDensity), atmosDensity);
     atmosSeedAttachment = std::make_unique<juce::SliderParameterAttachment>(*state.getParameter(dc::ids::atmosSeed), atmosSeed);

@@ -1,7 +1,7 @@
 """Builds the painted art: renders every scene's layers with Blender, paints them and
 writes the manifest the plug-in compiles in.
 
-    /opt/bvenv/bin/python tools/painted/build.py [scene ...] [--scale 1.0] [--samples 48] [--jobs 3]
+    python3 tools/painted/build.py [scene ...] [--scale 1.0] [--samples 48] [--jobs 3]   (default: every scene)
 
 Renders go to build-art/render/<scene>; the finished layers to assets/painted/<scene>
 (sky.jpg; far/mid/fog/near as .jpg colour + .png alpha); the manifest to
@@ -18,9 +18,10 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
 PY = sys.executable
 
-PROTOTYPE = ["map",
-             "dungeon/corridors", "dungeon/entrance-hall", "dungeon/prison-cells", "dungeon/treasure-room", "dungeon/final-boss-lair",
-             "castle/courtyard", "castle/great-hall", "castle/throne-room", "castle/chapel", "castle/tower-top"]
+def all_scenes():
+    sys.path.insert(0, HERE)
+    import scenes  # noqa: E402  (imports bpy: the registry of every scene)
+    return sorted(scenes.REGISTRY)
 
 
 def render(scene, scale, samples):
@@ -83,7 +84,7 @@ def main():
     ap.add_argument("--manifest-only", action="store_true")
     args = ap.parse_args()
     if not args.manifest_only:
-        scenes = args.scenes or PROTOTYPE
+        scenes = args.scenes or all_scenes()
         # Cycles uses every core, so scenes render one after another; painting (mostly
         # single-threaded numpy) runs in parallel with the next renders.
         with cf.ProcessPoolExecutor(max_workers=args.jobs) as pool:
