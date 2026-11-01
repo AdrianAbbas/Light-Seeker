@@ -8,8 +8,8 @@ Each milestone adds its section. Install the `LightSeeker-macOS-Universal` artif
 1. The installer ends with "LIGHT SEEKER is installed and validated".
 2. GarageBand → a track → an Audio Effect slot → Audio Units → **Veil Audio → LIGHT SEEKER**.
    If DUNGEON CRAWLER is installed, it is still listed beside it and still works.
-3. The window opens on the map (Milestone 1: a simple bright placeholder map; the painted
-   one is Milestone 3). Click a landmark: the sound travels there and the view zooms in.
+3. The window opens on the painted map. Click a landmark: the sound travels there and the
+   view zooms in.
 4. Play guitar or a synth: every place sounds clearly different from the dry sound.
 5. Bypass, Mix 0 % and Intensity 0 % give the dry sound.
 
@@ -60,13 +60,18 @@ fizzy on a voice; Diamond Vault and Starlit Canopy are obvious enough.
 
 ## M3: visuals (look at)
 
-1. **The map on opening:** a bright painterly world from above at an angle (meadows, a
-   river, the sea in the south-west, snowy peaks, cloud banks), ten luminous landmarks with
+1. **The map on opening:** a bright painterly world from above at an angle (a patchwork of
+   fields and woods, a river from the snowy mountains in the north to the sea in the
+   south-west, cloud banks), ten landmarks with
    small serif names; the current one in gold with a diamond. Hover: a ring and the name.
 2. **A click on a landmark:** a golden path, then the zoom into the place with parallax (the
    layers move at different speeds); "‹ Map" zooms back out.
 3. **Every place** (31): its own painting, rings for the location's places and the list top
-   right; a click on a ring crossfades to that place.
+   right; a click on a ring crossfades to that place. Judge the detail against the Gates of
+   Dawn (the approved prototype): grass blades and flowers, leaves and blossom, the gothic
+   towers' windows and pinnacles, cracked and stained cliff stone, leaded stained glass.
+   Compare with `docs/snapshots/` (and `contact-sheet.jpg`); note any scene that looks
+   wrong, flat or fake.
 4. **Life, gently:** light motes drifting up from glowing spots, glints twinkling on gold,
    crystal and water, white mist drifting low, the sun's glow breathing; now and then a few
    doves cross the sky (exterior scenes and the map). Nothing flickers; the MacBook Air stays

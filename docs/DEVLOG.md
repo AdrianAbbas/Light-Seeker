@@ -85,10 +85,10 @@ usage limit or a compaction) continues from the first unticked line. Push to `ma
 
 **Milestone 5: presets and polish**
 
-- [ ] 5a. 20+ factory presets (favourite spots + journeys)
-- [ ] 5b. Manual navigation overrides journeys, every panel closable (navigation tests on the light world)
-- [ ] 5c. README, `docs/MANUAL_TEST.md`, install docs
-- [ ] 5d. Final QA (clicks on every travel, levels, distinctness, editor CPU) and the DEVLOG handoff (what to listen for and look at in GarageBand); push without `[skip ci]`
+- [x] 5a. 20+ factory presets (favourite spots + journeys)
+- [x] 5b. Manual navigation overrides journeys, every panel closable (navigation tests on the light world)
+- [x] 5c. README, `docs/MANUAL_TEST.md`, install docs
+- [x] 5d. Final QA (clicks on every travel, levels, distinctness, editor CPU) and the DEVLOG handoff (what to listen for and look at in GarageBand); push without `[skip ci]`
 
 ---
 
@@ -517,3 +517,119 @@ location's atmosphere at full level, no instrument.
 
 **Results:** every `atmosphere` check passes on Linux (13 events in 8 bars, 7 at 60 BPM, −39.7 dB under a loud instrument), part of the full suite (Milestone 3's
 run); unchanged since 4a.
+
+---
+
+## Milestone 5: presets and polish (2026-11-01)
+
+- **Factory presets: 27** (18 favourite spots, 9 journeys including 3 roaming), written in
+  Milestone 1 against the light world and checked here: every place family is represented,
+  the journeys cross locations (Ascent to the Citadel: the meadow, the isles, the temple, the
+  citadel's gates, throne and summit), "Gentle Rose Garden (50 %)" shows Intensity 50 %.
+- **A manual click always wins** over a running Journey/Roam, and **every panel closes four
+  ways**: DUNGEON CRAWLER's Hotfix 1–3 code, kept, and its `navigation` group adapted to the
+  light world (every factory preset loaded with the transport playing, then a place of the
+  shown location and another location; each within one block, the journey stopped, the view
+  never snapping back; Stop on the badge; Init; both panels closing with ✕, their button, Esc
+  and a click outside, never covering their buttons; every one of the 31 places reachable in
+  the list and on its ring with nothing running, Roam on, a journey running and the Journey
+  panel open).
+- **Docs:** README (what it is, the world, install, GarageBand/Logic, every control, the
+  Journey panel, MIDI host support, presets, troubleshooting, build), `docs/MANUAL_TEST.md`
+  (M1–M5 and a 15-minute release check), `packaging/INSTALL.txt` (side by side with DUNGEON
+  CRAWLER), `docs/ART_SOURCES.md`, `tools/painted/README.md`, `tools/captures/README.md`.
+
+- **Final QA** (Linux, the full suite in five shards plus the CPU group): **1370 passed, 0 failed**.
+  Clicks on every travel (121 journeys, none clicks), levels within the gates and every
+  stored trim fresh, distinctness of the sound (closest pair 9.8 dB-eq, report-only) and
+  of the art (0.49), editor CPU (the map's life 4.7 % of one core in software rendering
+  here; Eco stops it) — all as listed in Milestones 2 and 3. macOS builds, `auval` and the
+  AU host harness run on GitHub Actions (`macos-15`) on this push.
+
+---
+
+## Handoff (2026-11-01): what to listen for and look at in GarageBand
+
+All five milestones of the brief are done. Install the `LightSeeker-macOS-Universal`
+artifact of the latest green run with `install-mac.sh` (README, Install), open GarageBand,
+put LIGHT SEEKER on a guitar, synth, piano or voice track (Smart Controls → Plug-ins →
+Audio Units → Veil Audio → LIGHT SEEKER) and play while you click through the world.
+`docs/MANUAL_TEST.md` has the full checklist; this is the short version.
+
+### Milestone 1: setup
+
+- **Look:** the plug-in is listed as Veil Audio → LIGHT SEEKER next to DUNGEON CRAWLER,
+  and both load in the same project. The window opens on the map.
+- **Listen:** Bypass and Intensity 0 % are exactly the dry signal (no level or tone change).
+
+### Milestone 2: sound (the most important part)
+
+- **Every place must sound obviously somewhere else at the defaults** (Intensity 100 %,
+  Mix 100 %), at about the same loudness as the dry signal, and stay musical. Click through
+  all 31 places with the same phrase. Each has its own signature:
+  Gates of Dawn (bright fanfare-like reflections), Hall of Mirrors (reflections
+  multiplying across the stereo field), Throne of Light (a regal chorus with a gold halo),
+  Spire Summit (long airy echoes), Cloud Steps (an endless rising shimmer), Sanctum (a soft
+  choir bloom), Bell Garden (tuned bells answering you), Moonwell (a glassy water-surface
+  shimmer), Leaf Halls (warm wooden resonance, an ensemble), Starlit Canopy (sparkling
+  harmonics), Prism Hall (an octave shimmer split into colours left to right), Mirror Lake
+  (calm long tail with a reverse swell), Diamond Vault (bright crystal ringing), Sunlit
+  Meadow (sunny warmth), Butterfly Glade (fluttering auto-pan), Wildflower Hill (gentle
+  echoes over the valley), Nave of Light (the longest, most radiant reverb; your own
+  octave-shimmer hall capture), Choir Loft (an angelic choir), Stained Glass Chapel (a
+  colour-shifting shimmer), Cloud Bridge (swirling stereo motion), Windswept Isle (an airy,
+  wind-filtered space), Sky Harbour (echoes soaring a fifth higher), Rose Garden (a soft lush
+  chorus; your chorus-hall capture), Fountain Court (sparkling water-like modulation),
+  Marble Colonnade (rhythmic slaps between columns), Mushroom Ring (bouncy sparkle), Firefly
+  Hollow (twinkling glitter), Fairy Court (a tiny bright room with harp strings), Eyrie
+  (vast cliff echoes), Golden Nest (warm golden harmonics), Summit of Winds (a huge heroic
+  reverb with a soaring octave).
+- **Intensity 50 %** should already be clearly audible.
+- **Travel** with Travel at 2 s while holding a chord: no clicks; the old place's tail
+  rings on under the new one.
+- **Listen especially to** the places that are report-only in the tests (DEVLOG M2):
+  Diamond Vault and Starlit Canopy (the least transformed of all; bright but sparse); on a
+  voice, the octave shimmer of Starlit Canopy, Stained Glass Chapel and Firefly Hollow
+  (does it fizz?); the long tails (Nave, Spire Summit, Mirror Lake, Eyrie, Summit of Winds:
+  is a piano still clear enough?); Spire Summit next to Cloud Bridge (different enough?).
+- A listening render (dry vs every place, the same guitar and synth phrase) is in the
+  Linux job's `LightSeeker-linux-test-logs` artifact (`listening/`).
+
+### Milestone 3: visuals
+
+- **Look:** the map is a sunlit painted landscape (fields, woods, a river, a coast, snowy
+  mountains, clouds) with ten landmarks; hover shows the name, a click draws a golden
+  path and zooms into the location; inside, the rings and the list lead to its places,
+  each its own painted scene. Light motes drift, the sun breathes, doves cross the sky now
+  and then (outdoors only). Compare with `docs/snapshots/`.
+- **Judge the art:** every scene was rebuilt with the detail approach you approved on the
+  Gates of Dawn prototype (real grass, flowers, leaves, gothic towers, cliff stone,
+  stained glass). Tell me which scenes still look wrong and why; each is one function in
+  `tools/painted/scenes.py` and re-renders in minutes.
+- **Performance:** on a MacBook Air the window must never flicker or freeze GarageBand.
+  ⚙ → Quality → Eco stops all animation.
+
+### Milestone 4: atmosphere
+
+- Turn **Atmosphere** up (default 0 %, off): sparse soft wind, distant bells, birdsong,
+  fountain shimmer, chimes, harp glints, leaves, a brook, different per place. They must
+  stay in the background and step back when you play.
+
+### Milestone 5: presets and polish
+
+- The preset menu has 27 factory presets (18 favourite spots, 9 journeys). Load "Ascent to
+  the Citadel" with the song playing: it travels on its own; a click on any place stops the
+  journey at once ("Journey stopped") and goes there.
+- Journey and Advanced panels close with ✕, their button, Esc and a click outside.
+
+### Known issues and decisions to revisit
+
+- The derived impulse responses of your captures (`assets/irs`) are committed in this
+  public repository (the plug-in ships them anyway); to keep them private, fetch them in
+  CI from `Samples` with a secret.
+- The cliff-hall capture is only in the Advanced drawer (Radiance kind 33): as the Eyrie's
+  space it smeared every instrument. The tape-echo capture is not used.
+- MIDI travel does nothing in GarageBand (it sends no MIDI to effects) and usually nothing
+  in Logic: use Journey, Roam or automation.
+- The art is rendered on CPU in this container at 24 samples and denoised; fine grain or a
+  little softness in dark corners is expected.
