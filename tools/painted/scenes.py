@@ -1177,7 +1177,7 @@ def v2_throne():
 
 @scene("celestial-citadel/spire-summit")
 def v2_summit():
-    B.camera((0, -14, 407), (0, 500, 385), lens=24)
+    B.camera((0, 22, 410), (0, 600, 372), lens=24)
     v2_light((-0.55, -0.35, 0.65), strength=5.0, sky=0.25)
     m, gold = D.mat_marble(), D.mat_gold()
     B.box((0, 10, 397), (120, 46, 6), "near", D.mat_floor("terracefloor"), name="terrace")
@@ -1188,16 +1188,16 @@ def v2_summit():
     b.box("gold", 0, 31.2, 403.9, 120, 0.4, 0.2)
     for side in (-1, 1):
         G.tower(b, side * 70, 40, 300, 9, 100, rng, tiers=4, spire_ratio=2.0, depth=1)
-    G.tower(b, -220, 420, 120, 14, 200, rng, tiers=6, spire_ratio=2.2, depth=1)
-    G.tower(b, 260, 560, 120, 12, 170, rng, tiers=5, spire_ratio=2.0, depth=1)
+    G.tower(b, -150, 300, 200, 14, 230, rng, tiers=6, spire_ratio=2.2, depth=1)
+    G.tower(b, 190, 380, 200, 12, 200, rng, tiers=5, spire_ratio=2.0, depth=1)
     b.flush("near", G.materials(), "summit")
     for k, (x, y, z, s_) in enumerate([(-400, 600, 250, 300), (200, 700, 240, 340), (-100, 1200, 260, 420), (600, 1100, 270, 380),
                                        (-700, 1500, 250, 420), (300, 1800, 290, 500), (-1100, 900, 240, 380), (1000, 800, 250, 360)]):
         D.cumulus((x, y, z), (s_ * 1.8, s_, s_ * 0.6), "mid" if y < 1000 else "far", 40 + k, density=0.014, name="fogcloud_s%d" % k)
     v2_sky(8, 120, clouds=(), mountains=True, valley=True)
     D.sparkles((0, 60, 410), (100, 60, 30), 80, "near", 41, size=0.15)
-    return meta((300, 120), spots3(4, [(-70, 40, 450), (70, 40, 450), (0, 32, 404), (0, 600, 380)]) +
-                [lightpt((-70, 40, 480), 14, "glint"), lightpt((70, 40, 480), 14, "glint")], horizon=260, clouds=0.5, rays=0.9, haze=0.35)
+    return meta((300, 120), spots3(4, [(-150, 300, 380), (190, 380, 380), (0, 60, 402), (0, 600, 380)]) +
+                [lightpt((-150, 300, 420), 14, "glint"), lightpt((190, 380, 400), 14, "glint")], horizon=260, clouds=0.5, rays=0.7, haze=0.2)
 
 
 # ================================================================== SKY TEMPLE (v2)
@@ -1401,9 +1401,10 @@ def v2_lake():
     v2_light((-0.6, -0.2, 0.5), strength=5.0, sky=0.3)
     lake = B.mat_metal((0.6, 0.72, 0.85), 0.02, "lake2")
     B.cylinder((0, 500, 0), 1200, 0.5, "near", lake, sides=96, name="lake")
-    D.mesa(0, 700, -30, 120, 110, "mid", 31)
+    D.mesa(0, 700, -40, 150, 85, "mid", 31, squash=0.55)
+    D.grass(lambda x, y: 45.5, -60, 60, 660, 740, 60000, "mid", 31, height=(0.6, 1.4))
     b = G.Builder()
-    G.citadel(b, 0, 700, 80, 0.8, 33)
+    G.citadel(b, 0, 700, 45, 0.85, 33)
     b.flush("mid", {"stone": D.mat_marble("crystalstone", colour=(0.88, 0.9, 0.98)), "gold": D.mat_gold(), "glass": B.mat_crystal((0.7, 0.85, 1.0), 0.6),
                     "roof": B.mat_crystal((0.8, 0.88, 1.0), 0.15)}, "crystalcastle")
     D.crystal_cluster(-150, 680, 0, 40, 10, "mid", 34)
