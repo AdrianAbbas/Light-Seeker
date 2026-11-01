@@ -1811,12 +1811,12 @@ def v2_nest():
     rng = random.Random(92)
     for k in range(200):
         B.cylinder((rng.uniform(-38, 38), 150 + rng.uniform(-30, 30), rng.uniform(8, 12)), rng.uniform(0.8, 2.0), 0.35, "mid", D.mat_gold(rough=0.18), sides=12, name="coin")
-    golden_dragon((6, 172, 9), 5.0, "mid", rotation_z=-0.6)
+    golden_dragon((-70, 420, 90), 7.0, "mid", rotation_z=0.9)
     # A heap of gold under the dragon: a mound and coins strewn over it.
-    B.lathe((0, 150, 7), [(38, 0), (30, 2.5), (18, 5), (6, 6.5), (0, 6.8)], "mid", D.mat_gold(rough=0.3), sides=64, name="hoard")
-    for k in range(260):
+    B.lathe((0, 150, 7), [(40, 0), (34, 3), (24, 8), (12, 12.5), (0, 14)], "mid", D.mat_gold(rough=0.3), sides=64, name="hoard")
+    for k in range(420):
         rr = 36 * math.sqrt(rng.random()); a = rng.uniform(0, 2 * math.pi)
-        hz = 7 + 6.8 * max(0.0, 1 - rr / 38) ** 1.2
+        hz = 7 + 14 * max(0.0, 1 - rr / 40) ** 1.3
         B.cylinder((rr * math.cos(a), 150 + rr * math.sin(a), hz), rng.uniform(0.8, 1.6), 0.3, "mid", D.mat_gold(rough=0.18), sides=12, name="coin",
                    rotation=(rng.uniform(-0.4, 0.4), rng.uniform(-0.4, 0.4), 0))
     D.mesa(-400, 900, -200, 150, 420, "far", 93)
@@ -1840,6 +1840,8 @@ def v2_winds():
         x = -1400 + k * 350; y = 600 + (k % 3) * 500
         D.cumulus((x, y, 240), (520, 380, 170), "mid" if y < 1200 else "far", 970 + k, density=0.016, name="fogcloud_w%d" % k)
     D.mountains(99, y=2600, height=900, base_z=0)
+    for k, (cx_, cy_) in enumerate([(-120, 380), (160, 420), (0, 560)]):
+        D.cumulus((cx_, cy_, 250), (620, 360, 160), "mid", 990 + k, density=0.018, name="fogcloud_sea%d" % k)
     golden_dragon((-60, 420, 520), 6.0, "mid", rotation_z=2.2)
     D.sparkles((0, 200, 540), (200, 120, 60), 60, "near", 96, size=0.3)
     return meta((360, 110), spots3(3, [(-60, 420, 540), (-460, 900, 600), (30, 90, 545)]) + [lightpt((-60, 420, 530), 18, "glint")],
