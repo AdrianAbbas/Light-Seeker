@@ -1,0 +1,17 @@
+{
+ "name": "chorus-hall",
+ "seconds": 4.197,
+ "scale": 0.21092667607101323,
+ "tilt_db": 3.0,
+ "rt60_measured_s": {
+  "125": 4.62,
+  "250": 4.427,
+  "500": 4.359,
+  "1000": 4.231,
+  "2000": 3.24,
+  "4000": 1.832,
+  "8000": 0.887
+ },
+ "rt_scale": 1.1,
+ "note": "the modulated chorus + reverb patch"
+}
