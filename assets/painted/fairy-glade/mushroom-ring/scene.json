@@ -1,0 +1,53 @@
+{
+ "scene": "fairy-glade/mushroom-ring",
+ "anchors": [
+  {
+   "kind": "hotspot",
+   "sub": 0,
+   "x": 480.0,
+   "y": 320.4
+  },
+  {
+   "kind": "hotspot",
+   "sub": 1,
+   "x": 225.2,
+   "y": 261.8
+  },
+  {
+   "kind": "hotspot",
+   "sub": 2,
+   "x": 716.1,
+   "y": 266.5
+  },
+  {
+   "kind": "fire",
+   "radius": 10,
+   "x": 320.3,
+   "y": 288.3
+  },
+  {
+   "kind": "fire",
+   "radius": 10,
+   "x": 480.0,
+   "y": 288.3
+  },
+  {
+   "kind": "fire",
+   "radius": 10,
+   "x": 639.7,
+   "y": 288.3
+  }
+ ],
+ "layers": [
+  "sky",
+  "far",
+  "mid",
+  "near"
+ ],
+ "moon": [
+  480,
+  90,
+  60
+ ],
+ "glows": []
+}

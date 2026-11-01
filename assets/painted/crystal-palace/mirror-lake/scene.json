@@ -1,0 +1,53 @@
+{
+ "scene": "crystal-palace/mirror-lake",
+ "anchors": [
+  {
+   "kind": "hotspot",
+   "sub": 0,
+   "x": 480.0,
+   "y": 139.7
+  },
+  {
+   "kind": "hotspot",
+   "sub": 1,
+   "x": 480.0,
+   "y": 390.6
+  },
+  {
+   "kind": "hotspot",
+   "sub": 2,
+   "x": 531.4,
+   "y": 256.8
+  },
+  {
+   "kind": "glint",
+   "radius": 14,
+   "x": 318.2,
+   "y": 379.6
+  },
+  {
+   "kind": "glint",
+   "radius": 14,
+   "x": 480.0,
+   "y": 379.6
+  },
+  {
+   "kind": "glint",
+   "radius": 14,
+   "x": 668.7,
+   "y": 379.6
+  }
+ ],
+ "layers": [
+  "sky",
+  "far",
+  "mid",
+  "near"
+ ],
+ "moon": [
+  300,
+  130,
+  60
+ ],
+ "glows": []
+}

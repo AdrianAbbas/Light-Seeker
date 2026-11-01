@@ -1,0 +1,34 @@
+{
+ "scene": "floating-isles/cloud-bridge",
+ "anchors": [
+  {
+   "kind": "hotspot",
+   "sub": 0,
+   "x": 480.0,
+   "y": 242.4
+  },
+  {
+   "kind": "hotspot",
+   "sub": 1,
+   "x": 173.9,
+   "y": 280.0
+  },
+  {
+   "kind": "hotspot",
+   "sub": 2,
+   "x": 754.3,
+   "y": 211.4
+  }
+ ],
+ "layers": [
+  "sky",
+  "far",
+  "mid"
+ ],
+ "moon": [
+  720,
+  100,
+  60
+ ],
+ "glows": []
+}

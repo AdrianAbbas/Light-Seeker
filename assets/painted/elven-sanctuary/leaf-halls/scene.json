@@ -1,0 +1,39 @@
+{
+ "scene": "elven-sanctuary/leaf-halls",
+ "anchors": [
+  {
+   "kind": "hotspot",
+   "sub": 0,
+   "x": 480.0,
+   "y": 437.0
+  },
+  {
+   "kind": "hotspot",
+   "sub": 1,
+   "x": 406.5,
+   "y": 324.1
+  },
+  {
+   "kind": "hotspot",
+   "sub": 2,
+   "x": 536.0,
+   "y": 329.4
+  },
+  {
+   "kind": "window",
+   "radius": 20,
+   "x": 480.0,
+   "y": 332.6
+  }
+ ],
+ "layers": [
+  "sky",
+  "mid"
+ ],
+ "moon": [
+  480,
+  150,
+  60
+ ],
+ "glows": []
+}

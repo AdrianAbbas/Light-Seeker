@@ -1,0 +1,46 @@
+{
+ "scene": "golden-cathedral/stained-glass-chapel",
+ "anchors": [
+  {
+   "kind": "hotspot",
+   "sub": 0,
+   "x": 348.5,
+   "y": 311.6
+  },
+  {
+   "kind": "hotspot",
+   "sub": 1,
+   "x": 237.0,
+   "y": 286.8
+  },
+  {
+   "kind": "hotspot",
+   "sub": 2,
+   "x": 537.7,
+   "y": 465.1
+  },
+  {
+   "kind": "window",
+   "radius": 26,
+   "x": 346.8,
+   "y": 302.9
+  },
+  {
+   "kind": "window",
+   "radius": 14,
+   "x": 139.3,
+   "y": 300.0
+  }
+ ],
+ "layers": [
+  "sky",
+  "far",
+  "mid"
+ ],
+ "moon": [
+  480,
+  150,
+  60
+ ],
+ "glows": []
+}

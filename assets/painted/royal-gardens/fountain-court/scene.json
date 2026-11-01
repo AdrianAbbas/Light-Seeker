@@ -1,0 +1,53 @@
+{
+ "scene": "royal-gardens/fountain-court",
+ "anchors": [
+  {
+   "kind": "hotspot",
+   "sub": 0,
+   "x": 314.6,
+   "y": 322.1
+  },
+  {
+   "kind": "hotspot",
+   "sub": 1,
+   "x": 480.0,
+   "y": 264.4
+  },
+  {
+   "kind": "hotspot",
+   "sub": 2,
+   "x": 644.3,
+   "y": 281.0
+  },
+  {
+   "kind": "glint",
+   "radius": 26,
+   "x": 480.0,
+   "y": 279.3
+  },
+  {
+   "kind": "glint",
+   "radius": 14,
+   "x": 441.0,
+   "y": 347.0
+  },
+  {
+   "kind": "glint",
+   "radius": 14,
+   "x": 524.1,
+   "y": 347.0
+  }
+ ],
+ "layers": [
+  "sky",
+  "far",
+  "mid",
+  "near"
+ ],
+ "moon": [
+  480,
+  100,
+  60
+ ],
+ "glows": []
+}

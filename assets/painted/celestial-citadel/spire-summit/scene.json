@@ -1,0 +1,53 @@
+{
+ "scene": "celestial-citadel/spire-summit",
+ "anchors": [
+  {
+   "kind": "hotspot",
+   "sub": 0,
+   "x": 136.4,
+   "y": 306.8
+  },
+  {
+   "kind": "hotspot",
+   "sub": 1,
+   "x": 818.5,
+   "y": 291.5
+  },
+  {
+   "kind": "hotspot",
+   "sub": 2,
+   "x": 480.0,
+   "y": 371.4
+  },
+  {
+   "kind": "hotspot",
+   "sub": 3,
+   "x": 480.0,
+   "y": 271.2
+  },
+  {
+   "kind": "glint",
+   "radius": 14,
+   "x": 133.1,
+   "y": 214.7
+  },
+  {
+   "kind": "glint",
+   "radius": 14,
+   "x": 819.8,
+   "y": 255.8
+  }
+ ],
+ "layers": [
+  "sky",
+  "far",
+  "mid",
+  "near"
+ ],
+ "moon": [
+  300,
+  120,
+  60
+ ],
+ "glows": []
+}

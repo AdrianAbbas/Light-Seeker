@@ -1,0 +1,58 @@
+{
+ "scene": "celestial-citadel/hall-of-mirrors",
+ "anchors": [
+  {
+   "kind": "hotspot",
+   "sub": 0,
+   "x": 497.4,
+   "y": 456.1
+  },
+  {
+   "kind": "hotspot",
+   "sub": 1,
+   "x": 426.0,
+   "y": 265.2
+  },
+  {
+   "kind": "hotspot",
+   "sub": 2,
+   "x": 568.3,
+   "y": 280.6
+  },
+  {
+   "kind": "hotspot",
+   "sub": 3,
+   "x": 571.5,
+   "y": 241.9
+  },
+  {
+   "kind": "glint",
+   "radius": 16,
+   "x": 360.0,
+   "y": 253.4
+  },
+  {
+   "kind": "glint",
+   "radius": 16,
+   "x": 440.8,
+   "y": 273.2
+  },
+  {
+   "kind": "glint",
+   "radius": 12,
+   "x": 546.5,
+   "y": 77.1
+  }
+ ],
+ "layers": [
+  "sky",
+  "far",
+  "mid"
+ ],
+ "moon": [
+  480,
+  220,
+  60
+ ],
+ "glows": []
+}

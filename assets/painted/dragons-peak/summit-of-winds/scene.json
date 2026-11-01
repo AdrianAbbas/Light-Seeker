@@ -1,0 +1,41 @@
+{
+ "scene": "dragons-peak/summit-of-winds",
+ "anchors": [
+  {
+   "kind": "hotspot",
+   "sub": 0,
+   "x": 394.6,
+   "y": 238.5
+  },
+  {
+   "kind": "hotspot",
+   "sub": 1,
+   "x": 160.0,
+   "y": 181.9
+  },
+  {
+   "kind": "hotspot",
+   "sub": 2,
+   "x": 638.8,
+   "y": 289.7
+  },
+  {
+   "kind": "glint",
+   "radius": 18,
+   "x": 394.8,
+   "y": 252.7
+  }
+ ],
+ "layers": [
+  "sky",
+  "far",
+  "mid",
+  "near"
+ ],
+ "moon": [
+  360,
+  110,
+  60
+ ],
+ "glows": []
+}

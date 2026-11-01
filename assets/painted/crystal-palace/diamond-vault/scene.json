@@ -1,0 +1,58 @@
+{
+ "scene": "crystal-palace/diamond-vault",
+ "anchors": [
+  {
+   "kind": "hotspot",
+   "sub": 0,
+   "x": 480.0,
+   "y": 405.3
+  },
+  {
+   "kind": "hotspot",
+   "sub": 1,
+   "x": 284.6,
+   "y": 290.0
+  },
+  {
+   "kind": "hotspot",
+   "sub": 2,
+   "x": 612.9,
+   "y": 268.2
+  },
+  {
+   "kind": "glint",
+   "radius": 12,
+   "x": 251.7,
+   "y": 303.0
+  },
+  {
+   "kind": "glint",
+   "radius": 12,
+   "x": 414.8,
+   "y": 303.0
+  },
+  {
+   "kind": "glint",
+   "radius": 12,
+   "x": 577.8,
+   "y": 303.0
+  },
+  {
+   "kind": "glint",
+   "radius": 12,
+   "x": 740.9,
+   "y": 303.0
+  }
+ ],
+ "layers": [
+  "sky",
+  "far",
+  "mid"
+ ],
+ "moon": [
+  480,
+  200,
+  60
+ ],
+ "glows": []
+}

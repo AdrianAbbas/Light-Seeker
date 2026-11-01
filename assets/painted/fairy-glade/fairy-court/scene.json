@@ -1,0 +1,46 @@
+{
+ "scene": "fairy-glade/fairy-court",
+ "anchors": [
+  {
+   "kind": "hotspot",
+   "sub": 0,
+   "x": 268.0,
+   "y": 256.8
+  },
+  {
+   "kind": "hotspot",
+   "sub": 1,
+   "x": 675.9,
+   "y": 262.4
+  },
+  {
+   "kind": "hotspot",
+   "sub": 2,
+   "x": 480.0,
+   "y": 299.1
+  },
+  {
+   "kind": "glint",
+   "radius": 18,
+   "x": 480.0,
+   "y": 299.1
+  },
+  {
+   "kind": "fire",
+   "radius": 22,
+   "x": 480.0,
+   "y": 193.1
+  }
+ ],
+ "layers": [
+  "sky",
+  "far",
+  "mid"
+ ],
+ "moon": [
+  480,
+  120,
+  60
+ ],
+ "glows": []
+}

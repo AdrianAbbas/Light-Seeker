@@ -1,0 +1,112 @@
+{
+ "scene": "map",
+ "anchors": [
+  {
+   "kind": "landmark",
+   "index": 0,
+   "x": 480.0,
+   "y": 186.5
+  },
+  {
+   "kind": "landmark",
+   "index": 1,
+   "x": 692.3,
+   "y": 174.6
+  },
+  {
+   "kind": "landmark",
+   "index": 2,
+   "x": 153.8,
+   "y": 281.1
+  },
+  {
+   "kind": "landmark",
+   "index": 3,
+   "x": 904.4,
+   "y": 285.4
+  },
+  {
+   "kind": "landmark",
+   "index": 4,
+   "x": 322.0,
+   "y": 357.9
+  },
+  {
+   "kind": "landmark",
+   "index": 5,
+   "x": 684.8,
+   "y": 328.0
+  },
+  {
+   "kind": "landmark",
+   "index": 6,
+   "x": 320.5,
+   "y": 157.9
+  },
+  {
+   "kind": "landmark",
+   "index": 7,
+   "x": 570.0,
+   "y": 348.8
+  },
+  {
+   "kind": "landmark",
+   "index": 8,
+   "x": 234.3,
+   "y": 210.1
+  },
+  {
+   "kind": "landmark",
+   "index": 9,
+   "x": 814.1,
+   "y": 152.4
+  },
+  {
+   "kind": "glint",
+   "radius": 30,
+   "x": 480.0,
+   "y": 142.9
+  },
+  {
+   "kind": "glint",
+   "radius": 20,
+   "x": 687.8,
+   "y": 295.0
+  },
+  {
+   "kind": "glint",
+   "radius": 18,
+   "x": 904.9,
+   "y": 282.6
+  },
+  {
+   "kind": "fire",
+   "radius": 24,
+   "x": 480.0,
+   "y": 170.7
+  },
+  {
+   "kind": "fire",
+   "radius": 18,
+   "x": 686.0,
+   "y": 314.4
+  },
+  {
+   "kind": "fire",
+   "radius": 16,
+   "x": 232.3,
+   "y": 190.5
+  }
+ ],
+ "layers": [
+  "sky",
+  "far",
+  "mid"
+ ],
+ "moon": [
+  760,
+  40,
+  60
+ ],
+ "glows": []
+}

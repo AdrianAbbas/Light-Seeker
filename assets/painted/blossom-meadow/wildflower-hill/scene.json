@@ -1,0 +1,35 @@
+{
+ "scene": "blossom-meadow/wildflower-hill",
+ "anchors": [
+  {
+   "kind": "hotspot",
+   "sub": 0,
+   "x": 79.6,
+   "y": 359.8
+  },
+  {
+   "kind": "hotspot",
+   "sub": 1,
+   "x": 655.4,
+   "y": 335.3
+  },
+  {
+   "kind": "hotspot",
+   "sub": 2,
+   "x": 321.6,
+   "y": 232.9
+  }
+ ],
+ "layers": [
+  "sky",
+  "far",
+  "mid",
+  "near"
+ ],
+ "moon": [
+  250,
+  120,
+  60
+ ],
+ "glows": []
+}

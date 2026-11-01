@@ -1,0 +1,52 @@
+{
+ "scene": "dragons-peak/golden-nest",
+ "anchors": [
+  {
+   "kind": "hotspot",
+   "sub": 0,
+   "x": 356.9,
+   "y": 189.6
+  },
+  {
+   "kind": "hotspot",
+   "sub": 1,
+   "x": 480.0,
+   "y": 261.9
+  },
+  {
+   "kind": "hotspot",
+   "sub": 2,
+   "x": 597.5,
+   "y": 189.6
+  },
+  {
+   "kind": "glint",
+   "radius": 12,
+   "x": 381.4,
+   "y": 301.1
+  },
+  {
+   "kind": "glint",
+   "radius": 12,
+   "x": 480.0,
+   "y": 301.1
+  },
+  {
+   "kind": "glint",
+   "radius": 12,
+   "x": 578.6,
+   "y": 301.1
+  }
+ ],
+ "layers": [
+  "sky",
+  "far",
+  "mid"
+ ],
+ "moon": [
+  650,
+  110,
+  60
+ ],
+ "glows": []
+}

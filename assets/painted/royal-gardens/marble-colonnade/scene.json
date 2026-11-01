@@ -1,0 +1,35 @@
+{
+ "scene": "royal-gardens/marble-colonnade",
+ "anchors": [
+  {
+   "kind": "hotspot",
+   "sub": 0,
+   "x": 488.7,
+   "y": 344.8
+  },
+  {
+   "kind": "hotspot",
+   "sub": 1,
+   "x": 554.9,
+   "y": 275.0
+  },
+  {
+   "kind": "hotspot",
+   "sub": 2,
+   "x": 497.7,
+   "y": 277.2
+  }
+ ],
+ "layers": [
+  "sky",
+  "far",
+  "mid",
+  "near"
+ ],
+ "moon": [
+  300,
+  110,
+  60
+ ],
+ "glows": []
+}

@@ -1,0 +1,40 @@
+{
+ "scene": "floating-isles/sky-harbour",
+ "anchors": [
+  {
+   "kind": "hotspot",
+   "sub": 0,
+   "x": 785.3,
+   "y": 237.6
+  },
+  {
+   "kind": "hotspot",
+   "sub": 1,
+   "x": 502.6,
+   "y": 130.5
+  },
+  {
+   "kind": "hotspot",
+   "sub": 2,
+   "x": 319.8,
+   "y": 304.4
+  },
+  {
+   "kind": "glint",
+   "radius": 16,
+   "x": 785.5,
+   "y": 207.5
+  }
+ ],
+ "layers": [
+  "sky",
+  "far",
+  "mid"
+ ],
+ "moon": [
+  640,
+  120,
+  60
+ ],
+ "glows": []
+}

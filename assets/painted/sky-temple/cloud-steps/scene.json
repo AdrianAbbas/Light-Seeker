@@ -1,0 +1,41 @@
+{
+ "scene": "sky-temple/cloud-steps",
+ "anchors": [
+  {
+   "kind": "hotspot",
+   "sub": 0,
+   "x": 480.0,
+   "y": 454.5
+  },
+  {
+   "kind": "hotspot",
+   "sub": 1,
+   "x": 480.0,
+   "y": 232.5
+  },
+  {
+   "kind": "hotspot",
+   "sub": 2,
+   "x": 523.1,
+   "y": 255.8
+  },
+  {
+   "kind": "glint",
+   "radius": 16,
+   "x": 480.0,
+   "y": 146.8
+  }
+ ],
+ "layers": [
+  "sky",
+  "far",
+  "mid",
+  "near"
+ ],
+ "moon": [
+  720,
+  110,
+  60
+ ],
+ "glows": []
+}

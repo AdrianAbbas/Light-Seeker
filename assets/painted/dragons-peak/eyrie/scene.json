@@ -1,0 +1,40 @@
+{
+ "scene": "dragons-peak/eyrie",
+ "anchors": [
+  {
+   "kind": "hotspot",
+   "sub": 0,
+   "x": 480.0,
+   "y": 88.4
+  },
+  {
+   "kind": "hotspot",
+   "sub": 1,
+   "x": 348.7,
+   "y": 258.9
+  },
+  {
+   "kind": "hotspot",
+   "sub": 2,
+   "x": 480.0,
+   "y": 63.4
+  },
+  {
+   "kind": "glint",
+   "radius": 20,
+   "x": 480.0,
+   "y": 88.4
+  }
+ ],
+ "layers": [
+  "sky",
+  "far",
+  "mid"
+ ],
+ "moon": [
+  700,
+  90,
+  60
+ ],
+ "glows": []
+}

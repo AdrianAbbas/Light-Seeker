@@ -1,0 +1,52 @@
+{
+ "scene": "golden-cathedral/nave-of-light",
+ "anchors": [
+  {
+   "kind": "hotspot",
+   "sub": 0,
+   "x": 480.0,
+   "y": 569.5
+  },
+  {
+   "kind": "hotspot",
+   "sub": 1,
+   "x": 405.9,
+   "y": 246.2
+  },
+  {
+   "kind": "hotspot",
+   "sub": 2,
+   "x": 538.7,
+   "y": 304.8
+  },
+  {
+   "kind": "window",
+   "radius": 30,
+   "x": 480.0,
+   "y": 273.8
+  },
+  {
+   "kind": "window",
+   "radius": 16,
+   "x": 376.6,
+   "y": 291.3
+  },
+  {
+   "kind": "window",
+   "radius": 16,
+   "x": 553.3,
+   "y": 301.3
+  }
+ ],
+ "layers": [
+  "sky",
+  "far",
+  "mid"
+ ],
+ "moon": [
+  480,
+  120,
+  60
+ ],
+ "glows": []
+}

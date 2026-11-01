@@ -1,0 +1,53 @@
+{
+ "scene": "elven-sanctuary/moonwell",
+ "anchors": [
+  {
+   "kind": "hotspot",
+   "sub": 0,
+   "x": 480.0,
+   "y": 342.1
+  },
+  {
+   "kind": "hotspot",
+   "sub": 1,
+   "x": 272.2,
+   "y": 249.6
+  },
+  {
+   "kind": "hotspot",
+   "sub": 2,
+   "x": 659.8,
+   "y": 203.0
+  },
+  {
+   "kind": "glint",
+   "radius": 30,
+   "x": 480.0,
+   "y": 371.2
+  },
+  {
+   "kind": "glint",
+   "radius": 14,
+   "x": 433.5,
+   "y": 370.5
+  },
+  {
+   "kind": "fire",
+   "radius": 20,
+   "x": 480.0,
+   "y": 332.5
+  }
+ ],
+ "layers": [
+  "sky",
+  "far",
+  "mid",
+  "near"
+ ],
+ "moon": [
+  650,
+  90,
+  60
+ ],
+ "glows": []
+}

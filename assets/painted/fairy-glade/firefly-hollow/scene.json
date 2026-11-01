@@ -1,0 +1,59 @@
+{
+ "scene": "fairy-glade/firefly-hollow",
+ "anchors": [
+  {
+   "kind": "hotspot",
+   "sub": 0,
+   "x": 177.8,
+   "y": 336.4
+  },
+  {
+   "kind": "hotspot",
+   "sub": 1,
+   "x": 480.0,
+   "y": 316.3
+  },
+  {
+   "kind": "hotspot",
+   "sub": 2,
+   "x": 730.2,
+   "y": 314.4
+  },
+  {
+   "kind": "fire",
+   "radius": 12,
+   "x": 241.1,
+   "y": 295.1
+  },
+  {
+   "kind": "fire",
+   "radius": 12,
+   "x": 440.2,
+   "y": 295.1
+  },
+  {
+   "kind": "fire",
+   "radius": 12,
+   "x": 639.2,
+   "y": 295.1
+  },
+  {
+   "kind": "fire",
+   "radius": 12,
+   "x": 798.5,
+   "y": 295.1
+  }
+ ],
+ "layers": [
+  "sky",
+  "far",
+  "mid",
+  "near"
+ ],
+ "moon": [
+  480,
+  50,
+  60
+ ],
+ "glows": []
+}

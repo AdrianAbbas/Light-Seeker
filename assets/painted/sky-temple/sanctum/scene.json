@@ -1,0 +1,45 @@
+{
+ "scene": "sky-temple/sanctum",
+ "anchors": [
+  {
+   "kind": "hotspot",
+   "sub": 0,
+   "x": 267.4,
+   "y": 425.5
+  },
+  {
+   "kind": "hotspot",
+   "sub": 1,
+   "x": 480.0,
+   "y": 349.3
+  },
+  {
+   "kind": "hotspot",
+   "sub": 2,
+   "x": 658.5,
+   "y": 314.4
+  },
+  {
+   "kind": "fire",
+   "radius": 24,
+   "x": 480.0,
+   "y": 367.8
+  },
+  {
+   "kind": "glint",
+   "radius": 20,
+   "x": 480.0,
+   "y": -189.5
+  }
+ ],
+ "layers": [
+  "sky",
+  "mid"
+ ],
+ "moon": [
+  480,
+  60,
+  60
+ ],
+ "glows": []
+}

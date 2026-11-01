@@ -1,0 +1,53 @@
+{
+ "scene": "elven-sanctuary/starlit-canopy",
+ "anchors": [
+  {
+   "kind": "hotspot",
+   "sub": 0,
+   "x": 480.0,
+   "y": 443.7
+  },
+  {
+   "kind": "hotspot",
+   "sub": 1,
+   "x": 254.6,
+   "y": 366.6
+  },
+  {
+   "kind": "hotspot",
+   "sub": 2,
+   "x": 602.6,
+   "y": 277.1
+  },
+  {
+   "kind": "glint",
+   "radius": 10,
+   "x": 267.6,
+   "y": 305.4
+  },
+  {
+   "kind": "glint",
+   "radius": 10,
+   "x": 480.0,
+   "y": 305.4
+  },
+  {
+   "kind": "glint",
+   "radius": 10,
+   "x": 692.4,
+   "y": 305.4
+  }
+ ],
+ "layers": [
+  "sky",
+  "far",
+  "mid",
+  "near"
+ ],
+ "moon": [
+  480,
+  60,
+  60
+ ],
+ "glows": []
+}

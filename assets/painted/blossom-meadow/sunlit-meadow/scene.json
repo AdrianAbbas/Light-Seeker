@@ -1,0 +1,35 @@
+{
+ "scene": "blossom-meadow/sunlit-meadow",
+ "anchors": [
+  {
+   "kind": "hotspot",
+   "sub": 0,
+   "x": 480.0,
+   "y": 334.2
+  },
+  {
+   "kind": "hotspot",
+   "sub": 1,
+   "x": 152.0,
+   "y": 292.7
+  },
+  {
+   "kind": "hotspot",
+   "sub": 2,
+   "x": 715.1,
+   "y": 270.7
+  }
+ ],
+ "layers": [
+  "sky",
+  "far",
+  "mid",
+  "near"
+ ],
+ "moon": [
+  640,
+  90,
+  60
+ ],
+ "glows": []
+}

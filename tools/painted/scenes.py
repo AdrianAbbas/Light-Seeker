@@ -1590,7 +1590,7 @@ def v2_windswept():
     b = G.Builder(); rng = random.Random(62)
     G.tower(b, -235, 425, 170, 5, 30, rng, tiers=2, spire_ratio=1.4, depth=0)
     b.flush("mid", G.materials(), "ruin")
-    return meta((300, 90), spots3(3, [(200, 600, 260), (-220, 420, 200), (0, 900, 300)]), horizon=360, clouds=0.6, rays=0.4, haze=0.5)
+    return meta((300, 90), spots3(3, [(-150, 560, 200), (-220, 420, 200), (-330, 560, 220)]), horizon=360, clouds=0.6, rays=0.4, haze=0.5)
 
 
 @scene("floating-isles/sky-harbour")
@@ -1880,7 +1880,7 @@ def v2_map():
         if k:
             a_ = 2 * (k - 1); T += [(a_, a_ + 1, a_ + 3), (a_, a_ + 3, a_ + 2)]
     D.big_mesh("river", np.array(V), np.array(T), "mid", water((0.5, 0.72, 0.9)))
-    L = [(0, 1100), (520, 1300), (-560, 700), (700, 650), (-200, 350), (300, 500), (-420, 1450), (120, 150), (-760, 300), (900, 1500)]
+    L = [(0, 1100), (520, 1300), (-560, 700), (700, 650), (-200, 350), (300, 500), (-420, 1450), (120, 400), (-520, 1030), (900, 1500)]
     # Woods everywhere (clumped), not on the landmarks or in the sea.
     D.grove(land, -1600, 1600, -200, 2000, 2200, "mid", 41, size=(22, 40), blossom=0.12, name="mapwood", clump=0.85,
             avoid=[(x, y, 120) for x, y in L], min_z=-30)
@@ -1930,5 +1930,5 @@ def v2_map():
     for k, (x, y, z) in enumerate([(-300, 1900, 260), (500, 2000, 300), (-1000, 1200, 220), (1100, 900, 200)]):
         D.cumulus((x, y, z), (400, 260, 180), "far", 340 + k, density=0.012, name="fogcloud_m%d" % k)
     anchors += [lightpt((0, 1100, 260), 30, "glint"), lightpt((300, 500, 120), 20, "glint"), lightpt((700, 650, 90), 18, "glint"),
-                lightpt((0, 1100, 200), 24, "fire"), lightpt((300, 500, 90), 18, "fire"), lightpt((-760, 300, 50), 16, "fire")]
+                lightpt((0, 1100, 200), 24, "fire"), lightpt((300, 500, 90), 18, "fire"), lightpt((-520, 1030, 170), 16, "fire")]
     return meta((760, 40), anchors, horizon=120, clouds=0.3, rays=0.5, haze=0.3)

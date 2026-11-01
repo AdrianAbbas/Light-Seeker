@@ -1,0 +1,47 @@
+{
+ "scene": "sky-temple/bell-garden",
+ "anchors": [
+  {
+   "kind": "hotspot",
+   "sub": 0,
+   "x": 480.0,
+   "y": 374.9
+  },
+  {
+   "kind": "hotspot",
+   "sub": 1,
+   "x": 392.4,
+   "y": 281.9
+  },
+  {
+   "kind": "hotspot",
+   "sub": 2,
+   "x": 480.0,
+   "y": 260.8
+  },
+  {
+   "kind": "glint",
+   "radius": 12,
+   "x": 325.9,
+   "y": 260.8
+  },
+  {
+   "kind": "glint",
+   "radius": 12,
+   "x": 634.1,
+   "y": 260.8
+  }
+ ],
+ "layers": [
+  "sky",
+  "far",
+  "mid",
+  "near"
+ ],
+ "moon": [
+  260,
+  120,
+  60
+ ],
+ "glows": []
+}
