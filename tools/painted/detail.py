@@ -594,11 +594,12 @@ def _fbm2(u, v, seed, octaves=6):
 def mesa(cx, cy, z0, radius, height, layer, seed, material=None, squash=0.75, name="mesa"):
     """A tall cliff mesa: a dense displaced shell (strata ledges, buttresses, overhangs),
     narrowing to the top, with a flat plateau."""
-    nu, nv = 220, 90
+    nu, nv = 360, 150
     u = np.linspace(0, 2 * np.pi, nu, endpoint=False)[None, :].repeat(nv, 0)
     v = np.linspace(0, 1, nv)[:, None].repeat(nu, 1)
     n = _fbm2(u, v, seed)
-    strata = 0.025 * np.sin(v * 46 + n * 2.5) + 0.05 * _fbm2(u * 3, v * 2.5, seed + 9, 4)   # irregular strata, vertical buttresses
+    ridge = 1.0 - np.abs(_fbm2(u * 4, v * 1.5, seed + 9, 5)) * 0.6
+    strata = 0.02 * np.sin(v * 52 + n * 3.0) + 0.07 * (ridge - 0.7) + 0.03 * _fbm2(u * 9, v * 6, seed + 17, 3)   # ridged buttresses, irregular strata
     r = radius * (1.0 - 0.28 * v ** 1.6) * (1.0 + 0.16 * n + strata)
     x = cx + r * np.cos(u)
     y = cy + r * np.sin(u) * squash
@@ -614,4 +615,187 @@ def mesa(cx, cy, z0, radius, height, layer, seed, material=None, squash=0.75, na
     ring = idx[-1]
     fan = np.stack([ring, np.roll(ring, -1), np.full(nu, top)], -1)
     tris = np.concatenate([tris, fan])
-    return big_mesh(name, verts, tris, layer, material or mat_rock("mesarock", colour=(0.72, 0.64, 0.52), moss=(0.26, 0.38, 0.1), moss_amount=0.35), smooth=True)
+    return big_mesh(name, verts, tris, layer, material or mat_cliff("cliff%d" % seed, seed), smooth=True)
+
+
+def mat_cliff(name="cliff3", seed=0):
+    """Realistic cliff stone: three warm tones in patches, dark crevices (Voronoi cracks),
+    vertical water stains, fine grain; moss and grass only on true ledges, in patches."""
+    key = ("cliff3", name, seed)
+    if key in _mats:
+        return _mats[key]
+    m, nt, out, bsdf = _principled(name)
+    L = nt.links.new
+    tc = nt.nodes.new("ShaderNodeTexCoord")
+    def noise(scale, detail=8, rough=0.6, dims="3D", w=0.0):
+        n = nt.nodes.new("ShaderNodeTexNoise"); n.inputs["Scale"].default_value = scale
+        n.inputs["Detail"].default_value = detail; n.inputs["Roughness"].default_value = rough
+        n.noise_dimensions = "4D"; n.inputs["W"].default_value = w + seed * 3.1
+        L(tc.outputs["Object"], n.inputs["Vector"]); return n
+    patches = noise(0.03, 6, 0.55)
+    tones = nt.nodes.new("ShaderNodeValToRGB")
+    els = tones.color_ramp.elements
+    els[0].position = 0.35; els[0].color = (0.46, 0.43, 0.4, 1)
+    els[1].position = 0.65; els[1].color = (0.78, 0.74, 0.68, 1)
+    e = els.new(0.5); e.color = (0.68, 0.57, 0.43, 1)          # ochre
+    L(patches.outputs["Fac"], tones.inputs["Fac"])
+    # Cracks: Voronoi distance to the edge, thin dark lines.
+    vor = nt.nodes.new("ShaderNodeTexVoronoi"); vor.feature = "DISTANCE_TO_EDGE"; vor.inputs["Scale"].default_value = 0.35
+    warp = noise(0.2, 4, 0.5, w=7)
+    mixv = nt.nodes.new("ShaderNodeVectorMath"); mixv.operation = "ADD"
+    sc = nt.nodes.new("ShaderNodeVectorMath"); sc.operation = "SCALE"; sc.inputs["Scale"].default_value = 3.0
+    L(warp.outputs["Color"], sc.inputs[0]); L(tc.outputs["Object"], mixv.inputs[0]); L(sc.outputs[0], mixv.inputs[1])
+    L(mixv.outputs[0], vor.inputs["Vector"])
+    crack = nt.nodes.new("ShaderNodeMapRange"); crack.inputs["From Min"].default_value = 0.0; crack.inputs["From Max"].default_value = 0.06
+    L(vor.outputs["Distance"], crack.inputs["Value"])
+    # Vertical stains: noise stretched along z.
+    stretch = nt.nodes.new("ShaderNodeVectorMath"); stretch.operation = "MULTIPLY"; stretch.inputs[1].default_value = (1.0, 1.0, 0.08)
+    L(tc.outputs["Object"], stretch.inputs[0])
+    stain = nt.nodes.new("ShaderNodeTexNoise"); stain.inputs["Scale"].default_value = 0.4; stain.inputs["Detail"].default_value = 5
+    L(stretch.outputs[0], stain.inputs["Vector"])
+    stainr = nt.nodes.new("ShaderNodeMapRange"); stainr.inputs["From Min"].default_value = 0.45; stainr.inputs["From Max"].default_value = 0.7
+    stainr.inputs["To Min"].default_value = 1.0; stainr.inputs["To Max"].default_value = 0.72
+    L(stain.outputs["Fac"], stainr.inputs["Value"])
+    c1 = nt.nodes.new("ShaderNodeMix"); c1.data_type = "RGBA"; c1.blend_type = "MULTIPLY"; c1.inputs["Factor"].default_value = 1.0
+    L(tones.outputs["Color"], c1.inputs["A"])
+    cr = nt.nodes.new("ShaderNodeCombineColor"); L(crack.outputs["Result"], cr.inputs[0]); L(crack.outputs["Result"], cr.inputs[1]); L(crack.outputs["Result"], cr.inputs[2])
+    crack_tone = nt.nodes.new("ShaderNodeMix"); crack_tone.data_type = "RGBA"
+    crack_tone.inputs["A"].default_value = (0.25, 0.22, 0.2, 1); crack_tone.inputs["B"].default_value = (1, 1, 1, 1)
+    L(crack.outputs["Result"], crack_tone.inputs["Factor"])
+    L(crack_tone.outputs["Result"], c1.inputs["B"])
+    c2 = nt.nodes.new("ShaderNodeMix"); c2.data_type = "RGBA"; c2.blend_type = "MULTIPLY"; c2.inputs["Factor"].default_value = 1.0
+    L(c1.outputs["Result"], c2.inputs["A"])
+    st = nt.nodes.new("ShaderNodeCombineColor")
+    for i in range(3): L(stainr.outputs["Result"], st.inputs[i])
+    L(st.outputs["Color"], c2.inputs["B"])
+    # Moss: true ledges only (normal z > 0.8), in patches.
+    geo = nt.nodes.new("ShaderNodeNewGeometry")
+    sep = nt.nodes.new("ShaderNodeSeparateXYZ"); L(geo.outputs["Normal"], sep.inputs["Vector"])
+    up = nt.nodes.new("ShaderNodeMapRange"); up.inputs["From Min"].default_value = 0.8; up.inputs["From Max"].default_value = 0.95
+    L(sep.outputs["Z"], up.inputs["Value"])
+    mp = noise(0.15, 5, 0.6, w=13)
+    mpr = nt.nodes.new("ShaderNodeMapRange"); mpr.inputs["From Min"].default_value = 0.45; mpr.inputs["From Max"].default_value = 0.6
+    L(mp.outputs["Fac"], mpr.inputs["Value"])
+    mm = nt.nodes.new("ShaderNodeMath"); mm.operation = "MULTIPLY"; L(up.outputs["Result"], mm.inputs[0]); L(mpr.outputs["Result"], mm.inputs[1])
+    moss = nt.nodes.new("ShaderNodeMix"); moss.data_type = "RGBA"
+    L(mm.outputs[0], moss.inputs["Factor"]); L(c2.outputs["Result"], moss.inputs["A"]); moss.inputs["B"].default_value = (0.2, 0.32, 0.08, 1)
+    L(moss.outputs["Result"], bsdf.inputs["Base Color"])
+    bsdf.inputs["Roughness"].default_value = 0.88
+    # Relief: cracks cut in, a coarse and a fine grain.
+    h1 = nt.nodes.new("ShaderNodeMath"); h1.operation = "MULTIPLY_ADD"
+    fine = noise(3.0, 6, 0.7, w=21)
+    L(fine.outputs["Fac"], h1.inputs[0]); h1.inputs[1].default_value = 0.25; L(crack.outputs["Result"], h1.inputs[2])
+    h2 = nt.nodes.new("ShaderNodeMath"); h2.operation = "ADD"; L(h1.outputs[0], h2.inputs[0]); L(patches.outputs["Fac"], h2.inputs[1])
+    bump = nt.nodes.new("ShaderNodeBump"); bump.inputs["Strength"].default_value = 0.85; bump.inputs["Distance"].default_value = 1.2
+    L(h2.outputs[0], bump.inputs["Height"]); L(bump.outputs["Normal"], bsdf.inputs["Normal"])
+    L(bsdf.outputs[0], out.inputs["Surface"])
+    _mats[key] = m
+    return m
+
+
+def mat_floor(name="floor3", a=(0.88, 0.85, 0.8), b=(0.7, 0.62, 0.5), scale=0.12):
+    """A polished chequered marble floor (reflections add richness)."""
+    key = ("floor", name)
+    if key in _mats:
+        return _mats[key]
+    m, nt, out, bsdf = _principled(name)
+    tc = nt.nodes.new("ShaderNodeTexCoord")
+    ch = nt.nodes.new("ShaderNodeTexChecker"); ch.inputs["Scale"].default_value = scale
+    ch.inputs["Color1"].default_value = (*a, 1); ch.inputs["Color2"].default_value = (*b, 1)
+    nt.links.new(tc.outputs["Object"], ch.inputs["Vector"])
+    nt.links.new(ch.outputs["Color"], bsdf.inputs["Base Color"])
+    bsdf.inputs["Roughness"].default_value = 0.12
+    nt.links.new(bsdf.outputs[0], out.inputs["Surface"])
+    _mats[key] = m
+    return m
+
+
+def arc(points_fn, n, radius, layer, material, name="arc", sides=6):
+    """A tube along a curve given by points_fn(t), t in 0..1."""
+    pts = [Vector(points_fn(k / n)) for k in range(n + 1)]
+    segs = [(pts[k], pts[k + 1], radius, radius) for k in range(n)]
+    return tube_mesh(segs, layer, material, name, sides=sides)
+
+
+def pointed_arch(x0, x1, y, z, rise, radius, layer, material, name="archrib"):
+    """A pointed (two-centred) arch from (x0, y, z) to (x1, y, z) rising by `rise`."""
+    def p(t):
+        if t <= 0.5:
+            u = t / 0.5
+            return (x0 + (x1 - x0) / 2 * math.sin(u * math.pi / 2), y, z + rise * (1 - (1 - u) ** 2) ** 0.5 * 1.0 if False else z + rise * math.sin(u * math.pi / 2))
+        u = (t - 0.5) / 0.5
+        return (x0 + (x1 - x0) / 2 + (x1 - x0) / 2 * (1 - math.cos(u * math.pi / 2)), y, z + rise * math.cos(u * math.pi / 2))
+    return arc(p, 12, radius, layer, material, name)
+
+
+def crystal_cluster(cx, cy, z, size, count, layer, seed, colour=(0.75, 0.85, 1.0)):
+    """A cluster of faceted crystals: hexagonal prisms with pointed tips, fanning out."""
+    rng = random.Random(seed)
+    mat = B.mat_crystal(colour, 0.25)
+    for k in range(count):
+        h = size * rng.uniform(0.4, 1.3)
+        B.crystal((cx + rng.uniform(-0.5, 0.5) * size, cy + rng.uniform(-0.3, 0.3) * size, z), h, h * rng.uniform(0.09, 0.15), layer, mat,
+                  tilt=(rng.uniform(-0.45, 0.45), rng.uniform(-0.45, 0.45)))
+
+
+def isle2(cx, cy, z, radius, depth, layer, seed, trees=3, blossom=0.4):
+    """A floating island: a ridged rock underside hanging below a grassy, flowered top."""
+    nu, nv = 200, 60
+    u = np.linspace(0, 2 * np.pi, nu, endpoint=False)[None, :].repeat(nv, 0)
+    v = np.linspace(0, 1, nv)[:, None].repeat(nu, 1)
+    n = _fbm2(u, v, seed)
+    r = radius * (v ** 0.55) * (1.0 + 0.18 * n + 0.06 * _fbm2(u * 5, v * 3, seed + 4, 3))
+    zz = z - depth * (1 - v) * (1.0 + 0.15 * n)
+    verts = np.stack([cx + r * np.cos(u), cy + r * np.sin(u), zz], -1).reshape(-1, 3)
+    idx = np.arange(nv * nu).reshape(nv, nu)
+    a = idx[:-1, :]; b = np.roll(idx[:-1, :], -1, 1); c = np.roll(idx[1:, :], -1, 1); d = idx[1:, :]
+    tris = np.concatenate([np.stack([a, c, b], -1).reshape(-1, 3), np.stack([a, d, c], -1).reshape(-1, 3)])
+    big_mesh("isle", verts, tris, layer, mat_cliff("islecliff%d" % seed, seed), smooth=True)
+    top = lambda x, y: z + 0.6 * math.sin(x * 0.3) * math.cos(y * 0.3)
+    B.cylinder((cx, cy, z - 1.2), radius * 1.01, 1.4, layer, mat_ground(), sides=64, name="isletop")
+    grass(lambda x, y: z + 0.2, cx - radius * 0.7, cx + radius * 0.7, cy - radius * 0.7, cy + radius * 0.7, int(radius * radius * 60), layer, seed,
+          height=(0.3, 0.8))
+    flowers(lambda x, y: z + 0.2, cx - radius * 0.6, cx + radius * 0.6, cy - radius * 0.6, cy + radius * 0.6, int(radius * radius * 4), layer, seed + 1,
+            size=0.25)
+    rng = random.Random(seed)
+    for k in range(trees):
+        tree((cx + rng.uniform(-0.5, 0.5) * radius, cy + rng.uniform(-0.4, 0.4) * radius, z), radius * rng.uniform(0.4, 0.7), seed * 7 + k, layer,
+             kind="blossom" if rng.random() < blossom else "green", leaves=6000)
+
+
+def mushroom2(x, y, z, size, layer, seed, cap=(0.92, 0.42, 0.5)):
+    """A fairy-tale mushroom: a curved stem, a domed cap with white spots, gills below."""
+    rng = random.Random(seed)
+    stem = mat_marble("stem%.2f" % size, colour=(0.95, 0.92, 0.85), vein=(0.85, 0.82, 0.76))
+    B.lathe((x, y, z), [(size * 0.2, 0), (size * 0.15, size * 0.35), (size * 0.13, size * 0.7), (size * 0.18, size * 0.82), (0.0, size * 0.83)], layer, stem, sides=24, name="stem")
+    capm = B.mat_stone("cap%.2f" % cap[0], cap, rough=0.4, bump=0.2, scale=4.0)
+    B.lathe((x, y, z + size * 0.72), [(size * 0.16, 0), (size * 0.7, size * 0.04), (size * 0.66, size * 0.2), (size * 0.5, size * 0.38),
+                                      (size * 0.25, size * 0.48), (0.0, size * 0.5)], layer, capm, sides=40, name="cap")
+    spot = B.mat_stone("spot", (0.98, 0.97, 0.94), rough=0.5, bump=0.1)
+    for k in range(14):
+        a = rng.uniform(0, 2 * math.pi); t = rng.uniform(0.15, 0.85)
+        rr = size * (0.68 - 0.55 * t); zz = z + size * 0.72 + size * 0.5 * (1 - (1 - t) ** 2) * 0.95
+        B.cylinder((x + math.cos(a) * rr, y + math.sin(a) * rr, zz), size * rng.uniform(0.04, 0.08), size * 0.02, layer, spot, sides=10, name="spot")
+    for k in range(36):
+        a = k * 2 * math.pi / 36
+        B.box((x + math.cos(a) * size * 0.42, y + math.sin(a) * size * 0.42, z + size * 0.7), (size * 0.5, size * 0.01, size * 0.03), layer,
+              stem, rotation=(0, 0, a), name="gill")
+
+
+def butterflies(centre, extent, count, layer, seed):
+    rng = random.Random(seed)
+    cols = [(0.98, 0.78, 0.25), (0.95, 0.55, 0.75), (0.62, 0.72, 1.0), (1.0, 1.0, 0.95)]
+    verts, tris, colsv = [], [], []
+    for k in range(count):
+        x = centre[0] + rng.uniform(-0.5, 0.5) * extent[0]; y = centre[1] + rng.uniform(-0.5, 0.5) * extent[1]
+        z = centre[2] + rng.uniform(-0.5, 0.5) * extent[2]
+        s = rng.uniform(0.25, 0.45); a = rng.uniform(0, 2 * math.pi); open_ = rng.uniform(0.2, 0.9)
+        ca, sa = math.cos(a), math.sin(a); c = cols[rng.randrange(4)]
+        for side in (-1, 1):
+            b0 = len(verts)
+            pts = [(0, 0, 0), (0.3, side * 1.0, open_ * 0.6), (1.0, side * 0.9, open_ * 0.5), (0.6, side * 0.2, 0.05),
+                   (-0.6, side * 0.8, open_ * 0.5), (-0.3, side * 0.2, 0.0)]
+            for px, py, pz in pts:
+                verts.append((x + (ca * px - sa * py) * s, y + (sa * px + ca * py) * s, z + pz * s)); colsv.append(c)
+            tris += [(b0, b0 + 1, b0 + 2), (b0, b0 + 2, b0 + 3), (b0, b0 + 4, b0 + 1), (b0, b0 + 5, b0 + 4)]
+    return big_mesh("butterflies", np.array(verts), np.array(tris), layer, mat_vegetation("wing", 0.5, 0.4), np.array(colsv))
