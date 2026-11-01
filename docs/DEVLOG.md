@@ -81,7 +81,7 @@ usage limit or a compaction) continues from the first unticked line. Push to `ma
 **Milestone 4: Atmosphere layer (light)**
 
 - [x] 4a. Synthesised light sounds (soft wind, distant bells, birdsong-like chirps, fountain shimmer, chimes, harp glints), per place, off by default, sparse, never masking
-- [ ] 4b. Tests, DEVLOG; push without `[skip ci]`
+- [x] 4b. Tests, DEVLOG; push without `[skip ci]`
 
 **Milestone 5: presets and polish**
 
@@ -477,3 +477,43 @@ grass, the map, the Marble Colonnade's shadowed grass). 47 MB of layers in
   the background thread, 7.2 MB per scene at 960 x 560 (x 4 on Retina); the map's life
   4.7 % of one core; a full repaint of a scene with its life 7.8 ms; the most similar pair
   of painted places 0.49 (gate 0.85).
+
+---
+
+## Milestone 4: the Atmosphere layer, light (2026-11-01)
+
+DUNGEON CRAWLER's Atmosphere engine (scheduling, ducking, level, density, seed) with every
+dark sound replaced. Eight original synthesised sounds, no samples:
+
+| Sound | Synthesis |
+|---|---|
+| Soft wind | band-passed noise, its centre drifting slowly (550 ± 260 Hz), 3.5–5.5 s, in-out envelope |
+| Distant bell | six partials of a major-chord bell on a pentatonic note, low-passed by distance, 5 s |
+| Birdsong | a phrase of 3–7 chirps: quick downward sweeps around 2.8 kHz with a fine trill, 40–90 ms each |
+| Fountain shimmer | tiny bright droplets (2–6 kHz blips) over a soft high hiss, 1.8 s |
+| Chimes | 3–6 strikes on a high pentatonic: a fundamental and an inharmonic partial, ringing out |
+| Harp glint | 3–5 soft plucks (fundamental and octave) climbing the pentatonic |
+| Leaves | a brief rustle of band-passed noise |
+| Brook | band-passed noise burbling (its centre moving at 3 Hz) |
+
+Each place has its own three (the first most often): bells and chimes in the Citadel, the
+Sky Temple and the Cathedral; birdsong and leaves in the meadow and the gardens; fountain
+shimmer at the Moonwell and the Fountain Court; chimes and harp glints in the Crystal Palace
+and the Fairy Glade; soft wind on the isles and Dragon's Peak. Off by default; at Level
+100 % an event peaks around −20 dBFS and the layer ducks under the instrument (−40 dB under
+a loud sine). Bells and chimes keep to one major pentatonic, so they never clash with each
+other.
+
+**Tests** (group `atmosphere`, 10 checks): off by default; every place has sounds; level 0
+silent; deterministic per seed, different for another seed; sparse (13 events in 8 bars at
+full density); quiet (peak below −16 dBFS); tempo-aware (7 events at 60 BPM vs 13 at 120);
+under a loud instrument −40 dB. Decision: the tests now count the events the layer starts
+(DUNGEON CRAWLER counted audible onsets, which merge when long bells and wind beds overlap,
+so the faster tempo looked sparser); the audible onsets are still reported.
+
+**Listening:** `atmosphere-every-location.wav` in the listening renders: 8 s of each
+location's atmosphere at full level, no instrument.
+
+
+**Results:** every `atmosphere` check passes on Linux (13 events in 8 bars, 7 at 60 BPM, −39.7 dB under a loud instrument), part of the full suite (Milestone 3's
+run); unchanged since 4a.
