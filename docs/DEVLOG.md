@@ -854,8 +854,16 @@ captured shimmer hall in the Nave of Light). Decision to revisit if the shimmer 
   function declaration to Clang (the most vexing parse; GCC accepted it). Fixed, and every
   changed file now also checked with `clang++ -fsyntax-only` here (it reproduces the six
   errors before the fix and none after). That run also predated the `SAMPLES_TOKEN` secret
-  ("Samples token missing"); the developer has since added it, so the next run ships the
-  recordings.
+  ("Samples token missing"); the developer has since added it.
+- **CI, `25d6031`: green.** The AU harness's new instrument suite needed one Clang fix (a
+  `__block` variable captured by a lambda). Then: the recordings fetched and prepared (530
+  notes) and shipped in the instrument's bundles; the smoke and instrument groups pass on
+  arm64 and x86_64 (64/0 each); **auval passes for both plug-ins** (instrument `aumu Lski`,
+  effect `aufx Lsek`) on arm64 and x86_64; the AU harness passes on all three hosting routes
+  (AUv2 out-of-process, AUv2 in-process, AUAudioUnit) for both plug-ins on both
+  architectures (the instrument played over MIDI: silent without notes, a chord sounding
+  on both channels, dying away after its release, dry at Intensity 0, another place, 44.1
+  kHz, state, editor); the installable package was uploaded.
 
 ## Handoff (Direction Update 1): what to listen for and look at in GarageBand
 
