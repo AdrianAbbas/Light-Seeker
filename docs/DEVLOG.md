@@ -70,13 +70,13 @@ usage limit or a compaction) continues from the first unticked line. Push to `ma
 **Milestone 3: visuals**
 
 - [x] 3a. Light restyle of the controls (ivory/pearl panels, gold value tracks, dark text) and the map overlay (gold marker, serif labels)
-- [ ] 3b. Painted pipeline relit for daylight (sun + sky, clouds, god rays, bright haze, marble and gold, flowers); life: drifting clouds, light motes, glimmer, birds
-- [ ] 3c. The bright painterly map
-- [ ] 3d. Scenes: Celestial Citadel (4)
-- [ ] 3e. Scenes: Sky Temple, Elven Sanctuary, Crystal Palace (9)
-- [ ] 3f. Scenes: Blossom Meadow, Golden Cathedral, Floating Isles (9)
-- [ ] 3g. Scenes: Royal Gardens, Fairy Glade, Dragon's Peak (9)
-- [ ] 3h. Zoom navigation + transitions checked, snapshots of everything in `docs/snapshots/`, tests; push without `[skip ci]`
+- [x] 3b. Painted pipeline relit for daylight (sun + sky, clouds, god rays, bright haze, marble and gold, flowers); life: drifting clouds, light motes, glimmer, birds
+- [x] 3c. The bright painterly map
+- [x] 3d. Scenes: Celestial Citadel (4)
+- [x] 3e. Scenes: Sky Temple, Elven Sanctuary, Crystal Palace (9)
+- [x] 3f. Scenes: Blossom Meadow, Golden Cathedral, Floating Isles (9)
+- [x] 3g. Scenes: Royal Gardens, Fairy Glade, Dragon's Peak (9)
+- [x] 3h. Zoom navigation + transitions checked, snapshots of everything in `docs/snapshots/`, tests; push without `[skip ci]`
 
 **Milestone 4: Atmosphere layer (light)**
 
@@ -372,3 +372,108 @@ cherry blossom and white marble balustrades; doves in the sky; a fine grain and 
 oil-paint softness. Applied: the light controls (pearl panels, dark sepia text, gold),
 the painted pipeline's daylight grade and props (Milestone 3).
 
+---
+
+## Milestone 3: visuals (2026-11-01)
+
+### 3a. The light controls and life
+
+The look-and-feel's roles keep their names, with light values: pearl panels, ivory fields,
+warm taupe lines, soft sepia secondary text, **dark sepia main text**, **radiant gold**
+accent, pearl fader caps with a gold centre line and soft warm shadows; the editor's veils
+and halos are pearl (they were black). Every slider's value colour is now set explicitly
+(DUNGEON CRAWLER relied on JUCE's default, white, invisible on pearl). The life, unchanged
+in cost and rates: embers became **light motes** (slower, longer, warm-white twinkling),
+glints and mist are white, the moon's crimson pulse is the **sun's golden breathing**, and
+**doves** cross the sky now and then: a flock of three to five in a loose V every 25–50 s,
+about 20 s across, at 15 fps, repainting only the flock's own box, and only where the
+scene's sky is visible (the top of its back plane sampled once per scene: blue), never in
+interiors. Eco stops everything; nothing runs on a still scene without life.
+
+### 3b. The painted pipeline, relit for daylight, and the detail pass
+
+DUNGEON CRAWLER's pipeline (Blender via PyPI `bpy` 5.2.3, Cycles on 4 CPU cores, depth
+layers sky/far/mid/fog/near, OIDN, the painterly post-process), relit for daylight:
+
+- **paint.py:** a lifted daylight tone curve (no black), a high-key grade (+30 % colour,
+  a gentle S-curve, small lavender shadows, warm cream highlights), a pale blue-cream haze,
+  a painted sky where the scene has no rendered sky, a light hand on the Kuwahara, brush
+  streaks and grain (the render's detail must survive the painting).
+- **Physical daylight:** Blender's multiple-scattering sky texture as the world, a warm sun
+  from behind the viewer's left (the romantic painter's front-and-side light: lit façades,
+  never silhouettes) and a soft rim sun.
+
+**The developer's verdict on the first light renders** (simple primitives: a few hundred
+flower heads, ball trees, boxes and cones for castles): "too fake and cartoony", "too
+polygonal and bland", "no details on the castles and trees", "it all still looks so flat".
+DUNGEON CRAWLER looked good because of its detail and its lighting, so the scenes were
+rebuilt from scratch with a **detail pass** (`tools/painted/detail.py`, `gothic.py`):
+
+| What | How |
+|---|---|
+| Meadows | numpy-built meshes of 100–250 thousand individual grass blades (tapered, bent, varied green) and 10–40 thousand flowers (daisies, buttercups, pink, lavender, coral: petals, centres, stems), written to Blender in one `foreach_set` (seconds, not minutes) |
+| Trees | recursive branching tubes with bark, thousands of leaf cards or blossom petals per crown |
+| Castles | a recursive **gothic generator**: towers with corner buttresses, string courses, gold-framed lancets with mullions, crowns of pinnacles that carry smaller pinnacles, crocketed spires with gold finials, halls with flying buttresses; a citadel is ~25 towers around a central keep (~1–2 million faces) |
+| Cliffs | displaced mesas (ridged strata, overhangs) with a **realistic rock material** (three stone tones in patches, Voronoi crevices, vertical water stains, fine grain, moss and grass only on true ledges) after the developer asked for "a more realistic type rock texture" |
+| Interiors | a gothic interior template: clustered columns, pointed arcades, triforium, clerestory lancets with tracery (mullions, transoms, quatrefoils), rib vaults, rose windows, polished chequered marble floors, gilt courses, volumetric light shafts through the windows |
+| Sky | true volumetric cumulus (Principled Volume with 4D noise per cloud), haze boxes for aerial depth, sparkles, butterflies |
+
+The Gates of Dawn was built first as the prototype and sent to the developer: "ok YES looks
+way better … WAYYY better" (and the rock request, done). Every other scene was then written
+on the same builders and templates, each with its own subject, light and composition.
+
+**A second pass over all 32** (quarter-size previews of every scene on one contact sheet,
+judged against the approved Gates of Dawn) found what the prototype had hidden:
+
+| Problem | Fix |
+|---|---|
+| Grey, heavy clouds (one volume bounce leaves a cumulus's inside unlit) | a soft self-glow in proportion to the density (radiance 0.65 inside), the multiple scattering of a real cloud, cheaply |
+| Mountains like paper cut-outs (DUNGEON CRAWLER's ridge strips) | `D.mountains`: a ridged-noise range (520 x 90 grid) with gullies, a blue-grey rock with snow only above the snow line on the gentler faces, a green foot; `D.peak`: single sharp peaks (arêtes) |
+| A flat green plane to the horizon | `D.valley`: rolling country (two noise scales) with a patchwork of fields (Voronoi greens and gold) and darker groves; `D.grove`: hundreds of distant trees in one mesh (lumpy crowns lit on top), clumped into woods |
+| Blank white windows, flat plaster walls in every interior | `D.mat_stained`: leaded jewel-coloured glass (Voronoi cells mixed towards the window's tint, lead lines, a sheen in each cell); `D.mat_ashlar`: coursed cut stone with mortar joints, per-block tones and stains; clustered columns of eight shafts with gilt rings; less fill and haze (more depth) |
+| Floating isles with a flat disc on top and a square of grass | a grassy dome following the rock's own outline, its rim rolling over, grass in strips filling the round |
+| Mushrooms like plastic | a cap shader: deeper crown, pale rim, mottling, waxy sheen and subsurface |
+| A washed-out look everywhere | the painted haze default lowered (0.55 → 0.3) |
+| Scenes that did not work | rewritten: the map (patchwork country, woods, a coast, a river from the snowy north to the sea; landmarks kept in place), Wildflower Hill (high on a flowering slope above a valley with a winding river and a far castle), Summit of Winds (a snowy ridge over a sea of cloud with sharp peaks rising through it), the Sanctum (inside the rotunda, windows all round), the Marble Colonnade (a double colonnade of fluted columns seen from the garden), the Fountain Court (lawns and a paved round), the Diamond Vault (windows and fill), Golden Nest (a hoard), Sky Harbour (framing), Hall of Mirrors (the camera stood behind a column), the Stained Glass Chapel (a diagonal view to the altar, so it differs from the Nave) |
+| Two bugs that would have broken the full build | a material called with a number for a name (Golden Nest); a replacement that matched the first (old) registration of a scene instead of the last and cut out 800 lines (restored from git, re-applied by matching the last occurrence) |
+
+The distinctness the tests gate (grey-level correlation of every pair of painted places at
+96 x 56, < 0.85) was measured on the previews before the full build: the closest pair was
+0.63 (Prism Hall / Stained Glass Chapel).
+
+Iterations that mattered: overexposed first renders (sun 5.5, sky 0.2, plus a rim sun);
+volumetric clouds as opaque grey slabs (density is per Blender unit: 0.012 for clouds
+hundreds of units wide); haze boxes as a purple veil (thinner, lower); black ellipses and
+lines on the ground (an object of one layer still casts shadows into another layer's pass:
+objects now share the layer of the ground or floor they stand on); interiors overexposed by
+their window glow, fill and fog; particle hair for grass (orientation unreliable without the
+UI: numpy meshes instead).
+
+**The full build** (1920 x 1120, 24 samples, OIDN, `--jobs 2` on 4 cores): about 4 minutes
+per scene, the 32 in 2.5 hours; then nine scenes fixed and re-rendered after a review of
+every full-size result (Wildflower Hill's seam, Spire Summit's framing, Mirror Lake's
+island, Golden Nest, Summit of Winds' cloud sea, Sky Harbour's ships, Windswept Isle's
+grass, the map, the Marble Colonnade's shadowed grass). 47 MB of layers in
+`assets/painted` (JPEG colour + PNG alpha per layer).
+
+### 3c–3h. The map, the 31 places, navigation, snapshots, tests
+
+- Every location and place has its painted scene in depth layers; the map's ten
+  landmarks and each scene's hotspots are projected from the 3D scene (anchors) and
+  written to `Source/UI/PaintedManifest.inc`.
+- **Two failures the tests caught in the new art** (fixed): the map's Royal Gardens
+  landmark sat under the controls and the Fairy Glade's off the left edge (moved to
+  (120, 400) and (−520, 1030), the map re-rendered); two Windswept Isle hotspots were
+  projected outside the window, so a Roam or Journey left one unreachable (moved onto the
+  isles in view; anchors re-projected without re-rendering: `render.py --layers none`
+  writes anchors.json only).
+- Zoom navigation and transitions are DUNGEON CRAWLER's (unchanged code), checked by the
+  `editor`, `art` and `navigation` groups on the light world.
+- Snapshots of everything (the map, the 31 places, two zoom mid-frames, the zoom out),
+  the editor at 200 %: `docs/snapshots/` (`LightSeekerTests --painted-snapshots`), plus a
+  contact sheet. `docs/snapshots/prototype/` keeps the approved Gates of Dawn prototype and
+  one rejected first-style render for comparison.
+- Measured (Linux, software rendering, report-only): loading a painted scene 170–230 ms on
+  the background thread, 7.2 MB per scene at 960 x 560 (x 4 on Retina); the map's life
+  4.7 % of one core; a full repaint of a scene with its life 7.8 ms; the most similar pair
+  of painted places 0.49 (gate 0.85).
