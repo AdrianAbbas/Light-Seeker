@@ -1597,20 +1597,20 @@ def v2_windswept():
 def v2_harbour():
     isles_world(63, ((150, 330, 238), (262, 500, 236)))
     m, gold = D.mat_marble(), D.mat_gold()
-    B.box((250, 480, 229), (90, 22, 3), "mid", m, name="pier")
+    B.box((320, 470, 229), (130, 14, 3), "mid", m, name="pier")
     sail = D.mat_vegetation("sailcloth", 0.5, 0.6)
     for k in range(3):
-        x = 210 + k * 34
-        B.lathe((x, 470, 221), [(0, 0), (9, 3), (11, 8), (0, 9)], "mid", B.mat_stone("hull2", (0.62, 0.42, 0.25), rough=0.5, bump=0.3, scale=5.0), sides=24, name="hull")
-        B.cylinder((x, 470, 229), 0.8, 34, "mid", gold, sides=10, name="mast")
+        x = 318 + k * 34
+        B.lathe((x, 452, 221), [(0, 0), (9, 3), (11, 8), (0, 9)], "mid", B.mat_stone("hull2", (0.62, 0.42, 0.25), rough=0.5, bump=0.3, scale=5.0), sides=24, name="hull")
+        B.cylinder((x, 452, 229), 0.8, 34, "mid", gold, sides=10, name="mast")
         cols = np.array([[0.97, 0.95, 0.9]] * 4)
-        D.big_mesh("sail", np.array([(x - 0.5, 466, 236), (x - 0.5, 476, 236), (x - 2, 476, 260), (x - 2, 466, 260)]), np.array([(0, 1, 2), (0, 2, 3)]), "mid", sail, cols)
-        B.cylinder((x, 470, 263), 0.2, 6, "mid", gold, sides=6, name="pennant")
+        D.big_mesh("sail", np.array([(x - 0.5, 447, 236), (x - 0.5, 457, 236), (x - 2, 457, 260), (x - 2, 447, 260)]), np.array([(0, 1, 2), (0, 2, 3)]), "mid", sail, cols)
+        B.cylinder((x, 452, 263), 0.2, 6, "mid", gold, sides=6, name="pennant")
     b = G.Builder(); rng = random.Random(63)
     G.tower(b, 285, 520, 230, 7, 50, rng, tiers=3, spire_ratio=1.8, depth=1)
     b.flush("mid", G.materials(), "harbourtower")
     D.sparkles((250, 480, 250), (120, 60, 40), 80, "mid", 64, size=0.3)
-    return meta((640, 120), spots3(3, [(244, 470, 250), (285, 520, 290), (420, 1100, 200)]) + [lightpt((244, 470, 260), 16, "glint")], horizon=380, clouds=0.35)
+    return meta((640, 120), spots3(3, [(352, 452, 250), (285, 520, 290), (420, 1100, 200)]) + [lightpt((352, 452, 260), 16, "glint")], horizon=380, clouds=0.35)
 
 
 # ================================================================ ROYAL GARDENS (v2)
