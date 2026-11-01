@@ -1685,7 +1685,13 @@ def v2_colonnade():
     B.camera((-34, -14, 9), (14, 260, 26), lens=24)
     v2_light((-0.6, -0.5, 0.5), strength=5.5, sky=0.2)
     ground = gentle(73, amp=0.3, rise=0.0)
-    v2_meadow(73, ground, kinds=BLOOM, grass_n=180000, flowers_n=12000, trees=((-44, 60, 22, "blossom"),))
+    # The garden beside the walk only (grass under the walk's floor would be shadowed black
+    # in its own layer's pass).
+    B.heightfield(ground, -220, 7, -10, 90, 170, 80, "near", D.mat_ground())
+    D.grass(ground, -130, 6.5, -8, 90, 300000, "near", 73, height=(0.2, 0.55))
+    D.flowers(ground, -40, 6, -4, 12, 6000, "near", 74, size=0.16, kinds=BLOOM, stem=0.3)
+    D.flowers(ground, -120, 6, -6, 80, 16000, "near", 75, size=0.22, kinds=BLOOM, stem=0.45)
+    D.tree((-44, 60, ground(-44, 60)), 22, 730, "near", kind="blossom", leaves=24000)
     v2_mid_meadow(73, ground)
     marble = D.mat_marble()
     b = G.Builder(); rng = random.Random(73)
