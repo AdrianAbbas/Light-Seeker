@@ -1489,14 +1489,14 @@ def v2_hill():
     v2_light((-0.5, -0.3, 0.6), strength=5.2, sky=0.22)
     slope = rolling(43, 1.6, 0, 0.03)
     f = lambda x, y: slope(x, y) - max(0.0, y - 30) * 0.12
-    B.heightfield(f, -160, 160, -10, 300, 170, 140, "near", D.mat_ground())
+    B.heightfield(f, -160, 160, -10, 175, 170, 100, "near", D.mat_ground())
     D.grass(f, -70, 70, -8, 160, 240000, "near", 43, height=(0.25, 0.6))
     D.flowers(f, -14, 14, -4, 12, 9000, "near", 47, size=0.17, kinds=BLOOM, stem=0.32)
     D.flowers(f, -70, 70, -6, 150, 22000, "near", 44, size=0.24, kinds=BLOOM, stem=0.5)
     D.tree((34, 46, f(34, 46)), 24, 430, "near", kind="blossom", leaves=26000)
     D.tree((-46, 90, f(-46, 90)), 20, 431, "near", kind="green", leaves=16000)
     D.flowers(f, -160, 160, 150, 300, 14000, "mid", 48, size=0.5, kinds=BLOOM)
-    B.heightfield(f, -900, 900, 150, 360, 160, 50, "mid", D.mat_ground(), name="lowerslope")
+    B.heightfield(f, -900, 900, 150, 440, 180, 70, "mid", D.mat_ground(), name="lowerslope")
     vz = f(0, 330) + 6
     h = D.valley(43, vz, y0=260, amp=40)
     # The river: a ribbon winding away through the valley.
@@ -1511,9 +1511,9 @@ def v2_hill():
             T += [(a_, a_ + 1, a_ + 3), (a_, a_ + 3, a_ + 2)]
     D.big_mesh("river", np.array(V), np.array(T), "far", water((0.55, 0.74, 0.9)))
     D.grove(h, -1600, 1600, 400, 2600, 320, "far", 49, size=(14, 30), blossom=0.25, name="valleywood")
-    cx, cy = -320, 1500
+    cx, cy = -300, 1300
     b = G.Builder()
-    G.citadel(b, cx, cy, h(cx, cy) - 5, 0.55, 45)
+    G.citadel(b, cx, cy, h(cx, cy) - 5, 0.95, 45)
     b.flush("far", G.materials(), "valleycastle")
     v2_sky(44, vz, valley=False, clouds=((-900, 2600, 520, 600), (500, 3000, 640, 800), (1300, 2600, 480, 560)))
     return meta((250, 120), spots3(3, [(-50, 70, f(-50, 70) + 6), (60, 220, f(60, 220) + 8), (cx, cy, h(cx, cy) + 60)]), horizon=250, clouds=0.4, haze=0.3)
