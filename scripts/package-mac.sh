@@ -1,29 +1,33 @@
 #!/usr/bin/env bash
-# Sign the built bundles ad hoc (whole bundle, --deep), verify them, and stage
-# dist/LightSeeker-macOS-Universal.zip with the AU, the VST3 and the install scripts.
-# Usage: scripts/package-mac.sh <artefacts dir> <dist dir>
+# Sign the built bundles of both plug-ins ad hoc (whole bundle, --deep), verify them, and
+# stage dist/LightSeeker-macOS-Universal.zip with LIGHT SEEKER (the instrument) and
+# LIGHT SEEKER FX (the effect), AU and VST3, and the install scripts.
+# Usage: scripts/package-mac.sh <build dir> <dist dir>
+#   (the artefacts are <build dir>/LightSeeker_artefacts/Release and LightSeekerFX_artefacts/Release)
 set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-artefacts="$1"
+build="$1"
 dist="$2"
 stage="$dist/LightSeeker-macOS-Universal"
 rm -rf "$stage" "$dist/LightSeeker-macOS-Universal.zip"
 mkdir -p "$stage"
 
-for bundle in "$artefacts/AU/LightSeeker.component" "$artefacts/VST3/LightSeeker.vst3" "$artefacts/Standalone/LightSeeker.app"; do
-    # Developer ID signing (optional CI path) runs before this script; keep it.
-    if ! /usr/bin/codesign -dv --verbose=2 "$bundle" 2>&1 | /usr/bin/grep -q "Authority=Developer ID Application"; then
-        /usr/bin/codesign --force --deep --sign - --timestamp=none "$bundle"
-    fi
-    /usr/bin/codesign --verify --strict --verbose=4 "$bundle"
-    /usr/bin/codesign -dv --verbose=2 "$bundle" 2>&1 | /usr/bin/grep -E "^(Identifier|Format|Signature|Authority|Sealed Resources)"
+for name in LightSeeker LightSeekerFX; do
+    artefacts="$build/${name}_artefacts/Release"
+    for bundle in "$artefacts/AU/$name.component" "$artefacts/VST3/$name.vst3" "$artefacts/Standalone/$name.app"; do
+        # Developer ID signing (optional CI path) runs before this script; keep it.
+        if ! /usr/bin/codesign -dv --verbose=2 "$bundle" 2>&1 | /usr/bin/grep -q "Authority=Developer ID Application"; then
+            /usr/bin/codesign --force --deep --sign - --timestamp=none "$bundle"
+        fi
+        /usr/bin/codesign --verify --strict --verbose=4 "$bundle"
+        /usr/bin/codesign -dv --verbose=2 "$bundle" 2>&1 | /usr/bin/grep -E "^(Identifier|Format|Signature|Authority|Sealed Resources)"
+    done
+    /usr/bin/ditto "$artefacts/AU/$name.component" "$stage/$name.component"
+    /usr/bin/ditto "$artefacts/VST3/$name.vst3" "$stage/$name.vst3"
 done
-
-/usr/bin/ditto "$artefacts/AU/LightSeeker.component" "$stage/LightSeeker.component"
-/usr/bin/ditto "$artefacts/VST3/LightSeeker.vst3" "$stage/LightSeeker.vst3"
 install -m 755 "$here/scripts/install-mac.sh" "$here/scripts/uninstall-mac.sh" "$here/scripts/diagnose-mac.sh" "$stage/"
 install -m 644 "$here/packaging/INSTALL.txt" "$stage/"
 # ditto keeps permissions and bundle metadata, unlike a plain zip of the artifact.
 /usr/bin/ditto -c -k --sequesterRsrc --keepParent "$stage" "$dist/LightSeeker-macOS-Universal.zip"
 echo "Packaged $dist/LightSeeker-macOS-Universal.zip"
-/usr/bin/unzip -l "$dist/LightSeeker-macOS-Universal.zip" | /usr/bin/grep -E "install|INSTALL|MacOS/LightSeeker$"
+/usr/bin/unzip -l "$dist/LightSeeker-macOS-Universal.zip" | /usr/bin/grep -E "install|INSTALL|MacOS/LightSeeker(FX)?$"

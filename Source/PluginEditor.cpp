@@ -1511,21 +1511,30 @@ LightSeekerEditor::LightSeekerEditor(LightSeekerProcessor& p) : AudioProcessorEd
     const float scale = juce::jlimit(0.5f, 2.0f, processor.editorScale.load());
     setOpaque(true);
     addAndMakeVisible(content);
+    if (processor.isInstrument()) {
+        panel = std::make_unique<dc::ui::InstrumentPanel>(processor);
+        addAndMakeVisible(*panel);
+    }
     content.onScaleChosen = [this](float scale) { setScale(scale); };
     setResizable(true, true);
-    setResizeLimits(defaultWidth / 2, defaultHeight / 2, defaultWidth * 2, defaultHeight * 2);
-    if (auto* constrainer = getConstrainer()) constrainer->setFixedAspectRatio(static_cast<double>(defaultWidth) / defaultHeight);
-    setSize(juce::roundToInt(static_cast<float>(defaultWidth) * scale), juce::roundToInt(static_cast<float>(defaultHeight) * scale));
+    const int h = baseHeight();
+    setResizeLimits(defaultWidth / 2, h / 2, defaultWidth * 2, h * 2);
+    if (auto* constrainer = getConstrainer()) constrainer->setFixedAspectRatio(static_cast<double>(defaultWidth) / h);
+    setSize(juce::roundToInt(static_cast<float>(defaultWidth) * scale), juce::roundToInt(static_cast<float>(h) * scale));
 }
 
 void LightSeekerEditor::setScale(float scale) {
     scale = juce::jlimit(0.5f, 2.0f, scale);
-    setSize(juce::roundToInt(static_cast<float>(defaultWidth) * scale), juce::roundToInt(static_cast<float>(defaultHeight) * scale));
+    setSize(juce::roundToInt(static_cast<float>(defaultWidth) * scale), juce::roundToInt(static_cast<float>(baseHeight()) * scale));
 }
 
 void LightSeekerEditor::resized() {
     const float scale = static_cast<float>(getWidth()) / static_cast<float>(defaultWidth);
     content.setBounds(0, 0, defaultWidth, defaultHeight);
     content.setTransform(juce::AffineTransform::scale(scale));
+    if (panel != nullptr) {
+        panel->setBounds(0, defaultHeight, defaultWidth, dc::ui::InstrumentPanel::panelHeight);
+        panel->setTransform(juce::AffineTransform::scale(scale));
+    }
     processor.editorScale.store(scale);
 }

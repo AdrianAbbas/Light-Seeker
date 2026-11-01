@@ -1,7 +1,9 @@
 # LIGHT SEEKER: manual test in GarageBand (MacBook Air)
 
 Each milestone adds its section. Install the `LightSeeker-macOS-Universal` artifact with
-`bash install-mac.sh` first.
+`bash install-mac.sh` first. Since Direction Update 1 the download holds two plug-ins:
+**LIGHT SEEKER** (the instrument, section "Instrument edition" at the end) and **LIGHT SEEKER
+FX** (the effect: sections M1 to M5, which name it LIGHT SEEKER as it was then called).
 
 ## M1: setup
 
@@ -118,3 +120,74 @@ they step back when you play loud; the same seed gives the same sounds at the sa
 - [ ] Atmosphere at 60 %: sparse and quiet.
 - [ ] A journey preset with the transport playing, a click on another place, Stop.
 - [ ] Save, reopen, duplicate.
+
+## Instrument edition (Direction Update 1)
+
+Install with `bash install-mac.sh`: it should end with "LIGHT SEEKER and LIGHT SEEKER FX are
+installed and validated" (two auval PASS lines).
+
+1. **Both plug-ins.** GarageBand: a new Software Instrument track → the instrument slot →
+   Audio Units → Veil Audio → **LIGHT SEEKER**. On an audio track, an Audio Effect slot →
+   Veil Audio → **LIGHT SEEKER FX**: it behaves exactly as before (an old project that used
+   LIGHT SEEKER finds LIGHT SEEKER FX). DUNGEON CRAWLER, if installed, still loads.
+2. **The window**: the map with the instrument panel underneath (pearl and ivory, gold
+   tracks). It must not flicker or slow GarageBand when you play.
+3. **Play** a keyboard or the piano roll (or click the panel's keyboard): the arrival place
+   (Celestial Citadel, Gates of Dawn) plays its fanfare trumpets in its space. The keys light
+   up with the notes you play.
+4. **Every place's instrument.** Click through all 31 places and play the same phrase and a
+   chord in each. Each should sound uplifting and clearly different from its siblings, at
+   about the same loudness, good dry (Intensity 0 % on the panel) and in its space:
+
+   | Place | Instrument | Listen for |
+   |---|---|---|
+   | Gates of Dawn | Fanfare Trumpets | bright, brassy, louder and brighter when you play harder |
+   | Hall of Mirrors | Shimmering Strings | a bowed section with a shimmer an octave above |
+   | Throne of Light | Orchestral Chord Pad | strings, soft horns and voices swelling in slowly |
+   | Spire Summit | Soaring Horn | one dark, round horn with a late vibrato |
+   | Cloud Steps | Rising Harp Glissando | every note climbs on in a quick harp run (Character: how far) |
+   | Sanctum | Angelic Choir | a soft "oo" choir, a descant above |
+   | Bell Garden | Wind Chimes and Bells | tuned bells ringing long, chimes above them |
+   | Moonwell | Glass Harp | rubbed wine glasses: soft onset, pure and glassy |
+   | Leaf Halls | Elven Lyre | your guitar recordings made bright and shimmering |
+   | Starlit Canopy | Airy Flute | a clean flute (a piccolo with Character up) |
+   | Prism Hall | Crystal Bells | bright crystal bells with a rising shimmer |
+   | Mirror Lake | Glass Harmonica Pad | almost pure rubbed bowls, wide and slow |
+   | Diamond Vault | Celesta | a celesta's bell-like bars |
+   | Sunlit Meadow | Warm Acoustic Guitar | your guitar recordings, warm |
+   | Butterfly Glade | Bouncy Kalimba | your kalimba recordings |
+   | Wildflower Hill | Pastoral Oboe | a reedy, nasal oboe |
+   | Nave of Light | Grand Organ | a full organ with a breath of wind; a trumpet stop with Character up |
+   | Choir Loft | Radiant Choir | a bright "ah" choir with basses and sopranos |
+   | Stained Glass Chapel | Celesta and Harp | the two together |
+   | Cloud Bridge | Cloud Pad | your Minilogue soft pad recordings, hazy and wide |
+   | Windswept Isle | Breathy Wind Flute | a lot of breath and air |
+   | Sky Harbour | Shimmering Pluck | a plucked synth sweeping open, a shimmer rising |
+   | Rose Garden | Concert Harp | a concert harp, ringing |
+   | Fountain Court | Music Box | high tines like a music box |
+   | Marble Colonnade | Harpsichord | quill-plucked, the same at any velocity, stops with the key |
+   | Mushroom Ring | Bouncy Pizzicato | your violin pizzicato recordings |
+   | Firefly Hollow | Twinkling Glockenspiel | high steel bars twinkling |
+   | Fairy Court | Fairy Harp | a tiny, bright harp an octave up |
+   | Eyrie | Heroic Horns | a horn section with an octave below |
+   | Golden Nest | Warm Strings | your violin recordings over a warm section |
+   | Summit of Winds | Epic Choir and Brass | voices and horns together |
+
+   The panel says "recorded" under the instruments that use your recordings; "synthesised
+   (recordings not found)" means the build had no access to them (the SAMPLES_TOKEN secret).
+5. **Held notes through travel.** Hold a chord and click another location: the space morphs,
+   the chord carries on in the new place's instrument without a click, the old instrument's
+   notes ring out. Release: nothing keeps sounding (no hung notes). Do the same with a
+   journey preset (e.g. "Ascent to the Citadel") running while you play.
+6. **Lock instrument.** Tick it, travel: only the space changes. Untick: the place's
+   instrument returns. ‹ › and "Instruments" play any instrument here (locked).
+7. **Controls.** Velocity, the sustain pedal, the pitch-bend wheel (a whole tone) and the mod
+   wheel (vibrato; tremolo on bells and plucked instruments) from your keyboard and on the
+   panel. Tone, Attack, Release and Character change the instrument as their names say (the
+   Character's name changes with the instrument). Octave shifts the keyboard.
+8. **Presets** (the preset menu): 31 instruments in their places, two dry or gentle ones,
+   eight "carried elsewhere" (e.g. "Celesta in the Nave": the celesta in the Nave of Light's
+   space, locked), and the journeys.
+9. **Save and reopen** the project: the place, the locked instrument and the panel come back.
+10. Logic Pro: the same from an AU Instruments slot; four instances on four tracks with
+    chords held should stay well within the MacBook Air's CPU.

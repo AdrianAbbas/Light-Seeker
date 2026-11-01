@@ -1,48 +1,68 @@
-LIGHT SEEKER - Light-fantasy location effect (macOS, Apple Silicon and Intel, macOS 10.15+)
+LIGHT SEEKER - Light-fantasy location instrument and effect
+(macOS, Apple Silicon and Intel, macOS 10.15+)
+
+Two plug-ins:
+  LIGHT SEEKER      the instrument: every place in the world has its own instrument,
+                    played from your keyboard or the piano roll inside that place's space.
+  LIGHT SEEKER FX   the effect: the places' spaces on any track.
 
 INSTALL
   1. Quit GarageBand and Logic.
   2. Open Terminal (Applications > Utilities > Terminal).
   3. Type "bash " (with a space), drag install-mac.sh from this folder into the
      Terminal window, and press Return.
-  4. Wait for "LIGHT SEEKER is installed and validated."
+  4. Wait for "LIGHT SEEKER and LIGHT SEEKER FX are installed and validated."
 
   Why a script? This build is not signed with an Apple Developer ID. When a browser
   downloads it, macOS marks every file as quarantined and then refuses to load the
-  plug-in: GarageBand shows a silent slot with plain sliders. The script removes that
-  flag, re-signs the plug-in for this Mac, refreshes the Audio Unit list and runs
+  plug-ins: GarageBand shows a silent slot with plain sliders. The script removes that
+  flag, re-signs the plug-ins for this Mac, refreshes the Audio Unit list and runs
   Apple's validator.
 
-GARAGEBAND
+GARAGEBAND: THE INSTRUMENT
   Settings > Audio/MIDI: tick "Audio Units". Restart GarageBand.
-  Select a track (software instrument or audio). Smart Controls (B) > Plug-ins >
-  an empty Audio Effect slot > Audio Units > Veil Audio > LIGHT SEEKER.
-  Play the track: the plug-in window opens on the painted map. Click a landmark to
-  travel there; inside, click the rings or the list to visit its places.
-  If you see sliders instead of the LIGHT SEEKER interface, switch the plug-in
-  window's view menu from "Controls" to "Editor".
+  Add a Software Instrument track. Smart Controls (B) > Plug-ins > the instrument slot >
+  Audio Units > Veil Audio > LIGHT SEEKER.
+  The window opens on the painted map with the instrument panel underneath. Click a
+  landmark, then a place: its instrument plays inside its space. Hold a chord while you
+  travel: it carries on in the new instrument. "Lock instrument" keeps the instrument and
+  moves only the space; "Instruments" plays any place's instrument here.
 
-MIDI TRAVEL
+GARAGEBAND: THE EFFECT
+  Select a track. Smart Controls (B) > Plug-ins > an empty Audio Effect slot >
+  Audio Units > Veil Audio > LIGHT SEEKER FX.
+  If you see sliders instead of the interface, switch the plug-in window's view menu
+  from "Controls" to "Editor".
+
+MIDI TRAVEL (the effect)
   GarageBand does not send MIDI to audio effects: use Journey or Roam (Journey
   button) or automate Location / Sub-location instead. See README for other hosts.
 
 LOGIC PRO
-  Settings > Plug-in Manager > Veil Audio > LIGHT SEEKER. If it is marked failed,
-  select it and click "Reset & Rescan Selection". Insert it in an Audio FX slot of
-  any track: Audio Units > Veil Audio > LIGHT SEEKER.
+  Settings > Plug-in Manager > Veil Audio > LIGHT SEEKER and LIGHT SEEKER FX. If one is
+  marked failed, select it and click "Reset & Rescan Selection".
+  The instrument: a Software Instrument track's Instrument slot > AU Instruments >
+  Veil Audio > LIGHT SEEKER. The effect: any Audio FX slot > Audio Units > Veil Audio >
+  LIGHT SEEKER FX.
 
 SIDE BY SIDE WITH DUNGEON CRAWLER
-  Both can be installed at once: LIGHT SEEKER is aufx Lsek Veil (LightSeeker.component,
-  audio.veil.lightseeker); DUNGEON CRAWLER is aufx Dgcr Veil. The scripts of one never
-  touch the other's files.
+  All can be installed at once: LIGHT SEEKER is aumu Lski Veil (LightSeeker.component,
+  audio.veil.lightseeker), LIGHT SEEKER FX is aufx Lsek Veil (LightSeekerFX.component,
+  audio.veil.lightseeker.fx); DUNGEON CRAWLER is aufx Dgcr Veil. The scripts of one
+  never touch the other's files.
+  Projects made with the earlier effect-only LIGHT SEEKER find LIGHT SEEKER FX (the same
+  Audio Unit codes, aufx Lsek Veil).
 
 UNINSTALL
   bash uninstall-mac.sh            (add --purge to also delete your presets and
                                     drop-in scenes in ~/Library/Application Support/LightSeeker)
 
 MANUAL INSTALL (if you prefer not to run the script)
-  cp -R LightSeeker.component ~/Library/Audio/Plug-Ins/Components/
-  xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/Components/LightSeeker.component
-  codesign --force --deep --sign - ~/Library/Audio/Plug-Ins/Components/LightSeeker.component
+  for p in LightSeeker LightSeekerFX; do
+    cp -R $p.component ~/Library/Audio/Plug-Ins/Components/
+    xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/Components/$p.component
+    codesign --force --deep --sign - ~/Library/Audio/Plug-Ins/Components/$p.component
+  done
   killall -9 AudioComponentRegistrar
+  auval -v aumu Lski Veil
   auval -v aufx Lsek Veil

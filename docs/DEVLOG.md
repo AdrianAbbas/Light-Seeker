@@ -90,6 +90,19 @@ usage limit or a compaction) continues from the first unticked line. Push to `ma
 - [x] 5c. README, `docs/MANUAL_TEST.md`, install docs
 - [x] 5d. Final QA (clicks on every travel, levels, distinctness, editor CPU) and the DEVLOG handoff (what to listen for and look at in GarageBand); push without `[skip ci]`
 
+**Direction Update 1: the instrument edition** ([docs/DIRECTION_UPDATE_1.md](DIRECTION_UPDATE_1.md); overrides the brief where they conflict)
+
+- [x] D1. The brief's milestones: all ticked above (checked at the start; nothing left)
+- [x] D2a. Two plug-ins from one tree: LIGHT SEEKER (instrument, `aumu`/`Lski`, `audio.veil.lightseeker`) and LIGHT SEEKER FX (the effect, renamed, `aufx`/`Lsek`, `audio.veil.lightseeker.fx`); CMake, identities, no clash with DUNGEON CRAWLER
+- [x] D2b. CI for both (build, bundles gate, package, install, auval + host harness for both, the instrument played over MIDI), install/uninstall/diagnose scripts, INSTALL.txt, README
+- [x] D3a. Instrument engine: WORLDBUILDER's sound engine copied (`Source/Synth/wb`: voices, sample bank, sample-prep tool), the voice pool (velocity, sustain, bend, mod, polyphony, click-free), the sampler and organ voices
+- [x] D3b. Processor: MIDI (host + on-screen), the place chooses the instrument, travel morphs the space while held notes move to the new instrument, Lock instrument, state
+- [x] D3c. The instrument panel (pearl/ivory, gold tracks): name, choose, Lock, Tone/Attack/Release/Character, Level, Octave, Intensity, bend/mod/sustain, keyboard lit by the host; tests (`instrument` group); snapshot `docs/snapshots/instrument-window.png`
+- [x] D4. Instruments, first half: Celestial Citadel, Sky Temple, Elven Sanctuary, Crystal Palace, Blossom Meadow
+- [x] D5. Instruments, second half: Golden Cathedral, Floating Isles, Royal Gardens, Fairy Glade, Dragon's Peak
+- [ ] D6a. 30+ instrument presets
+- [ ] D6b. Tests (every instrument plays from MIDI, in tune, distinct from siblings, level-matched; no hung notes during travel; both plug-ins validate), listening render, DEVLOG handoff; push without `[skip ci]`
+
 ---
 
 ## Lessons carried over from DUNGEON CRAWLER (read first)
@@ -633,3 +646,179 @@ Audio Units → Veil Audio → LIGHT SEEKER) and play while you click through th
   in Logic: use Journey, Roam or automation.
 - The art is rendered on CPU in this container at 24 samples and denoised; fine grain or a
   little softness in dark corners is expected.
+
+---
+## Direction Update 1: the instrument edition (2026-11-01)
+
+LIGHT SEEKER becomes two plug-ins built from this repository: **LIGHT SEEKER**, a software
+instrument in which every sub-location has its own instrument played inside that place's
+space, and **LIGHT SEEKER FX**, the effect built so far, renamed, behaviour unchanged.
+`LIGHT_SEEKER_BRIEF.md` was not in this session's uploads or the repository; its milestones
+are the checklist above, all ticked (milestone 1 of the update: nothing left to do). The
+direction update itself is now in [docs/DIRECTION_UPDATE_1.md](DIRECTION_UPDATE_1.md).
+
+### What was reused (read only, never modified)
+
+- **WORLDBUILDER** (`ccce3e3`): its sound engine, copied into `Source/Synth/wb` (Core,
+  Music, Events, InstrumentData, Voices, Instruments, PlaceFx, SampleBank) and its sample
+  preparation tool (`tools/sample-prep`, `scripts/ci-fetch-samples.sh`). The only changes:
+  the namespace `wb` became `lswb` (a host that loads both plug-ins never shares a symbol),
+  the samples' environment variable is `LIGHTSEEKER_SAMPLES`, and the fetch script warns
+  instead of failing without the token. Its Instrument mode was the model for playing one
+  instrument from host MIDI (switching with held keys, Attack/Release macros, an on-screen
+  keyboard through a lock-free queue, level trims measured per instrument).
+- **DUNGEON CRAWLER**: its instrument edition (Direction Update 3) does not exist in its
+  repository yet (`03eb669`: the DEVLOG ends at the sound redesign; no Direction Update 3),
+  so there was no integration code to copy. The behaviour follows Direction Update 1's
+  description of it.
+- **The developer's recordings** (`AdrianAbbas/Samples`, private): prepared with
+  WORLDBUILDER's tool (530 notes, 82.7 MB in memory, 0.6 s to load). Used: the classical
+  guitar (Sunlit Meadow warm; Leaf Halls bright, as the lyre), the kalimba (Butterfly
+  Glade), the violin's pizzicato (Mushroom Ring) and open-string sustain (Golden Nest, over a
+  modelled section), the Minilogue soft pad (Cloud Bridge). Every one of them has a modelled
+  stand-in that plays when the recordings are missing (and is level-matched too).
+
+### Two plug-ins, one tree
+
+| | LIGHT SEEKER | LIGHT SEEKER FX |
+|---|---|---|
+| What | instrument: MIDI in, stereo out | effect: audio in, audio out (as before) |
+| AU | `aumu` `Lski` `Veil` | `aufx` `Lsek` `Veil` (unchanged: old projects find it) |
+| VST3 | Instrument, Synth | Fx, Reverb |
+| Bundles | `LightSeeker.component/.vst3/.app` | `LightSeekerFX.component/.vst3/.app` |
+| Bundle ID | `audio.veil.lightseeker` | `audio.veil.lightseeker.fx` |
+| Factory | `LightSeekerAUFactory` | `LightSeekerFXAUFactory` |
+| Window | 960 x 756 (the map + the instrument panel) | 960 x 560 (as before) |
+| Presets | 50 instrument presets (`.lsinst` in `Instrument Presets`) | the 27 presets (`.lspreset`) |
+
+DUNGEON CRAWLER is `aufx Dgcr Veil`: nothing clashes, and the scripts only name the two
+LightSeeker bundles. CMake builds both with one function (`ls_add_plugin`); the processor
+takes a flag (`JucePlugin_IsSynth` per target), so the effect's code path is the one it
+always had (its parameters, buses, presets and window are unchanged; the tests check it).
+The instrument's bundles carry the prepared recordings (`Contents/Resources/Samples`) when
+`LS_SAMPLES_DIR` names them.
+
+### How the instrument plays
+
+- The **synth** (`Source/Synth/Synth.cpp`) is a pool of 48 voices; a patch is up to four
+  layers, each one engine with its own tuning, level, envelope, filter and pan: WORLDBUILDER's
+  brass, analog and reed synths, waveguide plucked strings (with the published bodies),
+  modal bells, the tine, two-operator FM, the formant choir, the wind and the bowed voices,
+  plus a sampler voice (WORLDBUILDER's SamplePart reading: cubic, loops, the recorded
+  release) and a pipe organ written here (seven ranks, chiff, wind).
+- **MIDI**: velocity (level and brightness), sustain pedal, pitch bend (a whole tone), mod
+  wheel (vibrato; tremolo on struck and plucked instruments), All Notes Off / All Sound Off,
+  sample-accurate note timing. Up to 16 notes per instrument (10-12 for solo winds and
+  brass); beyond that the oldest released note fades in 12 ms. No glides.
+- **The instrument follows the place** the world is in or travelling to (a click, a journey,
+  roam, automation). Changing it releases the old instrument's notes (they ring out in their
+  own sound) and starts the keys still held (or pedalled) on the new one at their
+  velocities: held notes survive travel, nothing is cut, nothing hangs. The space morphs as
+  in the effect.
+- **Lock instrument** keeps the instrument and moves only the space; choosing an instrument
+  on the panel (‹ ›, the Instruments menu) plays it here and locks it. The locked instrument
+  is saved with the state.
+- **Intensity 0** is the instrument dry; the effect chain is the effect's (the instrument's
+  sound is its input). MIDI travel is off in the instrument (the notes are for playing).
+- **The panel** (`Source/UI/InstrumentPanel.cpp`, 196 px under the map): a light background,
+  a 15 Hz timer that only touches what changed (lit keys, the wheels following the host,
+  the name); the on-screen keyboard, wheels and pedal go to the audio thread through a
+  lock-free FIFO.
+- **Macros**: Tone (the layers' low-pass and the bright shelf), Attack (envelope times x1/4
+  to x4; softer mallets and fingers), Release (release x1/4 to x4; rings x1/2 to x2),
+  Character (each instrument's own layer, shimmer or chorus: the piccolo, the shimmer octave,
+  the descant, the trumpet stop, how far the glissando climbs), Level, Octave.
+- **Level matching**: `Source/Synth/InstrumentTrims.h`, calibrated by
+  `LightSeekerTests --calibrate-instruments` (a held C major triad at velocity 0.8, dry, its
+  loudest 400 ms brought to -18 dBFS), separately for the stand-ins.
+
+### The 31 instruments
+
+| Place | Instrument | Built from |
+|---|---|---|
+| Gates of Dawn | Fanfare Trumpets | two bright brass players a few cents apart, a piccolo an octave up (Character) |
+| Hall of Mirrors | Shimmering Strings | violin and viola sections, a shimmer octave above (Character), chorus |
+| Throne of Light | Orchestral Chord Pad | slow violas, soft horns, a cello octave below, voices (Character) |
+| Spire Summit | Soaring Horn | a dark solo horn with a late vibrato, a second horn (Character) |
+| Cloud Steps | Rising Harp Glissando | a harp whose every note climbs on through a major pentatonic run (Character: how far) |
+| Sanctum | Angelic Choir | a soft "oo" choir, a descant above (Character) |
+| Bell Garden | Wind Chimes and Bells | tuned bells with a major tierce, wind-chime tubes above (Character) |
+| Moonwell | Glass Harp | rubbed wine glasses (bowed glass modes), a soft tap, an overtone glass (Character) |
+| Leaf Halls | Elven Lyre | the guitar recordings bright (high-passed, shimmering), an octave plucked above (Character) |
+| Starlit Canopy | Airy Flute | a clean flute, a piccolo (Character) |
+| Prism Hall | Crystal Bells | bright crystal modes in two octaves, a rising shimmer (Character) |
+| Mirror Lake | Glass Harmonica Pad | rubbed bowls (almost pure), a sine body, an overtone (Character), wide chorus |
+| Diamond Vault | Celesta | steel bars over resonators, a tine's sparkle, an octave (Character) |
+| Sunlit Meadow | Warm Acoustic Guitar | the guitar recordings warm, octave strings (Character) |
+| Butterfly Glade | Bouncy Kalimba | the kalimba recordings, a chime sparkle (Character) |
+| Wildflower Hill | Pastoral Oboe | a reedy, nasal wind, a recorder an octave up (Character) |
+| Nave of Light | Grand Organ | seven ranks (16' to the mixture) with chiff, a trumpet stop (Character) |
+| Choir Loft | Radiant Choir | a bright "ah" choir, basses below, sopranos above (Character) |
+| Stained Glass Chapel | Celesta and Harp | celesta bars with a concert harp (Character) |
+| Cloud Bridge | Cloud Pad | the Minilogue soft pad recordings, a hazy octave (Character), wide chorus |
+| Windswept Isle | Breathy Wind Flute | a breathy, airy flute, a wind octave (Character) |
+| Sky Harbour | Shimmering Pluck | a filter-swept analog pluck, an FM sparkle, a rising shimmer (Character) |
+| Rose Garden | Concert Harp | a gut-strung harp, its octave harmonics (Character) |
+| Fountain Court | Music Box | high tines, celesta bars (Character) |
+| Marble Colonnade | Harpsichord | two 8' quill-plucked choirs with the damper, a 4' (Character) |
+| Mushroom Ring | Bouncy Pizzicato | the violin pizzicato recordings, a plucked octave (Character) |
+| Firefly Hollow | Twinkling Glockenspiel | steel bars an octave up, a shimmer (Character) |
+| Fairy Court | Fairy Harp | a tiny harp an octave up, chime sparkle, a shimmer (Character) |
+| Eyrie | Heroic Horns | a section of two horns, an octave below (Character) |
+| Golden Nest | Warm Strings | the violin recordings over a viola section, cellos below (Character) |
+| Summit of Winds | Epic Choir and Brass | choir in two octaves, horns, brass below (Character) |
+
+The Prism Hall's "shimmer capture": its shimmer is WORLDBUILDER's algorithmic octave
+shimmer, not the developer's Astral Shimmer capture (convolving each instrument instance
+with an 8 s impulse response was not worth its CPU; the place's own space already carries a
+captured shimmer hall in the Nave of Light). Decision to revisit if the shimmer sounds wrong.
+
+### Tests (`instrument` and `instruments` groups, Linux, with the recordings)
+
+- **instrument (47 checks)**: the two plug-ins' names, buses, parameters (the instrument
+  adds exactly its seven; the effect has none of them) and layouts; one instrument per place,
+  every name unique; silence without notes; a note plays; the Nave's space rings on after the
+  organ (dry does not); travel under a held chord: the new instrument plays the held keys,
+  no click, no voice left after the release; Lock: the harpsichord stays in the Nave while
+  the space travels, unlocked the organ returns; choosing locks; state round trip; the pedal
+  holds and lets go; All Notes Off; velocity (+6 dB from 0.3 to 1.0 on the trumpets); bend a
+  whole tone up and down (the organ's pitch class); mod wheel adds vibrato (the horn,
+  measured in cents); the on-screen keyboard plays and lights its key; no heap allocation in
+  processBlock with notes, bend, pedal and mod; mono output at 44.1 kHz in odd blocks; the
+  panel (name, choose, Character label, keyboard, bend wheel, sustain) and the effect's
+  window unchanged.
+- **instruments (222 checks)**: every instrument plays from MIDI, finite, below full scale,
+  in tune on A4 and D4 (the pressed pitch class strongest, or within 3 dB), level-matched
+  (-18 dBFS +- 2 dB: the spread is 0.16 dB), sustained ones let go (30 dB down a second
+  after the keys), each distinct from its siblings (a fingerprint of third-octave colour in
+  the attack, sustain and release plus the envelope; distance > 3); the stand-ins play,
+  level-matched and in tune, without the recordings; a 160-step journey through eight places
+  with notes held, released and pedalled throughout changes the instrument 8+ times and
+  leaves no hung note (no voice, the sound below -70 dB after the last release); 31
+  instruments switched in a row under a held chord without a click.
+- First run of the sibling check: four pairs between 2.55 and 2.98 (trumpets/horn,
+  strings/pad, harp glissando/bells, glockenspiel/fairy harp). The horn was darkened, the pad
+  slowed and warmed, the bells made to ring through the release, the glockenspiel made
+  brighter and longer and the fairy harp shorter: all pass. The closest pair overall (not
+  siblings, report only): Airy Flute / Breathy Wind Flute (1.5).
+
+### Clicks when the instrument changes, and the panel (second pass)
+
+- **A switch click, found by a better test.** The first check (31 instruments in a row
+  under a chord, the largest step against the first instrument's own) passed with the
+  recordings and failed without them, because a plucked stand-in's onset is sharp by
+  nature. Measured properly, each instrument switched to under a held chord against its own
+  fresh onset, it showed a real fault: the level trims sat on the synth's output bus,
+  smoothed over 80 ms, so the new instrument's first notes played at the old instrument's
+  trim (up to 15 dB too loud: the glass harp's -1.3 dB against the trumpets' -16.6 dB). The
+  trim now travels with each note (the old notes ring out at their own level, the new ones
+  start at theirs); the worst switch fell from 15.6 to 1.6 times the instrument's own
+  onset. The check now compares the switch with the two instruments' own movement together
+  (the old notes letting go plus the new ones starting: the output is their sum), 1.2 times
+  at most: all 31 pass, with and without the recordings. Trims recalibrated (spread 0.09 dB).
+- **Grace notes and polyphony**: each note of the Cloud Steps run also counted against the
+  harp's 16-note limit, so a long run could cut held notes; only played notes count now.
+- **The panel**, as first drawn, used JUCE's default dark sliders and buttons and had a
+  two-octave keyboard. It now has the light look (pearl, gold tracks, serif labels), two
+  rows (the instrument and its macros above; the bend and mod wheels, the sustain pedal and
+  a full-width keyboard from C0 to C7 below) and is 196 px tall (the window 960 x 756).

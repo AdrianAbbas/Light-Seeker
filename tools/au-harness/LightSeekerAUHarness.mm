@@ -1,5 +1,6 @@
-// LightSeekerAUHarness: a small AudioToolbox host that loads aufx/Lsek/Veil the way
-// real hosts do and checks that it actually produces sound and shows its view.
+// LightSeekerAUHarness: a small AudioToolbox host that loads LIGHT SEEKER (the instrument,
+// aumu/Lski/Veil) or LIGHT SEEKER FX (the effect, aufx/Lsek/Veil) the way real hosts do and
+// checks that it actually produces sound and shows its view.
 //
 // It deliberately does not use JUCE's hosting code. Three hosting paths run:
 //
@@ -9,13 +10,17 @@
 //      and Logic use on Apple Silicon, where AUv2 plug-ins are bridged into
 //      AUHostingServiceXPC), rendered by AVAudioEngine in manual rendering mode
 //
-// LIGHT SEEKER is an effect (audio in, audio out). Each path renders a 440 Hz
+// LIGHT SEEKER FX is an effect (audio in, audio out). Each path renders a 440 Hz
 // sine and checks that the input is pulled and processed, host bypass, Mix 0 and
 // Intensity 0 transparency, Output and Location changes, presets (report only),
 // the state round trip and the editor view.
+// LIGHT SEEKER is an instrument (MIDI in, audio out; Direction Update 1). Each path plays
+// notes over MIDI and checks silence without notes, a note sounding (both channels),
+// the note dying away after its release, Intensity 0 (the instrument dry) still
+// sounding, another sample rate, the state round trip and the editor view.
 //
 // Usage:
-//   LightSeekerAUHarness [--strict] [--no-window] [--component aufx:Lsek:Veil]
+//   LightSeekerAUHarness [--strict] [--no-window] [--component aumu:Lski:Veil | aufx:Lsek:Veil]
 //                 [--only v2-oop|v2-inproc|auaudiounit]
 //
 // Without --strict the harness reports and exits 0 (used to characterise an
@@ -39,6 +44,9 @@
 #include "../../Tests/HarnessPair.h"
 
 #include <algorithm>
+#include <array>
+#include <utility>
+#include <vector>
 #include <chrono>
 #include <cmath>
 #include <cstdarg>
@@ -161,7 +169,8 @@ const char* harnessArchitecture() {
    #endif
 }
 
-constexpr const char* pluginImageNeedle = "LightSeeker.component/Contents/MacOS/";
+// The plug-in's binary, to tell in-process from out-of-process loads (set in main).
+const char* pluginImageNeedle = "LightSeekerFX.component/Contents/MacOS/";
 
 // Out-of-process rendering goes through Apple's render pipe, which expects a host's
 // timing: one block per block-duration with host time set, and playback stopped
@@ -984,6 +993,283 @@ void auAudioUnitSuite(Report& r, AudioComponentDescription description, bool use
 }
 
 //==============================================================================
+// The instrument (aumu): MIDI in, audio out, no input bus.
+void sendMidi(AudioUnit unit, UInt8 status, UInt8 data1, UInt8 data2, UInt32 offset = 0) {
+    MusicDeviceMIDIEvent(unit, status, data1, data2, offset);
+}
+
+struct V2InstrumentHost {
+    AudioUnit unit = nullptr;
+    Pacer pacer;
+    Source silence;   // no input: an empty capture for the Meter
+    double sampleRate = 48000.0;
+    UInt32 outChannels = 2, maxFrames = 512;
+    Float64 sampleTime = 0;
+    bool rendered = false;
+    std::vector<std::vector<float>> outputs;
+
+    OSStatus configure(double sr, UInt32 out, UInt32 frames = 512) {
+        sampleRate = sr; outChannels = out; maxFrames = frames;
+        if (rendered && pacer.realTime) pump(0.2);
+        AudioUnitUninitialize(unit);
+        rendered = false;
+        auto outFormat = floatFormat(sr, out);
+        OSStatus s = AudioUnitSetProperty(unit, kAudioUnitProperty_StreamFormat, kAudioUnitScope_Output, 0, &outFormat, sizeof(outFormat));
+        if (s != noErr) return s;
+        s = AudioUnitSetProperty(unit, kAudioUnitProperty_MaximumFramesPerSlice, kAudioUnitScope_Global, 0, &maxFrames, sizeof(maxFrames));
+        if (s != noErr) return s;
+        outputs.assign(out, std::vector<float>(maxFrames, 0.0f));
+        return AudioUnitInitialize(unit);
+    }
+
+    // Renders `seconds`; `midiAt` (seconds into the render) sends the given events first.
+    RenderResult render(double seconds, double skipSeconds, std::vector<std::pair<double, std::array<UInt8, 3>>> midi = {}) {
+        RenderResult result;
+        const auto total = size_t(seconds * sampleRate), skip = size_t(skipSeconds * sampleRate);
+        silence.reset(0);
+        std::vector<uint8_t> storage(offsetof(AudioBufferList, mBuffers) + sizeof(AudioBuffer) * outChannels);
+        auto* abl = reinterpret_cast<AudioBufferList*>(storage.data());
+        std::vector<const float*> channels(outChannels);
+        Meter meter;
+        size_t done = 0, nextEvent = 0;
+        rendered = true;
+        pacer.begin();
+        while (done < total) {
+            pacer.wait(done, sampleRate);
+            const auto frames = UInt32(std::min<size_t>(maxFrames, total - done));
+            while (nextEvent < midi.size() && size_t(midi[nextEvent].first * sampleRate) < done + frames) {
+                const auto at = size_t(midi[nextEvent].first * sampleRate);
+                const auto& e = midi[nextEvent].second;
+                sendMidi(unit, e[0], e[1], e[2], UInt32(at > done ? at - done : 0));
+                ++nextEvent;
+            }
+            abl->mNumberBuffers = outChannels;
+            for (UInt32 c = 0; c < outChannels; ++c) {
+                std::fill(outputs[c].begin(), outputs[c].end(), 0.0f);
+                abl->mBuffers[c].mNumberChannels = 1;
+                abl->mBuffers[c].mDataByteSize = frames * sizeof(float);
+                abl->mBuffers[c].mData = outputs[c].data();
+            }
+            AudioUnitRenderActionFlags flags = 0;
+            const AudioTimeStamp ts = hostTimeStamp(sampleTime);
+            result.status = AudioUnitRender(unit, &flags, &ts, 0, frames, abl);
+            if (result.status != noErr) break;
+            for (UInt32 c = 0; c < outChannels; ++c)
+                channels[c] = abl->mBuffers[c].mData != nullptr ? static_cast<const float*>(abl->mBuffers[c].mData) : outputs[c].data();
+            meter.add(channels.data(), outChannels, frames, done, skip, silence);
+            sampleTime += frames;
+            done += frames;
+        }
+        meter.finish(result, outChannels);
+        return result;
+    }
+};
+
+std::pair<double, std::array<UInt8, 3>> noteOn(double at, UInt8 note, UInt8 velocity = 100) { return { at, { UInt8(0x90), note, velocity } }; }
+std::pair<double, std::array<UInt8, 3>> noteOff(double at, UInt8 note) { return { at, { UInt8(0x80), note, UInt8(0) } }; }
+
+void v2InstrumentSuite(Report& r, AudioComponent component, bool outOfProcess, bool useWindow) {
+    r.scope = outOfProcess ? "v2 out-of-process (instrument)" : "v2 in-process (instrument)";
+    OSStatus s = noErr;
+    AudioComponentInstance unit = instantiate(component, outOfProcess, s);
+    if (!r.check(unit != nullptr && s == noErr, "instantiate", statusText(s))) return;
+    r.info("where the plug-in code runs", strf("plug-in image in harness process: %d; AUHostingService processes: %s",
+                                                 int(imageLoaded(pluginImageNeedle)), hostingServices().c_str()));
+    UInt32 inputBuses = 99, size = sizeof(inputBuses);
+    AudioUnitGetProperty(unit, kAudioUnitProperty_ElementCount, kAudioUnitScope_Input, 0, &inputBuses, &size);
+    r.check(inputBuses == 0, "no audio input bus (an instrument)", strf("%u", unsigned(inputBuses)));
+    {
+        V2InstrumentHost host;
+        host.unit = unit;
+        host.pacer.realTime = outOfProcess;
+        s = host.configure(48000.0, 2);
+        if (r.check(s == noErr, "initialise at 48 kHz, stereo out", statusText(s))) {
+            auto quiet = host.render(1.0, 0.2);
+            r.check(quiet.status == noErr && quiet.finite && quiet.rmsDb() < -90.0, "silent without notes", quiet.describe());
+            auto note = host.render(2.0, 0.2, { noteOn(0.0, 60), noteOn(0.0, 64), noteOn(0.0, 67) });
+            r.check(note.status == noErr && note.finite && note.rmsDb() > -45.0, "a chord over MIDI sounds", note.describe());
+            r.check(toDb(note.outRms[0]) > -50.0 && toDb(note.outRms[1]) > -50.0, "both channels are written", note.describe());
+            r.check(note.peak < 1.0f, "below full scale", strf("peak %.3f", double(note.peak)));
+            host.render(0.1, 0.0, { noteOff(0.0, 60), noteOff(0.0, 64), noteOff(0.0, 67) });
+            auto tail = host.render(12.0, 11.0);
+            r.check(tail.finite && tail.rmsDb() < note.rmsDb() - 40.0, "the notes die away after their release (no hung notes)",
+                    strf("%.1f dBFS -> %.1f dBFS", note.rmsDb(), tail.rmsDb()));
+            // Intensity 0: the instrument dry.
+            const auto params = listParameters(unit);
+            r.check(findParameter(params, { "Lock Instrument" }) != nullptr, "parameter Lock Instrument exists");
+            if (const Param* intensity = findParameter(params, { "Intensity" })) {
+                setParameter(unit, intensity->id, intensity->info.minValue);
+                auto dry = host.render(1.5, 0.2, { noteOn(0.0, 72) });
+                r.check(dry.finite && dry.rmsDb() > -50.0, "Intensity 0: the instrument plays dry", dry.describe());
+                host.render(0.1, 0.0, { noteOff(0.0, 72) });
+                setParameter(unit, intensity->id, intensity->info.defaultValue);
+                host.render(3.0, 0.0);
+            } else {
+                r.check(false, "parameter named Intensity exists");
+            }
+            if (const Param* location = findParameter(params, { "Location" })) {
+                setParameter(unit, location->id, std::round(location->info.minValue + 0.5f * (location->info.maxValue - location->info.minValue)));
+                auto moved = host.render(1.5, 0.2, { noteOn(0.0, 62) });
+                r.check(moved.finite && moved.rmsDb() > -50.0, "another place's instrument plays", moved.describe());
+                host.render(0.1, 0.0, { noteOff(0.0, 62) });
+                host.render(4.0, 0.0);
+            }
+            s = host.configure(44100.0, 2, 256);
+            if (r.check(s == noErr, "reconfigure at 44.1 kHz, 256-frame blocks", statusText(s))) {
+                auto other = host.render(1.5, 0.2, { noteOn(0.0, 65) });
+                r.check(other.finite && other.rmsDb() > -50.0, "plays at 44.1 kHz", other.describe());
+                host.render(0.1, 0.0, { noteOff(0.0, 65) });
+            }
+        }
+        if (host.rendered && host.pacer.realTime) pump(0.2);
+        AudioUnitUninitialize(unit);
+    }
+    // State round trip into a fresh instance.
+    CFPropertyListRef state = nullptr;
+    size = sizeof(state);
+    s = AudioUnitGetProperty(unit, kAudioUnitProperty_ClassInfo, kAudioUnitScope_Global, 0, &state, &size);
+    r.check(s == noErr && state != nullptr, "state readable (ClassInfo)", statusText(s));
+    if (state != nullptr) {
+        OSStatus s2 = noErr;
+        AudioComponentInstance fresh = instantiate(component, outOfProcess, s2);
+        if (r.check(fresh != nullptr, "second instance", statusText(s2))) {
+            s2 = AudioUnitSetProperty(fresh, kAudioUnitProperty_ClassInfo, kAudioUnitScope_Global, 0, &state, sizeof(state));
+            r.check(s2 == noErr, "state restored into a fresh instance", statusText(s2));
+            AudioComponentInstanceDispose(fresh);
+        }
+        CFRelease(state);
+    }
+    if (outOfProcess) requestViewControllerTest(r, unit, useWindow, false);
+    else cocoaViewTest(r, unit, useWindow);
+    AudioComponentInstanceDispose(unit);
+    pump(0.3);
+}
+
+void auAudioUnitInstrumentSuite(Report& r, AudioComponentDescription description, bool useWindow) {
+    r.scope = "AUAudioUnit out-of-process (instrument)";
+    __block AVAudioUnit* avUnit = nil;
+    __block NSError* error = nil;
+    dispatch_semaphore_t done = dispatch_semaphore_create(0);
+    [AVAudioUnit instantiateWithComponentDescription: description
+                                             options: kAudioComponentInstantiation_LoadOutOfProcess
+                                   completionHandler: ^(AVAudioUnit* u, NSError* e) {
+                                       avUnit = u;
+                                       error = e;
+                                       dispatch_semaphore_signal(done);
+                                   }];
+    const bool answered = waitFor(done, 30.0);
+    if (!r.check(answered && avUnit != nil, "instantiate", answered ? toString(error.description) : "timed out")) return;
+    AUAudioUnit* unit = avUnit.AUAudioUnit;
+    r.info("instance", strf("class=%s name=%s; inputs=%lu outputs=%lu", toString(NSStringFromClass([unit class])).c_str(),
+                              toString(unit.audioUnitName).c_str(), (unsigned long) unit.inputBusses.count, (unsigned long) unit.outputBusses.count));
+    AVAudioFormat* format48 = [[AVAudioFormat alloc] initStandardFormatWithSampleRate: 48000.0 channels: 2];
+    AVAudioEngine* engine = [[AVAudioEngine alloc] init];
+    NSError* e = nil;
+    const bool manual = [engine enableManualRenderingMode: AVAudioEngineManualRenderingModeRealtime format: format48 maximumFrameCount: 512 error: &e];
+    if (!r.check(manual, "AVAudioEngine manual rendering (real-time, 48 kHz stereo)", toString(e.description))) return;
+    [engine attachNode: avUnit];
+    [engine connect: avUnit to: engine.outputNode format: format48];
+    [engine prepare];
+    e = nil;
+    if (!r.check([engine startAndReturnError: &e], "AVAudioEngine starts with the instrument connected", toString(e.description))) return;
+    pump(0.3);
+    AUScheduleMIDIEventBlock midiBlock = unit.scheduleMIDIEventBlock;
+    r.check(midiBlock != nil, "the instrument takes MIDI (scheduleMIDIEventBlock)");
+    const auto send = [&](UInt8 status, UInt8 d1, UInt8 d2) {
+        const UInt8 bytes[3] { status, d1, d2 };
+        if (midiBlock != nil) midiBlock(AUEventSampleTimeImmediate, 0, 3, bytes);
+        else if ([avUnit isKindOfClass: [AVAudioUnitMIDIInstrument class]]) {
+            auto* instrument = (AVAudioUnitMIDIInstrument*) avUnit;
+            if ((status & 0xf0) == 0x90) [instrument startNote: d1 withVelocity: d2 onChannel: 0];
+            else [instrument stopNote: d1 onChannel: 0];
+        }
+    };
+    AVAudioPCMBuffer* buffer = [[AVAudioPCMBuffer alloc] initWithPCMFormat: engine.manualRenderingFormat frameCapacity: 512];
+    AVAudioEngineManualRenderingBlock renderBlock = engine.manualRenderingBlock;
+    Source silence;
+    auto render = [&](double seconds, double skipSeconds) {
+        RenderResult result;
+        const auto total = size_t(seconds * 48000.0), skip = size_t(skipSeconds * 48000.0);
+        silence.reset(0);
+        Meter meter;
+        size_t doneFrames = 0;
+        Pacer pacer;
+        pacer.realTime = true;
+        pacer.begin();
+        while (doneFrames < total) {
+            pacer.wait(doneFrames, 48000.0);
+            const auto frames = AVAudioFrameCount(std::min<size_t>(512, total - doneFrames));
+            buffer.frameLength = frames;
+            AudioBufferList* out = buffer.mutableAudioBufferList;
+            for (UInt32 b = 0; b < out->mNumberBuffers; ++b) out->mBuffers[b].mDataByteSize = frames * UInt32(sizeof(float));
+            OSStatus status = noErr;
+            const auto rendered = renderBlock(frames, out, &status);
+            if (rendered != AVAudioEngineManualRenderingStatusSuccess) {
+                result.status = status != noErr ? status : OSStatus(rendered);
+                break;
+            }
+            const AudioBufferList* abl = buffer.audioBufferList;
+            if (abl->mNumberBuffers < 2 || abl->mBuffers[0].mData == nullptr || abl->mBuffers[1].mData == nullptr) {
+                result.status = kAudioUnitErr_FailedInitialization;
+                break;
+            }
+            const float* channels[2] = { static_cast<const float*>(abl->mBuffers[0].mData), static_cast<const float*>(abl->mBuffers[1].mData) };
+            meter.add(channels, 2, frames, doneFrames, skip, silence);
+            doneFrames += frames;
+        }
+        meter.finish(result, 2);
+        return result;
+    };
+    auto quiet = render(1.0, 0.2);
+    r.check(quiet.status == noErr && quiet.finite && quiet.rmsDb() < -90.0, "silent without notes", quiet.describe());
+    send(0x90, 60, 100);
+    send(0x90, 67, 100);
+    auto note = render(2.0, 0.3);
+    r.check(note.status == noErr && note.finite && note.rmsDb() > -45.0, "notes over MIDI sound", note.describe());
+    r.check(toDb(note.outRms[1]) > -50.0, "right channel is written", strf("R %.1f dBFS", toDb(note.outRms[1])));
+    send(0x80, 60, 0);
+    send(0x80, 67, 0);
+    auto tail = render(12.0, 11.0);
+    r.check(tail.finite && tail.rmsDb() < note.rmsDb() - 40.0, "the notes die away after their release", strf("%.1f -> %.1f dBFS", note.rmsDb(), tail.rmsDb()));
+    r.info("parameter tree", strf("%lu parameters", (unsigned long) unit.parameterTree.allParameters.count));
+    NSDictionary<NSString*, id>* state = unit.fullState;
+    r.check(state != nil, "fullState readable", strf("%lu keys", (unsigned long) state.count));
+    pump(0.2);
+    [engine stop];
+    pump(0.2);
+    if (useWindow) {
+        __block AUViewControllerBase* controller = nil;
+        dispatch_semaphore_t viewDone = dispatch_semaphore_create(0);
+        [unit requestViewControllerWithCompletionHandler: ^(AUViewControllerBase* vc) {
+            controller = vc;
+            dispatch_semaphore_signal(viewDone);
+        }];
+        const bool got = waitFor(viewDone, 20.0);
+        if (r.check(got && controller != nil, "requestViewController delivers a controller", got ? "nil controller" : "timed out")) {
+            NSWindow* window = [[NSWindow alloc] initWithContentRect: NSMakeRect(80, 80, 400, 300)
+                                                           styleMask: NSWindowStyleMaskTitled | NSWindowStyleMaskResizable
+                                                             backing: NSBackingStoreBuffered
+                                                               defer: NO];
+            window.releasedWhenClosed = NO;
+            window.contentViewController = controller;
+            [window orderFront: nil];
+            pump(2.0);
+            NSView* view = controller.view;
+            r.check(view != nil && NSWidth(view.frame) >= 300 && NSHeight(view.frame) >= 200, "remote editor has a sensible size after 2 s",
+                    strf("view=%.0f x %.0f", NSWidth(view.frame), NSHeight(view.frame)));
+            [window orderOut: nil];
+            window.contentViewController = nil;
+            [window close];
+        }
+        controller = nil;
+    } else {
+        r.skip("requestViewController delivers a controller", "--no-window");
+    }
+    unit = nil;
+    pump(0.3);
+}
+
+//==============================================================================
 void describeComponent(Report& r, AudioComponent component) {
     CFStringRef name = nullptr;
     AudioComponentCopyName(component, &name);
@@ -1005,7 +1291,7 @@ void describeComponent(Report& r, AudioComponent component) {
 int main(int argc, const char* argv[]) {
     @autoreleasepool {
         bool strict = false, useWindow = true;
-        std::string only, componentText = "aufx:Lsek:Veil";
+        std::string only, componentText = "aumu:Lski:Veil";
         for (int i = 1; i < argc; ++i) {
             const std::string a = argv[i];
             if (a == "--strict") strict = true;
@@ -1015,7 +1301,7 @@ int main(int argc, const char* argv[]) {
             else { std::fprintf(stderr, "unknown argument %s\n", a.c_str()); return 64; }
         }
         if (componentText.size() != 14 || componentText[4] != ':' || componentText[9] != ':') {
-            std::fprintf(stderr, "--component expects type:subtype:manufacturer, e.g. aufx:Lsek:Veil\n");
+            std::fprintf(stderr, "--component expects type:subtype:manufacturer, e.g. aumu:Lski:Veil\n");
             return 64;
         }
 
@@ -1048,10 +1334,18 @@ int main(int argc, const char* argv[]) {
         r.check(matches == 1, "exactly one registered component matches", strf("%d", matches));
         describeComponent(r, component);
 
+        const bool instrument = description.componentType == kAudioUnitType_MusicDevice;
+        pluginImageNeedle = instrument ? "LightSeeker.component/Contents/MacOS/" : "LightSeekerFX.component/Contents/MacOS/";
         // Out-of-process first, before the in-process load maps the plug-in into this process.
-        if (only.empty() || only == "v2-oop") v2Suite(r, component, true, useWindow);
-        if (only.empty() || only == "auaudiounit") auAudioUnitSuite(r, description, useWindow);
-        if (only.empty() || only == "v2-inproc") v2Suite(r, component, false, useWindow);
+        if (instrument) {
+            if (only.empty() || only == "v2-oop") v2InstrumentSuite(r, component, true, useWindow);
+            if (only.empty() || only == "auaudiounit") auAudioUnitInstrumentSuite(r, description, useWindow);
+            if (only.empty() || only == "v2-inproc") v2InstrumentSuite(r, component, false, useWindow);
+        } else {
+            if (only.empty() || only == "v2-oop") v2Suite(r, component, true, useWindow);
+            if (only.empty() || only == "auaudiounit") auAudioUnitSuite(r, description, useWindow);
+            if (only.empty() || only == "v2-inproc") v2Suite(r, component, false, useWindow);
+        }
 
         r.scope = "summary";
         std::printf("SUMMARY passed=%d failed=%d skipped=%d\n", r.passed, r.failed, r.skipped);

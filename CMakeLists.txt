@@ -24,39 +24,21 @@ set(LS_FORMATS VST3 Standalone)
 if(APPLE)
     list(APPEND LS_FORMATS AU)
 endif()
-# File and bundle names use "LightSeeker" (no space: simpler scripts); hosts show
-# PLUGIN_NAME, "Veil Audio: LIGHT SEEKER".
-juce_add_plugin(LightSeeker
-    COMPANY_NAME "Veil Audio"
-    BUNDLE_ID "audio.veil.lightseeker"
-    PLUGIN_MANUFACTURER_CODE Veil
-    PLUGIN_CODE Lsek
-    PRODUCT_NAME "LightSeeker"
-    PLUGIN_NAME "LIGHT SEEKER"
-    AU_EXPORT_PREFIX LightSeekerAU
-    DESCRIPTION "Light-fantasy location effect"
-    ICON_BIG "${CMAKE_CURRENT_SOURCE_DIR}/assets/icon/icon-1024.png"
-    FORMATS ${LS_FORMATS}
-    # An audio effect: audio in, audio out. MIDI in (optional MIDI travel, Milestone 9)
-    # where the host sends MIDI to effects; the AU stays an effect (aufx).
-    IS_SYNTH FALSE
-    NEEDS_MIDI_INPUT TRUE
-    NEEDS_MIDI_OUTPUT FALSE
-    IS_MIDI_EFFECT FALSE
-    EDITOR_WANTS_KEYBOARD_FOCUS FALSE
-    VST3_CATEGORIES Fx Reverb
-    AU_MAIN_TYPE kAudioUnitType_Effect
-    # Lets sandboxed hosts (GarageBand) load it in-process. It must still work
-    # out-of-process, which the AU host harness checks.
-    AU_SANDBOX_SAFE TRUE
-    COPY_PLUGIN_AFTER_BUILD FALSE)
-target_sources(LightSeeker PRIVATE
+# Two plug-ins from the same sources (Direction Update 1):
+#   LIGHT SEEKER     the instrument (AU aumu Lski Veil, VST3 instrument): LightSeeker.*
+#   LIGHT SEEKER FX  the effect     (AU aufx Lsek Veil, VST3 effect):     LightSeekerFX.*
+# File and bundle names have no space (simpler scripts); hosts show "Veil Audio: LIGHT
+# SEEKER" and "Veil Audio: LIGHT SEEKER FX". DUNGEON CRAWLER (Dgcr) never clashes.
+set(LS_SAMPLES_DIR "" CACHE PATH "Prepared recordings (tools/sample-prep) to ship in the instrument's bundles")
+set(LS_SHARED_SOURCES
     Source/PluginProcessor.cpp Source/PluginEditor.cpp Source/Engine.cpp
     Source/DSP/Abyss.cpp Source/DSP/AncientBlood.cpp Source/DSP/Choir.cpp
     Source/DSP/Wraith.cpp Source/DSP/Echoes.cpp Source/DSP/Crypt.cpp
     Source/DSP/Relics.cpp Source/DSP/Signature.cpp Source/DSP/Vault.cpp Source/DSP/Convolver.cpp Source/DSP/Ensemble.cpp Source/DSP/Atmosphere.cpp Source/World/Locations.cpp
+    Source/World/InstrumentPresets.cpp
+    Source/Synth/Synth.cpp Source/Synth/Patches.cpp Source/Synth/wb/SampleBank.cpp
     Source/UI/EngravedLookAndFeel.cpp Source/UI/Engraving.cpp Source/UI/Scenes.cpp Source/UI/ScenePlaces.cpp Source/UI/SceneCache.cpp
-    Source/UI/Painted.cpp)
+    Source/UI/Painted.cpp Source/UI/InstrumentPanel.cpp)
 # Fonts (SIL Open Font License, assets/fonts): Cinzel for titles, Cormorant Garamond for labels.
 juce_add_binary_data(LightSeekerFonts NAMESPACE LightSeekerFonts SOURCES
     assets/fonts/CormorantGaramond-SemiBold.ttf assets/fonts/CormorantGaramond-Bold.ttf assets/fonts/Cinzel-SemiBold.ttf)
@@ -65,29 +47,78 @@ set_target_properties(LightSeekerFonts PROPERTIES POSITION_INDEPENDENT_CODE ON)
 juce_add_binary_data(LightSeekerIrs NAMESPACE LightSeekerIrs HEADER_NAME LightSeekerIrs.h SOURCES
     assets/irs/radiant-shimmer-hall.wav assets/irs/cliff-hall-echo.wav assets/irs/chorus-hall.wav)
 set_target_properties(LightSeekerIrs PROPERTIES POSITION_INDEPENDENT_CODE ON)
-target_include_directories(LightSeeker PUBLIC Source)
-target_compile_definitions(LightSeeker PUBLIC
-    JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0
-    JUCE_DISPLAY_SPLASH_SCREEN=0 JUCE_REPORT_APP_USAGE=0)
-target_link_libraries(LightSeeker PRIVATE juce::juce_audio_utils juce::juce_dsp
-    PUBLIC juce::juce_recommended_config_flags LightSeekerFonts LightSeekerIrs)
-# The painted art (tools/painted builds it into assets/painted) ships inside every bundle
-# at Contents/Resources/Painted; development builds and the tests fall back to the
-# source tree.
-target_compile_definitions(LightSeeker PUBLIC LS_PAINTED_DIR="${CMAKE_CURRENT_SOURCE_DIR}/assets/painted")
-foreach(ls_format IN LISTS LS_FORMATS)
-    set(ls_target LightSeeker_${ls_format})
-    if(TARGET ${ls_target})
-        if(ls_format STREQUAL "Standalone" AND NOT APPLE)
-            set(ls_dest "$<TARGET_FILE_DIR:${ls_target}>/Painted")
-        else()
-            set(ls_dest "$<TARGET_FILE_DIR:${ls_target}>/../Resources/Painted")
-        endif()
-        add_custom_command(TARGET ${ls_target} POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/assets/painted" "${ls_dest}"
-            VERBATIM)
+
+function(ls_add_plugin target)
+    cmake_parse_arguments(LS "SYNTH" "PRODUCT;NAME;CODE;BUNDLE;PREFIX;DESCRIPTION;AUTYPE" "CATEGORIES" ${ARGN})
+    if(LS_SYNTH)
+        set(ls_is_synth TRUE)
+    else()
+        set(ls_is_synth FALSE)
     endif()
-endforeach()
+    juce_add_plugin(${target}
+        COMPANY_NAME "Veil Audio"
+        BUNDLE_ID "${LS_BUNDLE}"
+        PLUGIN_MANUFACTURER_CODE Veil
+        PLUGIN_CODE ${LS_CODE}
+        PRODUCT_NAME "${LS_PRODUCT}"
+        PLUGIN_NAME "${LS_NAME}"
+        AU_EXPORT_PREFIX ${LS_PREFIX}
+        DESCRIPTION "${LS_DESCRIPTION}"
+        ICON_BIG "${CMAKE_CURRENT_SOURCE_DIR}/assets/icon/icon-1024.png"
+        FORMATS ${LS_FORMATS}
+        # The effect: audio in, audio out, MIDI in for the optional MIDI travel (the AU
+        # stays an effect, aufx). The instrument: MIDI in, audio out (aumu).
+        IS_SYNTH ${ls_is_synth}
+        NEEDS_MIDI_INPUT TRUE
+        NEEDS_MIDI_OUTPUT FALSE
+        IS_MIDI_EFFECT FALSE
+        EDITOR_WANTS_KEYBOARD_FOCUS FALSE
+        VST3_CATEGORIES ${LS_CATEGORIES}
+        AU_MAIN_TYPE ${LS_AUTYPE}
+        # Lets sandboxed hosts (GarageBand) load it in-process. It must still work
+        # out-of-process, which the AU host harness checks.
+        AU_SANDBOX_SAFE TRUE
+        COPY_PLUGIN_AFTER_BUILD FALSE)
+    target_sources(${target} PRIVATE ${LS_SHARED_SOURCES})
+    target_include_directories(${target} PUBLIC Source)
+    target_compile_definitions(${target} PUBLIC
+        JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0
+        JUCE_DISPLAY_SPLASH_SCREEN=0 JUCE_REPORT_APP_USAGE=0)
+    target_link_libraries(${target} PRIVATE juce::juce_audio_utils juce::juce_dsp
+        PUBLIC juce::juce_recommended_config_flags LightSeekerFonts LightSeekerIrs)
+    # The painted art (tools/painted builds it into assets/painted) ships inside every
+    # bundle at Contents/Resources/Painted; development builds and the tests fall back to
+    # the source tree. The instrument's bundles also carry the prepared recordings
+    # (Contents/Resources/Samples) when LS_SAMPLES_DIR names them.
+    target_compile_definitions(${target} PUBLIC LS_PAINTED_DIR="${CMAKE_CURRENT_SOURCE_DIR}/assets/painted")
+    foreach(ls_format IN LISTS LS_FORMATS)
+        set(ls_target ${target}_${ls_format})
+        if(TARGET ${ls_target})
+            if(ls_format STREQUAL "Standalone" AND NOT APPLE)
+                set(ls_res "$<TARGET_FILE_DIR:${ls_target}>")
+            else()
+                set(ls_res "$<TARGET_FILE_DIR:${ls_target}>/../Resources")
+            endif()
+            add_custom_command(TARGET ${ls_target} POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/assets/painted" "${ls_res}/Painted"
+                VERBATIM)
+            if(LS_SYNTH AND LS_SAMPLES_DIR)
+                add_custom_command(TARGET ${ls_target} POST_BUILD
+                    COMMAND ${CMAKE_COMMAND} -E copy_directory "${LS_SAMPLES_DIR}" "${ls_res}/Samples"
+                    VERBATIM)
+            endif()
+        endif()
+    endforeach()
+endfunction()
+
+ls_add_plugin(LightSeeker SYNTH
+    PRODUCT "LightSeeker" NAME "LIGHT SEEKER" CODE Lski BUNDLE "audio.veil.lightseeker"
+    PREFIX LightSeekerAU DESCRIPTION "Light-fantasy location instrument"
+    AUTYPE kAudioUnitType_MusicDevice CATEGORIES Instrument Synth)
+ls_add_plugin(LightSeekerFX
+    PRODUCT "LightSeekerFX" NAME "LIGHT SEEKER FX" CODE Lsek BUNDLE "audio.veil.lightseeker.fx"
+    PREFIX LightSeekerFXAU DESCRIPTION "Light-fantasy location effect"
+    AUTYPE kAudioUnitType_Effect CATEGORIES Fx Reverb)
 if(LS_BUILD_TESTS)
     enable_testing()
     juce_add_console_app(LightSeekerTests PRODUCT_NAME "LightSeekerTests")

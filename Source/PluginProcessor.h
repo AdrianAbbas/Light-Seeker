@@ -4,10 +4,16 @@
 #include "Parameters.h"
 #include "World/Journey.h"
 #include "DSP/Atmosphere.h"
+#include "Synth/Synth.h"
 
+// One processor, two plug-ins (Direction Update 1): LIGHT SEEKER, the instrument (an
+// instrument per sub-location played from MIDI, inside that place's space), and LIGHT
+// SEEKER FX, the effect (audio in, the place's space on it). Each plug-in target builds
+// it with its own flag (JucePlugin_IsSynth); the tests build both.
 class LightSeekerProcessor final : public juce::AudioProcessor {
 public:
-    LightSeekerProcessor();
+    explicit LightSeekerProcessor(bool instrumentEdition = false);
+    bool isInstrument() const noexcept { return instrumentMode; }
     void prepareToPlay(double sampleRate, int maximumBlockSize) override;
     void releaseResources() override {}
     // Hosts call reset() on transport stops and locates; clearing the reverb then would
@@ -18,7 +24,7 @@ public:
     void processBlockBypassed(juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
     juce::AudioProcessorEditor* createEditor() override;
     bool hasEditor() const override { return true; }
-    const juce::String getName() const override { return "LIGHT SEEKER"; }
+    const juce::String getName() const override { return instrumentMode ? "LIGHT SEEKER" : "LIGHT SEEKER FX"; }
     // MIDI travel (Milestone 9): notes choose places where the host sends MIDI to effects.
     bool acceptsMidi() const override { return true; }
     bool producesMidi() const override { return false; }
@@ -35,6 +41,8 @@ public:
     void setStateInformation(const void*, int) override;
 
 private:
+    static BusesProperties busesFor(bool instrument);
+    const bool instrumentMode;
     // Raw parameter values (declared before `parameters`: the Sub-location display
     // function reads `location`).
     std::atomic<float>* location = nullptr;
@@ -61,6 +69,14 @@ private:
     std::atomic<float>* atmosDensity = nullptr;
     std::atomic<float>* atmosSeed = nullptr;
     std::atomic<float>* quality = nullptr;
+    // The instrument (null in the effect).
+    std::atomic<float>* instTone = nullptr;
+    std::atomic<float>* instAttack = nullptr;
+    std::atomic<float>* instRelease = nullptr;
+    std::atomic<float>* instCharacter = nullptr;
+    std::atomic<float>* instLevel = nullptr;
+    std::atomic<float>* instOctave = nullptr;
+    std::atomic<float>* instLock = nullptr;
 
 public:
     juce::AudioProcessorValueTreeState parameters;
@@ -125,8 +141,41 @@ public:
     // Calibration only (tests): the chain's raw level, without trims or level matcher.
     void setLevelMatching(bool on) noexcept { world.setLevelMatching(on); }
 
+    // ---- The instrument (Direction Update 1) ----
+    // The instrument playing now (0..30, in place order) and whether it is locked.
+    int instrumentIndex() const noexcept { return shownInstrument.load(std::memory_order_relaxed); }
+    bool instrumentLocked() const noexcept { return instLock != nullptr && instLock->load() >= 0.5f; }
+    // Lock instrument on/off (message thread). Locking keeps the instrument playing now.
+    void setInstrumentLock(bool on);
+    // Plays another sub-location's instrument in the place you are in (message thread):
+    // locks it, so travelling keeps it.
+    void chooseInstrument(int index);
+    // The on-screen keyboard, wheels and pedal (message thread; lock-free into the next block).
+    void postUiMidi(const juce::MidiMessage&);
+    // What the audio thread holds now (for the keyboard's lit keys and the wheels).
+    bool keyLit(int note) const noexcept;
+    float bendShown() const noexcept { return bendNow.load(std::memory_order_relaxed); }
+    float modShown() const noexcept { return modNow.load(std::memory_order_relaxed); }
+    bool sustainShown() const noexcept { return sustainNow.load(std::memory_order_relaxed); }
+    int instrumentVoices() const noexcept { return voicesNow.load(std::memory_order_relaxed); }
+    // Tests: the synth itself.
+    const ls::inst::Synth& synthForTest() const noexcept { return *synth; }
+
 private:
     void process(juce::AudioBuffer<float>&, bool forcedBypass);
+    void renderInstrument(juce::AudioBuffer<float>&, int numSamples);
+    std::unique_ptr<ls::inst::Synth> synth;
+    juce::MidiBuffer* blockMidi = nullptr;
+    juce::MidiBuffer uiMidiScratch;
+    juce::AbstractFifo uiFifo { 512 };
+    std::array<uint32_t, 512> uiMessages {};
+    std::atomic<int> requestedLock { -1 }, lockedInstrument { -1 }, shownInstrument { 0 };
+    int lockedPlace = -1;
+    bool wasLocked = false;
+    std::array<std::atomic<uint32_t>, 4> litKeys {};
+    std::atomic<float> bendNow { 0 }, modNow { 0 };
+    std::atomic<bool> sustainNow { false };
+    std::atomic<int> voicesNow { 0 };
     static constexpr float neutralIntensity = 1.0e-4f;   // at or below: the dry path
     dc::Controls controls;
     struct Snapshot { std::vector<float> values; std::vector<dc::Stop> route; bool operator==(const Snapshot& o) const; };

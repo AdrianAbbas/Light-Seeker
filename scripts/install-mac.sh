@@ -1,24 +1,25 @@
 #!/usr/bin/env bash
-# Install LIGHT SEEKER for the current user and make sure macOS will load it.
+# Install LIGHT SEEKER (the instrument) and LIGHT SEEKER FX (the effect) for the current
+# user and make sure macOS will load them.
 #
 # Run it from the unzipped LightSeeker-macOS-Universal folder:
 #     bash install-mac.sh
 # (Tip: type "bash " in Terminal, then drag install-mac.sh into the window.)
 #
 # What it does:
-#   1. copies LightSeeker.component to ~/Library/Audio/Plug-Ins/Components and
-#      LightSeeker.vst3 to ~/Library/Audio/Plug-Ins/VST3
+#   1. copies LightSeeker.component and LightSeekerFX.component to
+#      ~/Library/Audio/Plug-Ins/Components and the .vst3 bundles to ~/Library/Audio/Plug-Ins/VST3
 #   2. removes the com.apple.quarantine flag your browser added. Without this,
 #      macOS refuses to load the plug-in and GarageBand shows a silent slot
-#   3. re-signs both bundles (ad hoc) and verifies the signatures
+#   3. re-signs every bundle (ad hoc) and verifies the signatures
 #   4. restarts the Audio Unit registrar so hosts see the new copy
-#   5. runs Apple's Audio Unit validator (auval) and prints PASS or FAIL
+#   5. runs Apple's Audio Unit validator (auval) on both and prints PASS or FAIL
 #   6. prints the next steps for GarageBand and Logic
 #
 # Options:
 #   --ci              non-interactive: no prompts, no check for running hosts
 #   --out-of-process  remove the sandboxSafe flag from the installed copy, so
-#                     GarageBand hosts LIGHT SEEKER in a separate process (fallback only)
+#                     GarageBand hosts the plug-ins in a separate process (fallback only)
 # (No `set -u`: macOS bash 3.2 treats an empty "$@" as unbound.)
 set -eo pipefail
 
@@ -29,7 +30,7 @@ for arg in "$@"; do
     case "$arg" in
         --ci) ci=1 ;;
         --out-of-process) out_of_process=1 ;;
-        -h|--help) /usr/bin/sed -n '2,23p' "${BASH_SOURCE[0]}"; exit 0 ;;
+        -h|--help) /usr/bin/sed -n '2,24p' "${BASH_SOURCE[0]}"; exit 0 ;;
         *) echo "Unknown option: $arg" >&2; exit 64 ;;
     esac
 done
@@ -44,10 +45,18 @@ if [[ "$(uname -s)" != Darwin ]]; then
     exit 1
 fi
 
-component_src="$here/LightSeeker.component"
-vst3_src="$here/LightSeeker.vst3"
-if [[ ! -d "$component_src" ]]; then
-    echo "LightSeeker.component was not found next to this script ($here)." >&2
+# The two plug-ins: bundle name, Audio Unit type and subtype, name in hosts.
+# (DUNGEON CRAWLER's plug-ins have their own names and codes: both can be installed.)
+plugins="LightSeeker:aumu:Lski:LIGHT SEEKER (instrument)
+LightSeekerFX:aufx:Lsek:LIGHT SEEKER FX (effect)"
+missing=0
+while IFS=: read -r bundle type subtype label; do
+    if [[ ! -d "$here/$bundle.component" ]]; then
+        echo "$bundle.component was not found next to this script ($here)." >&2
+        missing=1
+    fi
+done <<< "$plugins"
+if [[ $missing == 1 ]]; then
     echo "Unzip LightSeeker-macOS-Universal.zip first and run the script from that folder." >&2
     exit 1
 fi
@@ -57,7 +66,7 @@ vst3="$HOME/Library/Audio/Plug-Ins/VST3"
 logs="$HOME/Library/Logs/LightSeeker"
 mkdir -p "$components" "$vst3" "$logs"
 
-bold "LIGHT SEEKER installer"
+bold "LIGHT SEEKER and LIGHT SEEKER FX installer"
 
 # Hosts keep their own view of plug-ins while running.
 if [[ $ci == 0 ]]; then
@@ -69,7 +78,8 @@ if [[ $ci == 0 ]]; then
 fi
 
 # A second, system-wide copy would compete with this one.
-for system_copy in "/Library/Audio/Plug-Ins/Components/LightSeeker.component" "/Library/Audio/Plug-Ins/VST3/LightSeeker.vst3"; do
+for system_copy in /Library/Audio/Plug-Ins/Components/LightSeeker.component /Library/Audio/Plug-Ins/VST3/LightSeeker.vst3 \
+                   /Library/Audio/Plug-Ins/Components/LightSeekerFX.component /Library/Audio/Plug-Ins/VST3/LightSeekerFX.vst3; do
     if [[ -e "$system_copy" ]]; then
         warn "An older system-wide copy exists: $system_copy"
         warn "Remove it so hosts load the new one:  sudo rm -rf \"$system_copy\""
@@ -80,7 +90,7 @@ install_bundle() {
     local src="$1" dest="$2" binary
     rm -rf "$dest"
     /usr/bin/ditto "$src" "$dest"
-    binary="$dest/Contents/MacOS/LightSeeker"
+    binary="$dest/Contents/MacOS/$(basename "${dest%.*}")"
     chmod +x "$binary"
     /usr/bin/xattr -dr com.apple.quarantine "$dest" 2>/dev/null || true
     if /usr/bin/xattr -lr "$dest" 2>/dev/null | /usr/bin/grep -q com.apple.quarantine; then
@@ -89,7 +99,7 @@ install_bundle() {
     fi
     if [[ "$dest" == *.component && $out_of_process == 1 ]]; then
         /usr/libexec/PlistBuddy -c "Delete :AudioComponents:0:sandboxSafe" "$dest/Contents/Info.plist" 2>/dev/null || true
-        warn "sandboxSafe removed: GarageBand will host LIGHT SEEKER out-of-process"
+        warn "sandboxSafe removed: GarageBand will host $(basename "$dest") out-of-process"
     fi
     # A Developer ID signed and notarised release keeps its signature; anything else
     # is re-signed ad hoc for this Mac.
@@ -108,67 +118,77 @@ install_bundle() {
 }
 
 bold "1-3. Copying, removing quarantine, signing"
-install_bundle "$component_src" "$components/LightSeeker.component"
-if [[ -d "$vst3_src" ]]; then
-    install_bundle "$vst3_src" "$vst3/LightSeeker.vst3"
-else
-    warn "LightSeeker.vst3 not in this folder; skipped"
-fi
+while IFS=: read -r bundle type subtype label; do
+    install_bundle "$here/$bundle.component" "$components/$bundle.component"
+    if [[ -d "$here/$bundle.vst3" ]]; then
+        install_bundle "$here/$bundle.vst3" "$vst3/$bundle.vst3"
+    else
+        warn "$bundle.vst3 not in this folder; skipped"
+    fi
+done <<< "$plugins"
 
 bold "4. Resetting the Audio Unit registry"
 /usr/bin/killall -9 AudioComponentRegistrar 2>/dev/null || true
-registered=0
-for _ in $(seq 1 30); do
-    if /usr/bin/auval -a 2>/dev/null | /usr/bin/grep -Eq '^[[:space:]]*aufx[[:space:]]+Lsek[[:space:]]+Veil'; then
-        registered=1
-        break
-    fi
-    sleep 1
-done
-if [[ $registered == 1 ]]; then ok "macOS lists aufx Lsek Veil (Veil Audio: LIGHT SEEKER)"; else fail "LIGHT SEEKER is not listed by the Audio Unit registry after 30 s"; fi
+while IFS=: read -r bundle type subtype label; do
+    registered=0
+    for _ in $(seq 1 30); do
+        if /usr/bin/auval -a 2>/dev/null | /usr/bin/grep -Eq "^[[:space:]]*$type[[:space:]]+$subtype[[:space:]]+Veil"; then
+            registered=1
+            break
+        fi
+        sleep 1
+    done
+    if [[ $registered == 1 ]]; then ok "macOS lists $type $subtype Veil ($label)"; else fail "$label is not listed by the Audio Unit registry after 30 s"; fi
+done <<< "$plugins"
 
 bold "5. Validating with Apple's auval"
-auval_log="$logs/install-auval.txt"
-set +e
-/usr/bin/auval -v aufx Lsek Veil > "$auval_log" 2>&1
-auval_exit=$?
-set -e
-if [[ $auval_exit == 0 ]] && /usr/bin/grep -q "AU VALIDATION SUCCEEDED" "$auval_log"; then
-    ok "auval: PASS ($(uname -m))"
-    result=0
-else
-    fail "auval: FAIL ($(uname -m), exit $auval_exit). Full log: $auval_log"
-    /usr/bin/grep -E "FATAL|ERROR|Cannot open" "$auval_log" | /usr/bin/head -5 | /usr/bin/sed 's/^/       /'
-    result=1
-fi
-if [[ "$(uname -m)" == arm64 ]] && /usr/bin/arch -x86_64 /usr/bin/true 2>/dev/null; then
+result=0
+failed_logs=""
+while IFS=: read -r bundle type subtype label; do
+    auval_log="$logs/install-auval-$bundle.txt"
     set +e
-    /usr/bin/arch -x86_64 /usr/bin/auval -v aufx Lsek Veil > "$logs/install-auval-x86_64.txt" 2>&1
-    x86_exit=$?
+    /usr/bin/auval -v "$type" "$subtype" Veil > "$auval_log" 2>&1
+    auval_exit=$?
     set -e
-    if [[ $x86_exit == 0 ]]; then ok "auval: PASS (x86_64 under Rosetta)"; else warn "auval under Rosetta exited $x86_exit (only matters for Intel-mode hosts)"; fi
-fi
+    if [[ $auval_exit == 0 ]] && /usr/bin/grep -q "AU VALIDATION SUCCEEDED" "$auval_log"; then
+        ok "auval $label: PASS ($(uname -m))"
+    else
+        fail "auval $label: FAIL ($(uname -m), exit $auval_exit). Full log: $auval_log"
+        /usr/bin/grep -E "FATAL|ERROR|Cannot open" "$auval_log" | /usr/bin/head -5 | /usr/bin/sed 's/^/       /'
+        result=1
+        failed_logs="$failed_logs $auval_log"
+    fi
+    if [[ "$(uname -m)" == arm64 ]] && /usr/bin/arch -x86_64 /usr/bin/true 2>/dev/null; then
+        set +e
+        /usr/bin/arch -x86_64 /usr/bin/auval -v "$type" "$subtype" Veil > "$logs/install-auval-$bundle-x86_64.txt" 2>&1
+        x86_exit=$?
+        set -e
+        if [[ $x86_exit == 0 ]]; then ok "auval $label: PASS (x86_64 under Rosetta)"; else warn "auval $label under Rosetta exited $x86_exit (only matters for Intel-mode hosts)"; fi
+    fi
+done <<< "$plugins"
 
 bold "6. Next steps"
 cat <<'NEXT'
-  GarageBand
+  GarageBand: the instrument
     1. Open GarageBand > Settings > Audio/MIDI and make sure "Audio Units" is ticked.
     2. Quit and reopen GarageBand.
-    3. Select any track (an instrument or an audio track). Open Smart Controls (B),
-       click Plug-ins, click an empty Audio Effect slot:
-       Audio Units > Veil Audio > LIGHT SEEKER.
-    4. Play the track: it now sounds as if it were played in the chosen location.
-    5. If the window shows sliders instead of the LIGHT SEEKER interface, use the view menu
-       at the top of the plug-in window to switch from "Controls" to "Editor".
+    3. Add a Software Instrument track. In the Library or Smart Controls (B) > Plug-ins,
+       click the instrument slot: Audio Units > Veil Audio > LIGHT SEEKER.
+    4. Play your keyboard or the piano roll. Click a place on the map: its instrument
+       plays inside its space. "Lock instrument" keeps the instrument while you travel.
+  GarageBand: the effect
+    On any track click an empty Audio Effect slot: Audio Units > Veil Audio > LIGHT SEEKER FX.
+    If the window shows sliders instead of the interface, use the view menu at the top of
+    the plug-in window to switch from "Controls" to "Editor".
   Logic Pro
-    1. Logic Pro > Settings > Plug-in Manager, find Veil Audio > LIGHT SEEKER.
-       If it shows as failed, select it and click "Reset & Rescan Selection".
-    2. On any track, click an empty Audio FX slot:
-       Audio Units > Veil Audio > LIGHT SEEKER.
+    1. Logic Pro > Settings > Plug-in Manager, find Veil Audio > LIGHT SEEKER and LIGHT SEEKER FX.
+       If one shows as failed, select it and click "Reset & Rescan Selection".
+    2. Instrument: on a Software Instrument track, the Instrument slot > AU Instruments >
+       Veil Audio > LIGHT SEEKER. Effect: any Audio FX slot > Audio Units > Veil Audio > LIGHT SEEKER FX.
 NEXT
 if [[ $result == 0 ]]; then
-    bold "LIGHT SEEKER is installed and validated."
+    bold "LIGHT SEEKER and LIGHT SEEKER FX are installed and validated."
 else
-    bold "LIGHT SEEKER is installed, but validation failed. Send $auval_log when reporting this."
+    bold "Installed, but validation failed. Send$failed_logs when reporting this."
 fi
 exit $result

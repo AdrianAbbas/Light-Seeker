@@ -12,6 +12,8 @@ struct FactoryPreset {
     const char* category;   // "Favourite spots" or "Journeys"
     std::vector<std::pair<const char*, float>> values;   // parameter ID -> plain value
     std::vector<Stop> route;
+    // The instrument edition: another sub-location's instrument played here (locked), or -1.
+    int instrument = -1;
 };
 
 inline const std::vector<FactoryPreset>& factoryPresets() {
@@ -63,4 +65,10 @@ inline const std::vector<FactoryPreset>& factoryPresets() {
     };
     return presets;
 }
+
+// The instrument edition's presets (Direction Update 1): instruments in their own places,
+// instruments carried into another place (Lock instrument), then the journeys (the
+// instrument follows each place it passes, held notes carry over).
+const std::vector<FactoryPreset>& instrumentPresets();
+inline const std::vector<FactoryPreset>& presetsFor(bool instrument) { return instrument ? instrumentPresets() : factoryPresets(); }
 }

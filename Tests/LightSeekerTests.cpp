@@ -8,6 +8,8 @@
 //   LightSeekerTests --calibrate Source/World/LevelTrims.h  measure and write the per-place level trims
 //   LightSeekerTests --listen dir         listening renders: guitar + synth phrase dry vs through every place
 //   LightSeekerTests --strength [f.csv]   the strength table (Direction Update 2), report only
+//   LightSeekerTests --calibrate-instruments Source/Synth/InstrumentTrims.h   the instruments' level trims
+//   LightSeekerTests --listen-instruments dir   every instrument dry and in its place, and a travel (WAV)
 #include "PluginEditor.h"
 #include "PluginProcessor.h"
 #include "UI/Scenes.h"
@@ -2724,6 +2726,8 @@ int paintedSnapshots(const juce::String& directory) {
     return written > 0 ? 0 : 1;
 }
 
+#include "InstrumentTests.h"
+
 int main(int argc, char** argv) {
     juce::ScopedJuceInitialiser_GUI gui;
     juce::String snapshot;
@@ -2735,6 +2739,10 @@ int main(int argc, char** argv) {
         else if (arg == "--calibrate" && i + 1 < argc) return calibrate(argv[i + 1]);
         else if (arg == "--listen" && i + 1 < argc) return listen(argv[i + 1]);
         else if (arg == "--signatures") return signatureCheck();
+        else if (arg == "--synth-debug") return synthDebug();
+        else if (arg == "--calibrate-instruments" && i + 1 < argc) return calibrateInstruments(argv[i + 1]);
+        else if (arg == "--listen-instruments" && i + 1 < argc) return listenInstruments(argv[i + 1]);
+        else if (arg == "--instrument-snapshot" && i + 1 < argc) return instrumentSnapshot(argv[i + 1]);
         else if (arg == "--strength") return strengthReport(i + 1 < argc ? juce::String(argv[i + 1]) : juce::String());
         else if (arg == "--art" && i + 1 < argc) return renderArt(argv[i + 1], i + 2 < argc ? juce::String(argv[i + 2]).getIntValue() : 960);
         else if (arg == "--tail-debug") return tailDebug();
@@ -2766,6 +2774,8 @@ int main(int argc, char** argv) {
     if (run("navigation")) testNavigation(s);
     if (run("atmosphere")) testAtmosphere(s);
     if (run("workflow")) testWorkflow(s);
+    if (run("instrument")) testInstrument(s);
+    if (run("instruments")) { testInstruments(s); testInstrumentPresets(s); }
     if (only.contains("qa")) testQa(s);   // long (130 journeys): run explicitly
     if (only.contains("cpu")) testCpu(s);   // report only: run explicitly
     std::cout << "\n" << s.passed << " passed, " << s.failed << " failed" << std::endl;

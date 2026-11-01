@@ -45,7 +45,7 @@ section "Where is LIGHT SEEKER loaded right now?"
 found_loaded=0
 for pid in $(/usr/bin/pgrep -i -f 'GarageBand|Logic Pro|AUHostingService' 2>/dev/null); do
     name=$(/bin/ps -o comm= -p "$pid" 2>/dev/null)
-    hits=$(/usr/sbin/lsof -p "$pid" 2>/dev/null | /usr/bin/grep -i 'LightSeeker.component' | /usr/bin/awk '{print $NF}' | /usr/bin/sort -u)
+    hits=$(/usr/sbin/lsof -p "$pid" 2>/dev/null | /usr/bin/grep -i -E 'LightSeeker(FX)?\.component' | /usr/bin/awk '{print $NF}' | /usr/bin/sort -u)
     if [[ -n "$hits" ]]; then
         found_loaded=1
         printf 'pid %s (%s) has LIGHT SEEKER loaded from:\n%s\n' "$pid" "$name" "$hits"
@@ -63,9 +63,9 @@ for dir in "$HOME/Library/Audio/Plug-Ins/Components" "/Library/Audio/Plug-Ins/Co
         [[ "$bundle" == *.component ]] && components+=("$bundle")
     done < <(/usr/bin/find "$dir" -maxdepth 1 -iname 'LightSeeker*' -print0 2>/dev/null)
 done
-[[ ${#components[@]} -gt 0 ]] || echo "No LightSeeker.component found in either Components folder."
+[[ ${#components[@]} -gt 0 ]] || echo "No LightSeeker.component or LightSeekerFX.component found in either Components folder."
 echo "Other copies Spotlight knows about (e.g. in Downloads):"
-/usr/bin/mdfind "kMDItemFSName == 'LightSeeker.component'" 2>/dev/null | /usr/bin/head -20
+/usr/bin/mdfind "kMDItemFSName == 'LightSeeker*.component'" 2>/dev/null | /usr/bin/head -20
 
 for bundle in "${components[@]}"; do
     section "Bundle: $bundle"
@@ -82,22 +82,25 @@ done
 
 section "Audio Unit registry"
 echo "Native ($(uname -m)) registry entries for LIGHT SEEKER:"
-/usr/bin/auval -a 2>&1 | /usr/bin/grep -i -E 'dungeon|lsek' || echo "  not listed"
+/usr/bin/auval -a 2>&1 | /usr/bin/grep -i -E 'dungeon|lsek|lski' || echo "  not listed"
 if /usr/bin/arch -x86_64 /usr/bin/true 2>/dev/null; then
     echo "x86_64 (Rosetta) registry entries for LIGHT SEEKER:"
-    /usr/bin/arch -x86_64 /usr/bin/auval -a 2>&1 | /usr/bin/grep -i -E 'dungeon|lsek' || echo "  not listed"
+    /usr/bin/arch -x86_64 /usr/bin/auval -a 2>&1 | /usr/bin/grep -i -E 'dungeon|lsek|lski' || echo "  not listed"
 fi
 
-section "auval (native)"
-/usr/bin/auval -v aufx Lsek Veil > /tmp/lightseeker-auval-native.txt 2>&1
-echo "exit $?"
-/usr/bin/grep -E 'Cocoa|FATAL|ERROR|WARNING|Channel Capabilities|\[[0-9-]+, [0-9-]+\]|VALIDATION|Time to open' /tmp/lightseeker-auval-native.txt | /usr/bin/head -40
-if /usr/bin/arch -x86_64 /usr/bin/true 2>/dev/null; then
-    section "auval (x86_64 under Rosetta)"
-    /usr/bin/arch -x86_64 /usr/bin/auval -v aufx Lsek Veil > /tmp/lightseeker-auval-x86.txt 2>&1
+for plugin in "aumu Lski instrument" "aufx Lsek effect"; do
+    read -r type subtype kind <<< "$plugin"
+    section "auval $kind (native)"
+    /usr/bin/auval -v "$type" "$subtype" Veil > "/tmp/lightseeker-auval-$kind-native.txt" 2>&1
     echo "exit $?"
-    /usr/bin/grep -E 'FATAL|ERROR|VALIDATION|architecture|Time to open' /tmp/lightseeker-auval-x86.txt | /usr/bin/head -15
-fi
+    /usr/bin/grep -E 'Cocoa|FATAL|ERROR|WARNING|Channel Capabilities|\[[0-9-]+, [0-9-]+\]|VALIDATION|Time to open' "/tmp/lightseeker-auval-$kind-native.txt" | /usr/bin/head -40
+    if /usr/bin/arch -x86_64 /usr/bin/true 2>/dev/null; then
+        section "auval $kind (x86_64 under Rosetta)"
+        /usr/bin/arch -x86_64 /usr/bin/auval -v "$type" "$subtype" Veil > "/tmp/lightseeker-auval-$kind-x86.txt" 2>&1
+        echo "exit $?"
+        /usr/bin/grep -E 'FATAL|ERROR|VALIDATION|architecture|Time to open' "/tmp/lightseeker-auval-$kind-x86.txt" | /usr/bin/head -15
+    fi
+done
 
 section "Audio Unit caches"
 /bin/ls -la "$HOME/Library/Caches/AudioUnitCache" 2>&1 | /usr/bin/head -20
@@ -118,7 +121,7 @@ fi
 
 section "System log, last 2 hours (LIGHT SEEKER, Audio Unit hosting, Gatekeeper)"
 /usr/bin/log show --last 2h --style compact --predicate \
-    '(eventMessage CONTAINS[c] "lightseeker") OR (eventMessage CONTAINS[c] "Lsek") OR (process BEGINSWITH "AUHostingService" AND messageType >= 16) OR (process == "AudioComponentRegistrar" AND messageType >= 16)' \
+    '(eventMessage CONTAINS[c] "lightseeker") OR (eventMessage CONTAINS[c] "Lsek") OR (eventMessage CONTAINS[c] "Lski") OR (process BEGINSWITH "AUHostingService" AND messageType >= 16) OR (process == "AudioComponentRegistrar" AND messageType >= 16)' \
     2>&1 | /usr/bin/tail -250
 
 section "Questions only you can answer (please add the answers when you send this)"

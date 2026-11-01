@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # OPTIONAL: Developer ID signing with hardened runtime, notarisation and stapling,
-# for distributing LIGHT SEEKER to other people. CI runs this only when the signing
+# for distributing LIGHT SEEKER and LIGHT SEEKER FX to other people. CI runs this only when the signing
 # secrets exist; without them the build is ad-hoc signed instead.
 # UNTESTED: no signing identity was available when this was written.
 #
@@ -9,9 +9,9 @@
 #   MACOS_CERTIFICATE_PASSWORD  password of that .p12
 #   MACOS_SIGNING_IDENTITY      e.g. "Developer ID Application: Your Name (TEAMID)"
 #   NOTARY_APPLE_ID, NOTARY_TEAM_ID, NOTARY_PASSWORD (app-specific password)
-# Usage: scripts/ci-developer-id.sh <artefacts dir>
+# Usage: scripts/ci-developer-id.sh <build dir> (both plug-ins' artefacts inside it)
 set -euo pipefail
-artefacts="$1"
+build="$1"
 keychain="$RUNNER_TEMP/lightseeker-signing.keychain-db"
 keychain_password="$(/usr/bin/uuidgen)"
 /usr/bin/security create-keychain -p "$keychain_password" "$keychain"
@@ -24,7 +24,10 @@ rm -f "$RUNNER_TEMP/lightseeker-cert.p12"
 /usr/bin/security list-keychains -d user -s "$keychain" $(/usr/bin/security list-keychains -d user | tr -d '"')
 /usr/bin/security set-key-partition-list -S apple-tool:,apple: -s -k "$keychain_password" "$keychain" > /dev/null
 
-for bundle in "$artefacts/AU/LightSeeker.component" "$artefacts/VST3/LightSeeker.vst3" "$artefacts/Standalone/LightSeeker.app"; do
+for bundle in "$build/LightSeeker_artefacts/Release/AU/LightSeeker.component" "$build/LightSeeker_artefacts/Release/VST3/LightSeeker.vst3" \
+              "$build/LightSeeker_artefacts/Release/Standalone/LightSeeker.app" \
+              "$build/LightSeekerFX_artefacts/Release/AU/LightSeekerFX.component" "$build/LightSeekerFX_artefacts/Release/VST3/LightSeekerFX.vst3" \
+              "$build/LightSeekerFX_artefacts/Release/Standalone/LightSeekerFX.app"; do
     /usr/bin/codesign --force --deep --options runtime --timestamp --sign "$MACOS_SIGNING_IDENTITY" "$bundle"
     /usr/bin/codesign --verify --strict --verbose=2 "$bundle"
     archive="$RUNNER_TEMP/$(basename "$bundle").zip"

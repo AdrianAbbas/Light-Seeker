@@ -1,16 +1,64 @@
 # LIGHT SEEKER
 
-**LIGHT SEEKER** is a light-fantasy **audio effect** (AU + VST3, macOS; GarageBand and Logic
-Pro): the bright, majestic twin of DUNGEON CRAWLER. A painterly, sunlit fantasy **map**;
-click a **location** to zoom in and transform the sound, click again for its **places**.
-Sky castles, crystal palaces, blossom meadows, golden cathedrals: uplifting, shimmering and
-majestic, and always level-matched and musical on guitar, synth, piano and voice.
+**LIGHT SEEKER** is a light-fantasy **software instrument**, and **LIGHT SEEKER FX** the same
+world as an **audio effect** (AU + VST3, macOS; GarageBand and Logic Pro). Both are built from
+this repository: the bright, majestic twin of DUNGEON CRAWLER. A painterly, sunlit fantasy
+**map**; click a **location** to zoom in, click again for its **places**. Sky castles,
+crystal palaces, blossom meadows, golden cathedrals: uplifting, shimmering and majestic.
 
-Every place transforms the sound obviously at the defaults (Intensity 100 %, Mix 100 %) and
-has **one signature effect** no other place uses. Progress, decisions and measurements:
-[docs/DEVLOG.md](docs/DEVLOG.md).
+- **LIGHT SEEKER** (instrument, `aumu Lski Veil`): **every place has its own instrument**,
+  played from your keyboard or the piano roll **inside that place's space**: fanfare
+  trumpets at the Gates of Dawn, a glass harp at the Moonwell, a grand organ in the Nave of
+  Light, a kalimba in the Butterfly Glade. Travel and the space morphs while held notes play
+  on; **Lock instrument** carries one instrument through every space. One instrument per
+  instance, one instance per track, like any software instrument.
+- **LIGHT SEEKER FX** (effect, `aufx Lsek Veil`): every place transforms any track's sound,
+  with one signature effect no other place uses, level-matched and musical on guitar, synth,
+  piano and voice. (This is the plug-in that was called LIGHT SEEKER before the instrument
+  edition; projects that used it find it again.)
 
-## The world
+Progress, decisions and measurements: [docs/DEVLOG.md](docs/DEVLOG.md).
+
+## The instruments (LIGHT SEEKER)
+
+Each location is a family; each place has its own instrument, distinct from its siblings,
+good dry (Intensity 0 %) and in its space. Some play the developer's own recordings
+(classical guitar, kalimba, violin, Korg Minilogue soft pad), the rest are modelled with
+WORLDBUILDER's sound engine (brass, bowed strings, voices, plucked strings, bells, winds).
+
+| Location (family) | Place → instrument |
+|---|---|
+| Celestial Citadel (radiant brass & strings) | Gates of Dawn → Fanfare Trumpets · Hall of Mirrors → Shimmering Strings · Throne of Light → Orchestral Chord Pad · Spire Summit → Soaring Horn |
+| Sky Temple (bells & voices) | Cloud Steps → Rising Harp Glissando · Sanctum → Angelic Choir · Bell Garden → Wind Chimes and Bells |
+| Elven Sanctuary (harps & flutes) | Moonwell → Glass Harp · Leaf Halls → Elven Lyre (guitar recordings, bright) · Starlit Canopy → Airy Flute |
+| Crystal Palace (crystal) | Prism Hall → Crystal Bells (with a rising shimmer) · Mirror Lake → Glass Harmonica Pad · Diamond Vault → Celesta |
+| Blossom Meadow (pastoral) | Sunlit Meadow → Warm Acoustic Guitar (guitar recordings) · Butterfly Glade → Bouncy Kalimba (kalimba recordings) · Wildflower Hill → Pastoral Oboe |
+| Golden Cathedral (sacred, golden) | Nave of Light → Grand Organ · Choir Loft → Radiant Choir · Stained Glass Chapel → Celesta and Harp |
+| Floating Isles (airy) | Cloud Bridge → Cloud Pad (Minilogue soft pad recordings) · Windswept Isle → Breathy Wind Flute · Sky Harbour → Shimmering Pluck |
+| Royal Gardens (courtly) | Rose Garden → Concert Harp · Fountain Court → Music Box · Marble Colonnade → Harpsichord |
+| Fairy Glade (twinkly) | Mushroom Ring → Bouncy Pizzicato (violin pizzicato recordings) · Firefly Hollow → Twinkling Glockenspiel · Fairy Court → Fairy Harp |
+| Dragon's Peak (epic, heroic) | Eyrie → Heroic Horns · Golden Nest → Warm Strings (violin recordings) · Summit of Winds → Epic Choir and Brass |
+
+**The instrument panel** (under the map):
+
+| Control | What it does |
+|---|---|
+| **Instrument name, ‹ ›, Instruments** | The instrument playing now and its place. ‹ › and the Instruments menu play any place's instrument here (that locks it); "Follow the place" unlocks. |
+| **Lock instrument** | Keeps the instrument while you travel: only the space changes. Off, the instrument follows the place (journeys too). |
+| **Octave** | Shifts the keyboard by up to two octaves. |
+| **Tone, Attack, Release** | Brightness, how the notes start (slower bows and breaths; softer mallets and fingers) and how long they ring after the key. 0 % = as designed. |
+| **Character** | Each instrument's own: the trumpets' piccolo, the strings' shimmer octave, the choir's descant, the organ's trumpet stop, how far the harp's glissando climbs, the crystal bells' shimmer... Its name changes with the instrument. |
+| **Level** | The instrument's level (all instruments are level-matched as designed). |
+| **Intensity** | How much of the place's space: 0 % is the instrument dry. |
+| **Bend, Mod, Sustain** | Pitch bend (a whole tone), modulation (vibrato; tremolo on struck and plucked instruments), the sustain pedal. Your MIDI keyboard's wheels and pedal move them. |
+| **Keyboard** | Plays (click and drag); the keys light up with the notes the host plays. |
+
+Velocity, sustain pedal, pitch bend and the mod wheel all work from MIDI; up to 16 notes per
+instrument (10 to 12 for the solo winds and brass); nothing glides unless you bend. Travel
+under held notes: the keys you hold carry on in the new place's instrument, the old one's
+notes ring out, nothing hangs and nothing clicks.
+
+## The world (LIGHT SEEKER FX: the places' signatures)
 
 | Location | Places (the first is where you arrive) | Signatures |
 |---|---|---|
@@ -30,11 +78,13 @@ Nave of Light, a chorus hall in the Rose Garden), measured and rebuilt as impuls
 
 ## Install (macOS 10.15+, Apple Silicon and Intel)
 
+One download installs both plug-ins.
+
 1. Download the `LightSeeker-macOS-Universal` artifact of a green run (GitHub → Actions →
    Native build → the run → Artifacts) or a release, and unzip it.
 2. Quit GarageBand and Logic. In Terminal type `bash ` (with a space), drag
    `install-mac.sh` from the unzipped folder into the window, press Return.
-3. Wait for "LIGHT SEEKER is installed and validated."
+3. Wait for "LIGHT SEEKER and LIGHT SEEKER FX are installed and validated."
 
 The script removes the browser's quarantine flag (without it macOS refuses to load an
 unsigned plug-in and GarageBand shows a silent slot), re-signs the bundles for this Mac,
@@ -42,15 +92,24 @@ refreshes the Audio Unit list and runs Apple's validator. Details and a manual i
 [packaging/INSTALL.txt](packaging/INSTALL.txt). Uninstall: `bash uninstall-mac.sh`
 (`--purge` also deletes your presets and drop-in scenes).
 
-LIGHT SEEKER (`aufx Lsek Veil`, bundle ID `audio.veil.lightseeker`) installs **side by side
-with DUNGEON CRAWLER** (`aufx Dgcr Veil`); neither's scripts touch the other's files.
+LIGHT SEEKER (`aumu Lski Veil`, `LightSeeker.component`, bundle ID `audio.veil.lightseeker`)
+and LIGHT SEEKER FX (`aufx Lsek Veil`, `LightSeekerFX.component`, `audio.veil.lightseeker.fx`)
+install **side by side with DUNGEON CRAWLER** (`aufx Dgcr Veil`); no script touches the
+other plug-ins' files.
 
 ## Using it
 
-**GarageBand:** select a track → Smart Controls (B) → Plug-ins → an empty Audio Effect slot
-→ Audio Units → Veil Audio → LIGHT SEEKER. Double-click the slot to open the window (if you
+**The instrument.** GarageBand: a Software Instrument track → Smart Controls (B) → Plug-ins →
+the instrument slot → Audio Units → Veil Audio → LIGHT SEEKER. Logic Pro: a Software
+Instrument track → the Instrument slot → AU Instruments → Veil Audio → LIGHT SEEKER. Play
+your keyboard or the piano roll; choose places on the map and play their instruments.
+
+**The effect.** GarageBand: select a track → Smart Controls (B) → Plug-ins → an empty Audio
+Effect slot → Audio Units → Veil Audio → LIGHT SEEKER FX. Logic Pro: an Audio FX slot →
+Audio Units → Veil Audio → LIGHT SEEKER FX. Double-click the slot to open the window (if you
 see plain sliders, switch the window's view menu from "Controls" to "Editor").
-**Logic Pro:** an Audio FX slot → Audio Units → Veil Audio → LIGHT SEEKER.
+
+The map and the controls below are the same in both:
 
 1. The window opens on the **map**. Hover a landmark to see its name; click it: a golden
    path shows the journey and the view zooms into the place.
@@ -101,15 +160,22 @@ Host automation of Location does not stop a journey: the journey steers while it
 Journeys, roaming and the atmosphere follow the song's position when it plays (the same bar
 always gives the same result) and keep moving at the song's tempo when it is stopped.
 
-**MIDI travel, host support (honestly):** the plug-in is an audio effect (`aufx`) so that it
-loads in GarageBand. GarageBand does not send MIDI to audio effects, and Logic only offers
+**MIDI travel, host support (honestly):** LIGHT SEEKER FX is an audio effect (`aufx`) so that
+it loads in GarageBand (in the instrument the notes are for playing, so MIDI travel is off). GarageBand does not send MIDI to audio effects, and Logic only offers
 side-chain MIDI to "MIDI-controlled effects", so MIDI travel will usually do nothing there:
 use Journey, Roam or automation instead. VST3 hosts that route MIDI to effects (Reaper,
 Cubase, Bitwig) work.
 
 ## Factory presets
 
-27: 18 favourite spots (Golden Gates at Dawn, Infinite Mirrors, Throne of Light, Above the
+**LIGHT SEEKER (instrument): 50.** 31 instruments in their own places (one per place), two
+dry or gentle (Dry Concert Harp, Gentle Strings (50 %)), 8 instruments carried into another
+place (Organ in the Sky Temple, Guitar by the Moonwell, Kalimba in the Crystal Halls, Celesta
+in the Nave, Trumpets from the Summit, Harp in the Hall of Mirrors, Pizzicato in the Bell
+Garden, Cloud Pad on the Mirror Lake) and the 9 journeys below (the instrument follows each
+place a journey passes; your held notes carry on).
+
+**LIGHT SEEKER FX (effect): 27:** 18 favourite spots (Golden Gates at Dawn, Infinite Mirrors, Throne of Light, Above the
 Clouds, Garden of Bells, Moonwell Glimmer, Under the Stars, Prism Light, Still Mirror Lake,
 Summer Meadow, Butterfly Flutter, Nave of Light, Angel Choir, Soaring Harbour, Fountain
 Sparkle, Fairy Court Harp, Heroic Summit, Gentle Rose Garden (50 %)) and 9 journeys
@@ -120,6 +186,7 @@ Flight of the Dragon, Elven Night; roaming: Fairy Dance, Drifting Isles, Meadow 
 
 | Problem | Fix |
 |---|---|
+| An instrument says "synthesised (recordings not found)" | That build was made without the private recordings (see Build); the instrument plays its modelled stand-in. |
 | Silent slot with plain sliders in GarageBand | The quarantine flag: run `install-mac.sh` again (from the unzipped folder), restart GarageBand. |
 | Plug-in missing from the list | GarageBand: Settings → Audio/MIDI → tick "Audio Units", restart. Logic: Plug-in Manager → Reset & Rescan. |
 | Plain sliders instead of the map | The window's view menu: "Editor", not "Controls". |
@@ -132,8 +199,18 @@ test checklist: [docs/MANUAL_TEST.md](docs/MANUAL_TEST.md).
 
 ## Build and test
 
+The build makes both plug-ins (`LightSeeker` and `LightSeekerFX` targets). The instrument's
+recordings come from the private `AdrianAbbas/Samples` repository, prepared with
+`tools/sample-prep` (from WORLDBUILDER) and copied into the instrument's bundles; CI fetches
+them with the `SAMPLES_TOKEN` secret (a fine-grained token with Contents read access to
+that repository). Without them the instruments that use them play modelled stand-ins.
+
 ```bash
-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+python3 tools/sample-prep/prepare.py --source ../Samples --out build/samples
+```
+
+```bash
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DLS_SAMPLES_DIR=build/samples
 ```
 
 ```bash
@@ -141,23 +218,25 @@ cmake --build build --parallel 4
 ```
 
 ```bash
-bash scripts/run-tests-parallel.sh build/LightSeekerTests_artefacts/Release/LightSeekerTests build/test-logs
+LIGHTSEEKER_SAMPLES=build/samples bash scripts/run-tests-parallel.sh build/LightSeekerTests_artefacts/Release/LightSeekerTests build/test-logs
 ```
 
 ```bash
 build/LightSeekerTests_artefacts/Release/LightSeekerTests --listen build/test-logs/listening
 ```
 
-macOS builds, `auval`, the AU host harness (in- and out-of-process, arm64 and x86_64) and
-packaging run on GitHub Actions (`macos-15`); the Linux job runs the full suite and writes
-the listening renders (every place dry vs processed, a journey, the atmosphere) into the
-`LightSeeker-linux-test-logs` artifact. Art: `python3 tools/painted/build.py` (see
+macOS builds, `auval`, the AU host harness (in- and out-of-process, arm64 and x86_64, both
+plug-ins: the instrument played over MIDI, the effect on a sine) and packaging run on GitHub
+Actions (`macos-15`); the Linux job runs the full suite and writes the listening renders
+(every place dry vs processed, a journey, the atmosphere; every instrument dry and in its
+place, a chord travelling through the world) into the `LightSeeker-linux-test-logs` artifact. Art: `python3 tools/painted/build.py` (see
 [tools/painted/README.md](tools/painted/README.md)); captures: [tools/captures/README.md](tools/captures/README.md).
 
 ## Layout
 
-`Source/` (processor, engine, DSP modules, world, editor, art), `Tests/`, `tools/` (AU
-harness, painted art pipeline, capture tools, icon), `scripts/` (CI, install), `packaging/`,
+`Source/` (processor, engine, DSP modules, world, editor, art; `Synth/` the instruments and
+`Synth/wb` WORLDBUILDER's sound engine, copied), `Tests/`, `tools/` (AU harness, painted art
+pipeline, capture tools, sample preparation, icon), `scripts/` (CI, install), `packaging/`,
 `assets/` (fonts, icon, captured impulse responses, painted art), `docs/` (DEVLOG, manual
 test, art sources, snapshots).
 

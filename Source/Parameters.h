@@ -40,6 +40,14 @@ inline constexpr const char* atmosDensity = "atmosDensity";
 inline constexpr const char* atmosSeed = "atmosSeed";
 // Milestone 11: Eco / Standard / High (a setting, not automatable).
 inline constexpr const char* quality = "quality";
+// Direction Update 1: the instrument edition's own parameters (only in the instrument).
+inline constexpr const char* instTone = "instTone";
+inline constexpr const char* instAttack = "instAttack";
+inline constexpr const char* instRelease = "instRelease";
+inline constexpr const char* instCharacter = "instCharacter";
+inline constexpr const char* instLevel = "instLevel";
+inline constexpr const char* instOctave = "instOctave";
+inline constexpr const char* instLock = "instLock";
 inline juce::String advanced(std::size_t index) { return juce::String("adv_") + moduleSpecs[index].id; }
 }
 
@@ -65,7 +73,7 @@ inline juce::StringArray advancedChoices(const ModuleParamSpec& spec) {
 }
 
 // `currentLocation` names the sub-locations of the location in use (for host display).
-inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout(std::function<int()> currentLocation) {
+inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout(std::function<int()> currentLocation, bool instrument = false) {
     juce::AudioProcessorValueTreeState::ParameterLayout layout;
     juce::StringArray places;
     for (const auto* name : locationNames) places.add(name);
@@ -150,6 +158,23 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
         const juce::String name = juce::String("Adv ") + spec.name;
         if (spec.glide == Glide::Step) layout.add(std::make_unique<juce::AudioParameterChoice>(id, name, advancedChoices(spec), 0));
         else layout.add(std::make_unique<juce::AudioParameterFloat>(id, name, juce::NormalisableRange<float>(-1.0f, 1.0f), 0.0f, offsetText));
+    }
+    // Direction Update 1, the instrument: its macros (0.5 = as designed), level, octave
+    // and Lock instrument (the instrument stays while you travel; the space still moves).
+    if (instrument) {
+        layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { ids::instTone, 1 }, "Instrument Tone",
+                                                               juce::NormalisableRange<float>(0.0f, 1.0f), 0.5f, macroText));
+        layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { ids::instAttack, 1 }, "Instrument Attack",
+                                                               juce::NormalisableRange<float>(0.0f, 1.0f), 0.5f, macroText));
+        layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { ids::instRelease, 1 }, "Instrument Release",
+                                                               juce::NormalisableRange<float>(0.0f, 1.0f), 0.5f, macroText));
+        layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { ids::instCharacter, 1 }, "Instrument Character",
+                                                               juce::NormalisableRange<float>(0.0f, 1.0f), 0.5f, macroText));
+        layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { ids::instLevel, 1 }, "Instrument Level",
+                                                               juce::NormalisableRange<float>(-24.0f, 12.0f), 0.0f, decibels));
+        layout.add(std::make_unique<juce::AudioParameterInt>(juce::ParameterID { ids::instOctave, 1 }, "Instrument Octave", -2, 2, 0,
+            juce::AudioParameterIntAttributes().withStringFromValueFunction([](int v, int) { return (v > 0 ? "+" : "") + juce::String(v); })));
+        layout.add(std::make_unique<juce::AudioParameterBool>(juce::ParameterID { ids::instLock, 1 }, "Lock Instrument", false));
     }
     return layout;
 }

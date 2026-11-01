@@ -24,6 +24,17 @@ jobs:
           xcodebuild -version
           cmake --version
           /usr/sbin/softwareupdate --install-rosetta --agree-to-license || true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # The developer's recordings live in the private AdrianAbbas/Samples repository,
+      # read with the SAMPLES_TOKEN secret and prepared for the instrument's sampler here
+      # (tools/sample-prep, from WORLDBUILDER). They are never committed to this repository.
+      # Without the secret the build goes on and those instruments play their stand-ins.
+      - name: Fetch and prepare the recordings (private repository, optional)
+        env:
+          SAMPLES_TOKEN: ${{ secrets.SAMPLES_TOKEN }}
+        run: bash scripts/ci-fetch-samples.sh "${{ runner.temp }}/samples-src" "${{ runner.temp }}/samples"
       # JUCE is fetched once and kept (the configure step otherwise clones its whole history).
       - name: JUCE source cache
         id: juce
@@ -43,21 +54,25 @@ jobs:
         run: >
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
           -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DCMAKE_OSX_DEPLOYMENT_TARGET=10.15
-          -DJUCE_PATH="${{ runner.temp }}/juce"
+          -DJUCE_PATH="${{ runner.temp }}/juce" -DLS_SAMPLES_DIR="${{ runner.temp }}/samples"
           -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
-      - name: Build
+      - name: Build (LIGHT SEEKER and LIGHT SEEKER FX)
         run: |
           cmake --build build --parallel 4
           ccache --show-stats
       # The full processor suite runs in the Linux job. Here a short smoke group checks
       # each slice of the universal binary, and the cpu group reports (never fails on)
       # the cost of every location on this runner.
-      - name: Smoke test and CPU report (arm64)
-        run: /usr/bin/arch -arm64 build/LightSeekerTests_artefacts/Release/LightSeekerTests --only smoke,cpu
-      - name: Smoke test and CPU report (x86_64 under Rosetta)
-        run: /usr/bin/arch -x86_64 build/LightSeekerTests_artefacts/Release/LightSeekerTests --only smoke,cpu
-      - name: Universal binary and Info.plist gate
-        run: bash scripts/ci-check-bundles.sh build/LightSeeker_artefacts/Release
+      - name: Smoke test, instrument checks and CPU report (arm64)
+        env:
+          LIGHTSEEKER_SAMPLES: ${{ runner.temp }}/samples
+        run: /usr/bin/arch -arm64 build/LightSeekerTests_artefacts/Release/LightSeekerTests --only smoke,instrument,cpu
+      - name: Smoke test, instrument checks and CPU report (x86_64 under Rosetta)
+        env:
+          LIGHTSEEKER_SAMPLES: ${{ runner.temp }}/samples
+        run: /usr/bin/arch -x86_64 build/LightSeekerTests_artefacts/Release/LightSeekerTests --only smoke,instrument,cpu
+      - name: Universal binary and Info.plist gate (both plug-ins)
+        run: bash scripts/ci-check-bundles.sh build
       - name: Developer ID signing and notarisation (optional, untested)
         if: env.HAS_DEVELOPER_ID == 'true'
         env:
@@ -67,12 +82,12 @@ jobs:
           NOTARY_APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
           NOTARY_TEAM_ID: ${{ secrets.NOTARY_TEAM_ID }}
           NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
-        run: bash scripts/ci-developer-id.sh build/LightSeeker_artefacts/Release
-      - name: Sign, verify and package
-        run: bash scripts/package-mac.sh build/LightSeeker_artefacts/Release dist
+        run: bash scripts/ci-developer-id.sh build
+      - name: Sign, verify and package (both plug-ins)
+        run: bash scripts/package-mac.sh build dist
       - name: Build AU host harness
         run: bash scripts/build-au-harness.sh build/LightSeekerAUHarness
-      - name: Install a quarantined download with install-mac.sh, then auval and harness (arm64 + x86_64)
+      - name: Install a quarantined download with install-mac.sh, then auval and harness for both plug-ins (arm64 + x86_64)
         run: bash scripts/ci-user-install-test.sh dist/LightSeeker-macOS-Universal.zip build/LightSeekerAUHarness build/ci-logs
       # Annotations are readable through the REST API; GitHub keeps at most 10 per step.
       - name: Publish install and arm64 harness logs as annotations
@@ -107,6 +122,17 @@ jobs:
       CCACHE_SLOPPINESS: time_macros,include_file_mtime,include_file_ctime
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # The developer's recordings live in the private AdrianAbbas/Samples repository,
+      # read with the SAMPLES_TOKEN secret and prepared for the instrument's sampler here
+      # (tools/sample-prep, from WORLDBUILDER). They are never committed to this repository.
+      # Without the secret the build goes on and those instruments play their stand-ins.
+      - name: Fetch and prepare the recordings (private repository, optional)
+        env:
+          SAMPLES_TOKEN: ${{ secrets.SAMPLES_TOKEN }}
+        run: bash scripts/ci-fetch-samples.sh "${{ runner.temp }}/samples-src" "${{ runner.temp }}/samples"
       - name: Dependencies
         run: sudo apt-get update && sudo apt-get install -y ninja-build libasound2-dev libfreetype6-dev libfontconfig1-dev libx11-dev libxcomposite-dev libxcursor-dev libxext-dev libxinerama-dev libxrandr-dev libxrender-dev libgl1-mesa-dev
       - name: JUCE source cache
@@ -126,6 +152,7 @@ jobs:
       - name: Configure
         run: >
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DJUCE_PATH="${{ runner.temp }}/juce"
+          -DLS_SAMPLES_DIR="${{ runner.temp }}/samples"
           -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
       - name: Build
         run: |
@@ -133,13 +160,21 @@ jobs:
           ccache --show-stats
       # The full processor suite as shards in parallel, then the CPU group alone
       # (report-only) so its timings are not disturbed.
-      - name: Processor tests (full suite)
+      - name: Processor tests (full suite, the effect and the instrument)
+        env:
+          LIGHTSEEKER_SAMPLES: ${{ runner.temp }}/samples
         run: bash scripts/run-tests-parallel.sh build/LightSeekerTests_artefacts/Release/LightSeekerTests build/test-logs
       # The same guitar and synth phrase dry, then through each place (one A/B file per
       # place), strength.csv, and a journey through every place, in the test-logs artifact.
       - name: Listening renders (dry vs processed per place, WAV)
         if: always()
         run: build/LightSeekerTests_artefacts/Release/LightSeekerTests --listen build/test-logs/listening
+      # Every instrument dry and in its own place, a short phrase each (Direction Update 1).
+      - name: Instrument listening renders (every instrument dry and in its place, WAV)
+        if: always()
+        env:
+          LIGHTSEEKER_SAMPLES: ${{ runner.temp }}/samples
+        run: build/LightSeekerTests_artefacts/Release/LightSeekerTests --listen-instruments build/test-logs/instruments
       - name: Upload test logs
         if: always()
         uses: actions/upload-artifact@v4

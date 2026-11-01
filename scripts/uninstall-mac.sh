@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Remove LIGHT SEEKER for the current user.
+# Remove LIGHT SEEKER and LIGHT SEEKER FX for the current user.
 #   bash uninstall-mac.sh           remove the plug-ins, keep your saved presets
 #   bash uninstall-mac.sh --purge   also remove your presets and drop-in scenes
 #                                   (~/Library/Application Support/LightSeeker)
@@ -8,7 +8,8 @@ purge=0
 [[ "${1:-}" == --purge ]] && purge=1
 
 removed=0
-for bundle in "$HOME/Library/Audio/Plug-Ins/Components/LightSeeker.component" "$HOME/Library/Audio/Plug-Ins/VST3/LightSeeker.vst3"; do
+for bundle in "$HOME/Library/Audio/Plug-Ins/Components/LightSeeker.component" "$HOME/Library/Audio/Plug-Ins/VST3/LightSeeker.vst3" \
+              "$HOME/Library/Audio/Plug-Ins/Components/LightSeekerFX.component" "$HOME/Library/Audio/Plug-Ins/VST3/LightSeekerFX.vst3"; do
     if [[ -e "$bundle" ]]; then
         rm -rf "$bundle"
         echo "Removed $bundle"
@@ -26,7 +27,8 @@ for data in "$HOME/Library/Application Support/LightSeeker" "$HOME/Library/Audio
     fi
 done
 
-for system_copy in "/Library/Audio/Plug-Ins/Components/LightSeeker.component" "/Library/Audio/Plug-Ins/VST3/LightSeeker.vst3"; do
+for system_copy in /Library/Audio/Plug-Ins/Components/LightSeeker.component /Library/Audio/Plug-Ins/VST3/LightSeeker.vst3 \
+                   /Library/Audio/Plug-Ins/Components/LightSeekerFX.component /Library/Audio/Plug-Ins/VST3/LightSeekerFX.vst3; do
     [[ -e "$system_copy" ]] && echo "A system-wide copy remains: sudo rm -rf \"$system_copy\""
 done
 

@@ -4,10 +4,17 @@
 #include <cmath>
 #include <optional>
 
-LightSeekerProcessor::LightSeekerProcessor()
-    : AudioProcessor(BusesProperties().withInput("Input", juce::AudioChannelSet::stereo(), true)
-                                      .withOutput("Output", juce::AudioChannelSet::stereo(), true)),
-      parameters(*this, nullptr, "LIGHT_SEEKER", dc::createParameterLayout([this] { return locationIndex(); })) {
+juce::AudioProcessor::BusesProperties LightSeekerProcessor::busesFor(bool instrument) {
+    // The instrument: no audio input, a stereo output. The effect: stereo in and out.
+    if (instrument) return BusesProperties().withOutput("Output", juce::AudioChannelSet::stereo(), true);
+    return BusesProperties().withInput("Input", juce::AudioChannelSet::stereo(), true)
+                            .withOutput("Output", juce::AudioChannelSet::stereo(), true);
+}
+
+LightSeekerProcessor::LightSeekerProcessor(bool instrumentEdition)
+    : AudioProcessor(busesFor(instrumentEdition)),
+      instrumentMode(instrumentEdition),
+      parameters(*this, nullptr, "LIGHT_SEEKER", dc::createParameterLayout([this] { return locationIndex(); }, instrumentEdition)) {
     location = parameters.getRawParameterValue(dc::ids::location);
     subLocation = parameters.getRawParameterValue(dc::ids::subLocation);
     intensity = parameters.getRawParameterValue(dc::ids::intensity);
@@ -32,7 +39,48 @@ LightSeekerProcessor::LightSeekerProcessor()
     atmosDensity = parameters.getRawParameterValue(dc::ids::atmosDensity);
     atmosSeed = parameters.getRawParameterValue(dc::ids::atmosSeed);
     quality = parameters.getRawParameterValue(dc::ids::quality);
+    if (instrumentMode) {
+        instTone = parameters.getRawParameterValue(dc::ids::instTone);
+        instAttack = parameters.getRawParameterValue(dc::ids::instAttack);
+        instRelease = parameters.getRawParameterValue(dc::ids::instRelease);
+        instCharacter = parameters.getRawParameterValue(dc::ids::instCharacter);
+        instLevel = parameters.getRawParameterValue(dc::ids::instLevel);
+        instOctave = parameters.getRawParameterValue(dc::ids::instOctave);
+        instLock = parameters.getRawParameterValue(dc::ids::instLock);
+        synth = std::make_unique<ls::inst::Synth>();
+        // The developer's recordings load on a background thread (once per process).
+        lswb::samples::Bank::get().load();
+    }
     markPresetBaseline();   // a new instance is "Init", unmodified
+}
+
+void LightSeekerProcessor::setInstrumentLock(bool on) {
+    if (!instrumentMode) return;
+    if (on) requestedLock.store(shownInstrument.load());
+    setPlain(dc::ids::instLock, on ? 1.0f : 0.0f);
+}
+
+void LightSeekerProcessor::chooseInstrument(int index) {
+    if (!instrumentMode) return;
+    pushUndo();
+    requestedLock.store(juce::jlimit(0, ls::inst::instrumentCount - 1, index));
+    shownInstrument.store(juce::jlimit(0, ls::inst::instrumentCount - 1, index));
+    setPlain(dc::ids::instLock, 1.0f);
+}
+
+void LightSeekerProcessor::postUiMidi(const juce::MidiMessage& m) {
+    if (!instrumentMode || m.getRawDataSize() < 1 || m.getRawDataSize() > 3) return;
+    const auto* d = m.getRawData();
+    const uint32_t packed = uint32_t(d[0]) | (m.getRawDataSize() > 1 ? uint32_t(d[1]) << 8 : 0u) | (m.getRawDataSize() > 2 ? uint32_t(d[2]) << 16 : 0u)
+                            | (uint32_t(m.getRawDataSize()) << 24);
+    const auto scope = uiFifo.write(1);
+    if (scope.blockSize1 > 0) uiMessages[static_cast<std::size_t>(scope.startIndex1)] = packed;
+    else if (scope.blockSize2 > 0) uiMessages[static_cast<std::size_t>(scope.startIndex2)] = packed;
+}
+
+bool LightSeekerProcessor::keyLit(int note) const noexcept {
+    if (note < 0 || note > 127) return false;
+    return (litKeys[static_cast<std::size_t>(note >> 5)].load(std::memory_order_relaxed) >> (note & 31)) & 1u;
 }
 
 bool LightSeekerProcessor::journeyRunning() const noexcept {
@@ -198,7 +246,7 @@ void LightSeekerProcessor::copyCurrentToOtherSlot() {
 }
 
 void LightSeekerProcessor::applyFactoryPreset(int index) {
-    const auto& presets = dc::factoryPresets();
+    const auto& presets = dc::presetsFor(instrumentMode);
     if (index < 0 || index >= static_cast<int>(presets.size())) return;
     pushUndo();
     const auto& preset = presets[static_cast<std::size_t>(index)];
@@ -216,6 +264,11 @@ void LightSeekerProcessor::applyFactoryPreset(int index) {
             }
         }
     setRoute(preset.route);
+    // An instrument preset that plays another sub-location's instrument here locks it.
+    if (instrumentMode && preset.instrument >= 0) {
+        requestedLock.store(preset.instrument);
+        shownInstrument.store(preset.instrument);
+    }
     midiCancel.store(true);
     manualEpoch.fetch_add(1, std::memory_order_acq_rel);
     presetIndex = index;
@@ -228,7 +281,7 @@ juce::File LightSeekerProcessor::userPresetFolder() const {
    #if JUCE_MAC
     base = base.getChildFile("Application Support");
    #endif
-    return base.getChildFile("LightSeeker").getChildFile("Presets");
+    return base.getChildFile("LightSeeker").getChildFile(instrumentMode ? "Instrument Presets" : "Presets");
 }
 
 bool LightSeekerProcessor::saveUserPreset(const juce::String& name) {
@@ -241,7 +294,7 @@ bool LightSeekerProcessor::saveUserPreset(const juce::String& name) {
     auto xml = getXmlFromBinary(data.getData(), static_cast<int>(data.getSize()));
     if (xml == nullptr) return false;
     xml->setAttribute("presetName", name.trim());
-    const bool ok = xml->writeTo(folder.getChildFile(clean + ".lspreset"));
+    const bool ok = xml->writeTo(folder.getChildFile(clean + (instrumentMode ? ".lsinst" : ".lspreset")));
     if (ok) { presetName = name.trim(); presetIndex = -1; markPresetBaseline(); }
     return ok;
 }
@@ -310,11 +363,22 @@ void LightSeekerProcessor::prepareToPlay(double sampleRate, int) {
     neutralRamp.prepare(0.03, rate);
     neutralRamp.value = intensity->load() <= neutralIntensity ? 1.0f : 0.0f;
     setLatencySamples(latency);
+    if (instrumentMode) {
+        // The recordings: give the background load a moment so the first notes are sampled.
+        lswb::samples::Bank::get().waitUntilLoaded(1500);
+        synth->prepare(rate);
+        uiMidiScratch.ensureSize(2048);
+    }
     inputLevel = 0;
     outputLevel = 0;
 }
 
 bool LightSeekerProcessor::isBusesLayoutSupported(const BusesLayout& layout) const {
+    if (instrumentMode) {
+        // The instrument: no input; a stereo (or mono) output.
+        const auto out = layout.getMainOutputChannelSet();
+        return layout.getMainInputChannelSet().isDisabled() && (out == juce::AudioChannelSet::stereo() || out == juce::AudioChannelSet::mono());
+    }
     // mono->mono, stereo->stereo and mono->stereo (Logic offers it on mono tracks).
     const auto in = layout.getMainInputChannelSet(), out = layout.getMainOutputChannelSet();
     const auto monoOrStereo = [](const juce::AudioChannelSet& set) {
@@ -324,6 +388,15 @@ bool LightSeekerProcessor::isBusesLayoutSupported(const BusesLayout& layout) con
 }
 
 void LightSeekerProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi) {
+    if (instrumentMode) {
+        // The instrument plays the host's MIDI (no MIDI travel: the notes are for playing).
+        midiLocation = -1;
+        midiCancel.store(false);
+        blockMidi = &midi;
+        process(buffer, false);
+        blockMidi = nullptr;
+        return;
+    }
     // A manual choice of place cancels the place MIDI chose.
     if (midiCancel.exchange(false)) midiLocation = -1;
     // MIDI travel: the last note-on in the travel octave chooses the place.
@@ -341,7 +414,87 @@ void LightSeekerProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::
     } else midiLocation = -1;
     process(buffer, false);
 }
-void LightSeekerProcessor::processBlockBypassed(juce::AudioBuffer<float>& buffer, juce::MidiBuffer&) { process(buffer, true); }
+void LightSeekerProcessor::processBlockBypassed(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi) {
+    // The instrument bypassed still plays (dry, without its place); the effect passes its input.
+    blockMidi = instrumentMode ? &midi : nullptr;
+    process(buffer, true);
+    blockMidi = nullptr;
+}
+
+void LightSeekerProcessor::renderInstrument(juce::AudioBuffer<float>& buffer, int numSamples) {
+    // Which instrument: the place's (where the world is, or travelling to), unless locked.
+    const bool lock = instLock->load() >= 0.5f;
+    const int request = requestedLock.exchange(-1);
+    if (request >= 0) lockedPlace = request;
+    // Locked without a choice (automation, a host): the instrument playing now stays.
+    if (lock && lockedPlace < 0) lockedPlace = synth->patchIndex();
+    // Unlocked: follow the place (a choice made this very block waits for its lock).
+    if (!lock && request < 0) lockedPlace = -1;
+    wasLocked = lock;
+    const int place = lock ? lockedPlace : ls::inst::instrumentIndex(world.destination(), world.destinationSub());
+    synth->setPatch(place);
+    lockedInstrument.store(lock ? lockedPlace : -1, std::memory_order_relaxed);
+    const auto finiteOr = [](float v, float fallback) { return std::isfinite(v) ? v : fallback; };
+    ls::inst::Macros m;
+    m.tone = finiteOr(instTone->load(), 0.5f);
+    m.attack = finiteOr(instAttack->load(), 0.5f);
+    m.release = finiteOr(instRelease->load(), 0.5f);
+    m.character = finiteOr(instCharacter->load(), 0.5f);
+    m.levelDb = finiteOr(instLevel->load(), 0.0f);
+    m.octave = juce::jlimit(-2, 2, static_cast<int>(std::lround(finiteOr(instOctave->load(), 0.0f))));
+    synth->setMacros(m);
+
+    // The on-screen keyboard, wheels and pedal join at the start of the block.
+    uiMidiScratch.clear();
+    {
+        const auto scope = uiFifo.read(uiFifo.getNumReady());
+        const auto take = [this](int start, int size) {
+            for (int k = 0; k < size; ++k) {
+                const uint32_t packed = uiMessages[static_cast<std::size_t>(start + k)];
+                const int length = static_cast<int>(packed >> 24);
+                const juce::uint8 bytes[3] { juce::uint8(packed & 0xff), juce::uint8((packed >> 8) & 0xff), juce::uint8((packed >> 16) & 0xff) };
+                uiMidiScratch.addEvent(bytes, juce::jlimit(1, 3, length), 0);
+            }
+        };
+        take(scope.startIndex1, scope.blockSize1);
+        take(scope.startIndex2, scope.blockSize2);
+    }
+    auto* left = buffer.getWritePointer(0);
+    auto* right = buffer.getNumChannels() > 1 ? buffer.getWritePointer(1) : nullptr;
+    buffer.clear(0, numSamples);
+    // A mono output: the instrument's right half goes into a scratch row.
+    float* r = right != nullptr ? right : work[1].data();
+    int at = 0;
+    const auto renderTo = [&](int until) {
+        until = juce::jlimit(at, numSamples, until);
+        while (at < until) {
+            const int n = right != nullptr ? until - at : juce::jmin(until - at, dc::maxChunk);
+            if (right == nullptr) std::fill(r, r + n, 0.0f);
+            synth->render(left + at, right != nullptr ? r + at : r, n);
+            if (right == nullptr) for (int i = 0; i < n; ++i) left[at + i] = 0.5f * (left[at + i] + r[i]);
+            at += n;
+        }
+    };
+    for (const auto meta : uiMidiScratch) synth->handle(meta.getMessage());
+    if (blockMidi != nullptr)
+        for (const auto meta : *blockMidi) {
+            renderTo(meta.samplePosition);
+            synth->handle(meta.getMessage());
+        }
+    renderTo(numSamples);
+
+    // For the editor: lit keys, wheels, pedal.
+    for (std::size_t w = 0; w < litKeys.size(); ++w) {
+        uint32_t bits = 0;
+        for (int b = 0; b < 32; ++b) if (synth->keyDown(static_cast<int>(w) * 32 + b)) bits |= 1u << b;
+        litKeys[w].store(bits, std::memory_order_relaxed);
+    }
+    bendNow.store(synth->bendAmount(), std::memory_order_relaxed);
+    modNow.store(synth->modAmount(), std::memory_order_relaxed);
+    sustainNow.store(synth->sustainDown(), std::memory_order_relaxed);
+    voicesNow.store(synth->activeVoices(), std::memory_order_relaxed);
+    shownInstrument.store(synth->patchIndex(), std::memory_order_relaxed);
+}
 
 void LightSeekerProcessor::process(juce::AudioBuffer<float>& buffer, bool forcedBypass) {
     juce::ScopedNoDenormals noDenormals;
@@ -365,8 +518,9 @@ void LightSeekerProcessor::process(juce::AudioBuffer<float>& buffer, bool forced
     // carries no input and must still be written.
     const int numSamples = buffer.getNumSamples();
     const int bufferChannels = buffer.getNumChannels();
-    const int inputs = juce::jmin(bufferChannels, getTotalNumInputChannels());
     const int outputs = juce::jmin(bufferChannels, getTotalNumOutputChannels());
+    // The instrument's "input" is its own sound, rendered into the output channels below.
+    const int inputs = instrumentMode ? outputs : juce::jmin(bufferChannels, getTotalNumInputChannels());
     for (int ch = inputs; ch < bufferChannels; ++ch) buffer.clear(ch, 0, numSamples);
     if (inputs < 1 || outputs < 1 || numSamples <= 0) return;
     auto* left = buffer.getWritePointer(0);
@@ -416,6 +570,7 @@ void LightSeekerProcessor::process(juce::AudioBuffer<float>& buffer, bool forced
     controls.bpm = bpm;
     world.setQuality(qualityMode());
     world.setControls(controls);
+    if (instrumentMode) renderInstrument(buffer, numSamples);
     inputGain.set(dc::dsp::dbToGain(juce::jlimit(-24.0f, 24.0f, finiteOr(input->load(), 0))));
     outputGain.set(dc::dsp::dbToGain(juce::jlimit(-24.0f, 12.0f, finiteOr(output->load(), 0))));
     wetMix.set(juce::jlimit(0.0f, 1.0f, finiteOr(mix->load(), 1)));
@@ -490,6 +645,7 @@ void LightSeekerProcessor::getStateInformation(juce::MemoryBlock& data) {
     juce::StringArray stops;
     for (const auto& st : route()) stops.add(juce::String(st.location) + ":" + juce::String(st.sub));
     state.setProperty("route", stops.joinIntoString(","), nullptr);
+    if (instrumentMode) state.setProperty("lockedInstrument", lockedInstrument.load() >= 0 ? lockedInstrument.load() : shownInstrument.load(), nullptr);
     if (auto xml = state.createXml()) copyXmlToBinary(*xml, data);
 }
 
@@ -527,6 +683,12 @@ void LightSeekerProcessor::setStateInformation(const void* data, int size) {
             stops.push_back({ juce::jlimit(0, dc::LocationCount - 1, token.upToFirstOccurrenceOf(":", false, false).getIntValue()),
                               juce::jlimit(0, dc::maxSubLocations, token.fromFirstOccurrenceOf(":", false, false).getIntValue()) });
     setRoute(stops);
+    // The instrument a locked instance plays (Direction Update 1).
+    if (instrumentMode && incoming.hasProperty("lockedInstrument") && instLock->load() >= 0.5f) {
+        const int index = juce::jlimit(0, ls::inst::instrumentCount - 1, static_cast<int>(incoming.getProperty("lockedInstrument")));
+        requestedLock.store(index);
+        shownInstrument.store(index);
+    }
     manualEpoch.fetch_add(1, std::memory_order_acq_rel);
     // Unmodified when saved: what was loaded is the preset; otherwise it stays modified.
     if (!applying) {
@@ -535,4 +697,4 @@ void LightSeekerProcessor::setStateInformation(const void* data, int size) {
     }
 }
 
-juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter() { return new LightSeekerProcessor(); }
+juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter() { return new LightSeekerProcessor(JucePlugin_IsSynth != 0); }

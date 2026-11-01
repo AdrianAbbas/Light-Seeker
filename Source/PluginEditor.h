@@ -17,6 +17,7 @@
 #include "PluginProcessor.h"
 #include "UI/EngravedLookAndFeel.h"
 #include "UI/SceneCache.h"
+#include "UI/InstrumentPanel.h"
 
 class LightSeekerView final : public juce::Component, private juce::Timer, private juce::AudioProcessorParameter::Listener {
 public:
@@ -318,9 +319,12 @@ private:
 
 // The plug-in window: the view at 960 x 560, scaled to the window (resizable, fixed
 // aspect; the size menu offers 75-200 %). The scale is saved with the state.
+// The instrument edition adds its panel under the view (960 x 756 at 100 %).
 class LightSeekerEditor final : public juce::AudioProcessorEditor {
 public:
     static constexpr int defaultWidth = LightSeekerView::defaultWidth, defaultHeight = LightSeekerView::defaultHeight;
+    int baseHeight() const noexcept { return defaultHeight + (panel != nullptr ? dc::ui::InstrumentPanel::panelHeight : 0); }
+    dc::ui::InstrumentPanel* instrumentPanel() noexcept { return panel.get(); }
     explicit LightSeekerEditor(LightSeekerProcessor&);
     void resized() override;
     void paint(juce::Graphics&) override {}
@@ -329,5 +333,6 @@ public:
 private:
     LightSeekerProcessor& processor;
     LightSeekerView content;
+    std::unique_ptr<dc::ui::InstrumentPanel> panel;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(LightSeekerEditor)
 };
