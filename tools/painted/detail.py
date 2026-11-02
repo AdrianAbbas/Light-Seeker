@@ -875,6 +875,70 @@ def mountains(seed, y=2600, height=700, x0=-4200, x1=4200, depth=900, base_z=-40
     return big_mesh(name, verts, tris, layer, mat_range("range%d" % seed, top=height * 1.2, base_z=base_z), smooth=True)
 
 
+def _noise_field(x, y, seed, scale, octaves=4):
+    """fBm noise in [-1, 1] on numpy arrays (mathutils per point)."""
+    from mathutils import noise as mn
+    out = np.empty(x.shape, np.float32)
+    fx, fy, o = x.ravel(), y.ravel(), out.ravel()
+    for i in range(fx.size):
+        o[i] = mn.fractal(Vector((fx[i] * scale, fy[i] * scale, seed * 3.17)), 0.5, 2.0, octaves)
+    return out
+
+
+def alpine(seed, y, depth, x0, x1, base_z, height, layer, nx=900, ny=140, peaks=11, rock=(0.44, 0.42, 0.46),
+           snow_line=0.5, rough=1.0, detail_scale=None, octaves=7, hills=False, name="alpine"):
+    """A believable mountain range (final touches): distinct massifs with pointed summits,
+    saddles between them and spurs running down (not a wall of noise). Each massif is a
+    cone about as wide as it is tall (slopes of 30-40 degrees, as real ranges); domain-
+    warped ridged noise carves arêtes and gullies into it, the gullies deepening with
+    height (a cheap stand-in for erosion); the foot fades into the plain in front."""
+    rng = np.random.default_rng(seed)
+    xs = np.linspace(x0, x1, nx + 1, dtype=np.float32)
+    ys = np.linspace(y, y + depth, ny + 1, dtype=np.float32)
+    X, Y = np.meshgrid(xs, ys)
+    # Massifs: soft-max of cones, the highest towards the middle of the depth.
+    M = np.zeros_like(X)
+    span = x1 - x0
+    for k in range(peaks):
+        px = x0 + span * (k + 0.5 + rng.uniform(-0.35, 0.35)) / peaks
+        py = y + depth * rng.uniform(0.35, 0.7)
+        h = height * rng.uniform(0.5, 1.0) ** 0.7
+        if hills:
+            # Foothills: broad rounded domes several times wider than tall.
+            r = h * rng.uniform(3.5, 5.5)
+            d = np.sqrt((X - px) ** 2 + ((Y - py) * 1.15) ** 2) / r
+            cone = h * np.clip(1 - d * d, 0, None) ** 1.6
+        else:
+            r = h * rng.uniform(1.3, 1.9)
+            d = np.sqrt((X - px) ** 2 + ((Y - py) * 1.15) ** 2) / r
+            cone = h * np.clip(1 - d, 0, None) ** 1.35
+        M = np.maximum(M, cone) + 0.12 * np.minimum(M, cone)    # saddles between neighbours
+    # A long ridge line joining them (the range, not separate hills).
+    spine = height * 0.42 * np.exp(-((Y - (y + depth * 0.52)) / (depth * 0.28)) ** 2)
+    M = np.maximum(M, spine * (0.75 + 0.25 * _noise_field(X, Y, seed + 5, 1.0 / (height * 0.9), 3)))
+    # Arêtes and gullies: domain-warped ridged noise, stronger higher up.
+    f = 1.0 / (detail_scale or height * 0.55)
+    wx = _noise_field(X, Y, seed + 1, f * 0.5, 3) * height * 0.35
+    wy = _noise_field(X, Y, seed + 2, f * 0.5, 3) * height * 0.35
+    rid = np.clip(_ridged((X + wx) * f, (Y + wy) * f, seed, octaves=octaves) / 1.6, 0, None)
+    hn = np.clip(M / height, 0, 1)
+    if hills:
+        # Rolling, wooded: soft fBm bumps (crowns of woods) instead of arêtes.
+        M = M * (0.85 + 0.25 * _noise_field(X, Y, seed + 7, 1.0 / (height * 1.6), 4)) + height * 0.06 * _noise_field(X, Y, seed + 8, 1.0 / 90.0, 3)
+    Z = M * (1.0 - 0.28 * rough + 0.42 * rough * rid * (0.4 + 0.6 * hn)) + height * 0.05 * rough * rid
+    # The foot fades into the plain at the front edge; the back edge stays high (no gap).
+    t = np.clip((Y - y) / (depth * 0.22), 0, 1)
+    Z = base_z + Z * (t * t * (3 - 2 * t))
+    Z[0, :] = base_z - 20
+    verts = np.stack([X, Y, Z], -1).reshape(-1, 3)
+    i = np.arange(nx); j = np.arange(ny)
+    I, J = np.meshgrid(i, j)
+    a = (J * (nx + 1) + I).ravel()
+    tris = np.concatenate([np.stack([a, a + 1, a + nx + 2], -1), np.stack([a, a + nx + 2, a + nx + 1], -1)])
+    top = float(Z.max() - base_z)
+    return big_mesh(name, verts, tris, layer, mat_range("alp%d" % seed, rock=rock, snow_line=snow_line, top=top, base_z=base_z), smooth=True)
+
+
 def mat_fields(name="fields3", base=(0.2, 0.36, 0.12), scale=0.004):
     """A sunlit valley floor from far away: meadows in several greens and gold, darker
     groves, at two scales."""

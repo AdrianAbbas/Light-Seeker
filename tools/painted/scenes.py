@@ -1859,7 +1859,10 @@ def v2_map():
     """The bright world from high above: a patchwork of sunlit fields and woods, a river
     winding from the snowy mountains in the north to a sea in the south-west, cumulus
     drifting over the edges; each location a luminous landmark."""
-    B.camera((0, -520, 470), (0, 820, 40), lens=28)
+    # Final touches: a little lower and wider, so the horizon comes down into the picture
+    # (sky, the sun and layered ranges above the land: air) while every landmark stays
+    # within a few pixels of where it was.
+    B.camera((0, -450, 400), (0, 820, 40), lens=26)
     v2_light((-0.5, -0.4, 0.6), strength=5.0, sky=0.3)
     f = rolling(3, 30, 0, 0.003)
 
@@ -1883,7 +1886,15 @@ def v2_map():
     # Woods everywhere (clumped), not on the landmarks or in the sea.
     D.grove(land, -1600, 1600, -200, 2000, 2200, "mid", 41, size=(22, 40), blossom=0.12, name="mapwood", clump=0.85,
             avoid=[(x, y, 120) for x, y in L], min_z=-30)
-    D.mountains(9, y=2080, height=820, base_z=land(0, 2080) - 30, x0=-3000, x1=3000, layer="mid")   # same layer as the land: no shadow seam
+    # The north (final touches): wooded foothills on the land's layer (no shadow seam),
+    # then, far off across the haze, a middle range and the great snowy range, each
+    # paler and cooler with distance (the light pass and the map's air pass).
+    D.alpine(9, y=2050, depth=1100, x0=-3200, x1=3200, base_z=land(0, 2050) - 30, height=230, layer="mid", nx=800, ny=110, peaks=16,
+             rock=(0.2, 0.3, 0.17), snow_line=2.0, rough=0.15, detail_scale=650, octaves=5, hills=True, name="foothills")
+    D.alpine(21, y=4200, depth=1900, x0=-5200, x1=5200, base_z=150, height=330, layer="far", nx=900, ny=130, peaks=13,
+             rock=(0.26, 0.34, 0.33), snow_line=2.0, rough=0.35, detail_scale=900, octaves=5, name="midrange")   # wooded, no snow
+    D.alpine(23, y=8200, depth=2600, x0=-8200, x1=8200, base_z=150, height=860, layer="far", nx=1200, ny=150, peaks=15,
+             rock=(0.46, 0.44, 0.5), snow_line=0.45, name="greatrange")
     anchors = []
     rng = random.Random(3)
     b = G.Builder()
@@ -1926,8 +1937,9 @@ def v2_map():
             G.tower(b, x, y, z + 215, 10, 40, rng, tiers=2, spire_ratio=1.6, depth=1)
         anchors.append({"kind": "landmark", "index": i, "world": (x, y, z + 80)})
     b.flush("mid", G.materials(), "maplandmarks")
-    for k, (x, y, z) in enumerate([(-300, 1900, 260), (500, 2000, 300), (-1000, 1200, 220), (1100, 900, 200)]):
-        D.cumulus((x, y, z), (400, 260, 180), "far", 340 + k, density=0.012, name="fogcloud_m%d" % k)
+    # (The cloud banks and the valley mist between the ranges are painted by map_air.py.)
     anchors += [lightpt((0, 1100, 260), 30, "glint"), lightpt((300, 500, 120), 20, "glint"), lightpt((700, 650, 90), 18, "glint"),
                 lightpt((0, 1100, 200), 24, "fire"), lightpt((300, 500, 90), 18, "fire"), lightpt((-520, 1030, 170), 16, "fire")]
-    return meta((760, 40), anchors, horizon=120, clouds=0.3, rays=0.5, haze=0.3)
+    m = meta((790, 36), anchors, horizon=84, clouds=0.55, rays=0.8, haze=0.45)
+    m["air"] = True   # paint.py runs map_air.py after the light pass
+    return m

@@ -453,6 +453,12 @@ def main():
     if not args.no_light:
         import light
         light.light_pass(out, meta, scale, interior=meta["scene"].split("/")[-1] in INTERIORS)
+        if meta.get("air"):
+            # The map's air (final touches): perspective, haze, cloud banks, a mist layer.
+            import map_air
+            map_air.air_pass(out, meta, scale)
+            if "fog" in out and "fog" not in layers:
+                layers["fog"] = None
     save_layer(out["sky"], os.path.join(args.assets, "sky"), opaque=True)
     for name in layers:
         save_layer(out[name], os.path.join(args.assets, name), quality=86 if name != "fog" else 80)

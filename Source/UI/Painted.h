@@ -53,4 +53,6 @@ std::vector<LightSource> paintedLights(SceneId);
 // A tileable mist texture (procedural, generated once): the wisps that drift across the
 // painted scenes' low ground.
 const juce::Image& mistTexture();
+// Final touches: the shadows of passing clouds that drift over the map's land (tileable).
+const juce::Image& cloudShadowTexture();
 }

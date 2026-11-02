@@ -1687,12 +1687,13 @@ void testEditor(Suite& s, const juce::String& snapshot) {
         const auto regions = editor->lifeRegionsWithRates();
         double msPerSecond = 0.0;
         juce::Image canvas(juce::Image::RGB, editor->getWidth(), editor->getHeight(), true, juce::SoftwareImageType());
-        for (const int fps : { 30, 15, 10, 5 }) {
+        for (const int fps : { 30, 15, 10, 6, 5 }) {
             juce::RectangleList<int> clip;
             for (const auto& [r, rate] : regions) if (rate == fps) clip.addWithoutMerging(r);
             if (clip.isEmpty()) continue;
             const auto t0 = std::chrono::steady_clock::now();
             for (int k = 0; k < 5; ++k) {
+                if (fps == 6) editor->advanceAirForTest();   // the cloud shadows' step itself
                 juce::Graphics g(canvas);
                 g.reduceClipRegion(clip);
                 editor->paintEntireComponent(g, true);
@@ -1703,6 +1704,14 @@ void testEditor(Suite& s, const juce::String& snapshot) {
         }
         s.metric("editor CPU for the painted map's life (software, this container)", msPerSecond / 10.0, " % of one core");
         if (paintedArt) s.check(editor->emberCount() > 0, "light motes drift on the map", std::to_string(editor->emberCount()));
+        if (paintedArt) {
+            // Final touches: the map's air (cloud shadows at 6 fps, mist along the horizon).
+            bool shadows = false, mist = false;
+            for (const auto& [r, rate] : regions) { shadows = shadows || (rate == 6 && r.getHeight() > 100); mist = mist || rate == 10; }
+            s.check(shadows, "cloud shadows drift over the map's land (6 fps)");
+            s.check(mist, "mist drifts along the map's horizon (10 fps)");
+            s.check(msPerSecond / 10.0 < 20.0, "the map's life stays cheap (under 20 % of one core in software)", fmt(msPerSecond / 10.0) + " %");
+        }
     }
     {
         const auto begin = std::chrono::steady_clock::now();
@@ -2755,8 +2764,8 @@ int paintedSnapshots(const juce::String& directory) {
 
 #include "InstrumentTests.h"
 #include "WindowTests.h"
-
 #include "ShimmerTests.h"
+
 int main(int argc, char** argv) {
     juce::ScopedJuceInitialiser_GUI gui;
     juce::String snapshot;
@@ -2795,8 +2804,8 @@ int main(int argc, char** argv) {
     if (run("levels")) testLevels(s);
     if (run("musicality")) testMusicality(s);
     if (run("strength")) testStrength(s);
-    if (run("modules")) { testModules(s); testNewModules(s); }
     if (run("shimmer")) testShimmer(s);
+    if (run("modules")) { testModules(s); testNewModules(s); }
     if (run("rates")) testRates(s);
     if (run("extremes")) testExtremes(s);
     if (run("realtime")) testRealtime(s);

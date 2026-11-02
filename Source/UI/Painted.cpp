@@ -231,4 +231,44 @@ const juce::Image& mistTexture() {
     }();
     return texture;
 }
+
+const juce::Image& cloudShadowTexture() {
+    // Final touches: the shadows of passing clouds on the map's land. 256 x 128, tileable
+    // horizontally: soft, separate blobs of cool lavender shade (never grey).
+    static const juce::Image texture = [] {
+        constexpr int W = 256, H = 128;
+        juce::Image image(juce::Image::ARGB, W, H, true, juce::SoftwareImageType());
+        juce::Image::BitmapData d(image, juce::Image::BitmapData::writeOnly);
+        const auto lattice = [](int x, int y, int px, int py, std::uint32_t seed) {
+            x = ((x % px) + px) % px; y = ((y % py) + py) % py;
+            std::uint32_t h = static_cast<std::uint32_t>(x) * 0x8da6b343u ^ static_cast<std::uint32_t>(y) * 0xd8163841u ^ seed * 0xcb1ab31fu;
+            h ^= h >> 13; h *= 0x5bd1e995u; h ^= h >> 15;
+            return static_cast<float>(h & 0xffffu) / 65535.0f;
+        };
+        const auto periodic = [&](float x, float y, int px, int py, std::uint32_t seed) {
+            const int ix = static_cast<int>(std::floor(x)), iy = static_cast<int>(std::floor(y));
+            float tx = x - static_cast<float>(ix), ty = y - static_cast<float>(iy);
+            tx = tx * tx * (3 - 2 * tx); ty = ty * ty * (3 - 2 * ty);
+            const float a = lattice(ix, iy, px, py, seed), b = lattice(ix + 1, iy, px, py, seed);
+            const float c = lattice(ix, iy + 1, px, py, seed), e = lattice(ix + 1, iy + 1, px, py, seed);
+            return a + (b - a) * tx + (c - a) * ty + (a - b - c + e) * tx * ty;
+        };
+        for (int y = 0; y < H; ++y)
+            for (int x = 0; x < W; ++x) {
+                float v = 0, amp = 1, total = 0;
+                for (int o = 0; o < 4; ++o) {
+                    const int px = 4 << o, py = 2 << o;
+                    v += amp * periodic(static_cast<float>(x) * static_cast<float>(px) / W, static_cast<float>(y) * static_cast<float>(py) / H, px, py, 7u + static_cast<std::uint32_t>(o) + 31u);
+                    total += amp; amp *= 0.5f;
+                }
+                v /= total;
+                const float a = juce::jlimit(0.0f, 1.0f, (v - 0.52f) * 3.2f);
+                // Vertical fade (the sheet has no hard top or bottom edge), slate tint.
+                const float fade = std::pow(std::sin(juce::MathConstants<float>::pi * (static_cast<float>(y) + 0.5f) / H), 1.5f);
+                d.setPixelColour(x, y, juce::Colour(0xff4a4878).withAlpha(a * a * (3 - 2 * a) * fade * 0.17f));   // lavender shade
+            }
+        return image;
+    }();
+    return texture;
+}
 }

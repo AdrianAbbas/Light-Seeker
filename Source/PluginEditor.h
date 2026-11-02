@@ -107,9 +107,12 @@ public:
         for (const auto& e : embers) r.push_back({ juce::Rectangle<float>(e.size * 8.0f, e.size * 8.0f).withCentre(e.p).getSmallestIntegerContainer(), 30 });
         if (!mistArea().isEmpty()) r.push_back({ mistArea(), 10 });
         if (!moonArea().isEmpty()) r.push_back({ moonArea(), 5 });
+        if (!airArea().isEmpty()) r.push_back({ airArea(), 6 });
         return r;
     }
     void setAnimation(bool on) { animateLife = on; wakeTimer(); }
+    // Tests: one step of the map's cloud shadows (what the 6 fps tick costs besides its repaint).
+    void advanceAirForTest();
     int emberCount() const noexcept { return static_cast<int>(embers.size()); }
     bool sceneLayered() const noexcept { return planes.layered(); }
     // Tests and snapshots: render the pending scenes on this thread and finish any
@@ -284,6 +287,18 @@ private:
     void stepEmbers(float dt);
     juce::Rectangle<int> moonArea() const;
     juce::Rectangle<int> mistArea() const;
+    // Final touches, the map's air: the land where cloud shadows drift (painted map only).
+    juce::Rectangle<int> airArea() const;
+    // The cloud shadows are composited over the frame into `airFrame` at 6 fps (in the
+    // frame's pixels); every repaint on the map blits it, so the small regions of the motes
+    // and glints never redraw the shadows. Only the map.
+    void paintMapAir(juce::Graphics&, double now, float pixelScale);
+    void refreshAirFrame(double now);
+    juce::Image airFrame, airSource;
+    // Soft textures pre-scaled once to the size they are drawn at (cloud shadows, mist):
+    // each frame is then a 1:1 blit, not a resampled stretch.
+    std::array<juce::Image, 4> scaledTiles;
+    const juce::Image& scaledTile(std::size_t slot, const juce::Image& source, int width, int height);
     void drawPlanes(juce::Graphics&, const dc::art::Planes&, const juce::Image& flat, std::array<float, 4> scales, juce::Point<float> about, float alpha);
     juce::Rectangle<int> lifeArea(const dc::art::LightSource&) const;
     void refreshLights();

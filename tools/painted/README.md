@@ -31,6 +31,10 @@ paint.py    denoise (OIDN), haze by layer (pale blue-cream air) and inside each 
             curve, a high-key grade (cream highlights, lavender shadows), a light-handed
             Kuwahara (oil paint), brush streaks, dabs, fine grain; the sky where none is
             rendered; writes the finished layers
+map_air.py  the map's air (final touches), after the light pass: atmospheric perspective on the
+            land, haze layered on the far ranges (more at their foot), cloud banks behind the
+            peaks (warm tops, lavender undersides), stratus collars, and a mist layer (horizon,
+            valleys, river and sea) that keeps clear of the landmarks
 build.py    all of the above for every scene (or a list), then writes Source/UI/PaintedManifest.inc
 ```
 

@@ -435,7 +435,27 @@ void LightSeekerView::refreshFrame() {
     if (transition.active) return;
     const auto px = pixelSize();
     auto image = cache.get(scene, px.x, px.y);   // queues the scene if it is not ready
-    if (image.isValid() && !(image == frame)) { frame = image; repaint(); }
+    if (image.isValid() && !(image == frame)) { frame = image; refreshAirFrame(nowSeconds()); repaint(); }
+}
+
+void LightSeekerView::advanceAirForTest() { refreshAirFrame(nowSeconds()); }
+
+void LightSeekerView::refreshAirFrame(double now) {
+    if (!animateLife || airArea().isEmpty() || !frame.isValid()) { airFrame = {}; return; }
+    // A new frame (another size, or the scene changed): copied whole once.
+    const bool fresh = airFrame.getBounds() != frame.getBounds() || airFrame.getFormat() != frame.getFormat() || airSource != frame;
+    if (airFrame.getBounds() != frame.getBounds() || airFrame.getFormat() != frame.getFormat())
+        airFrame = juce::Image(frame.getFormat(), frame.getWidth(), frame.getHeight(), false, juce::SoftwareImageType());
+    airSource = frame;
+    const float ps = static_cast<float>(frame.getWidth()) / static_cast<float>(std::max(1, getWidth()));
+    const auto area = airArea();
+    const auto pixels = juce::Rectangle<float>(area.toFloat()).transformedBy(juce::AffineTransform::scale(ps)).getSmallestIntegerContainer()
+                            .getIntersection(frame.getBounds());
+    juce::Graphics g(airFrame);
+    if (fresh) g.drawImageAt(frame, 0, 0);
+    else { g.saveState(); g.reduceClipRegion(pixels); g.drawImageAt(frame, 0, 0); g.restoreState(); }
+    g.reduceClipRegion(pixels);
+    paintMapAir(g, now, ps);
 }
 
 void LightSeekerView::travelManually(int l, int k) {
@@ -733,6 +753,8 @@ void LightSeekerView::timerCallback() {
         }
         if (painted && lifeTick % 3 == 0 && !mistArea().isEmpty()) repaint(mistArea());
         if (painted && lifeTick % 6 == 0 && !moonArea().isEmpty()) repaint(moonArea());
+        // The map's cloud shadows: slow, so 6 fps is smooth (a fraction of a pixel a frame).
+        if (painted && lifeTick % 5 == 0 && !airArea().isEmpty()) { refreshAirFrame(now); repaint(airArea()); }
     }
     if (!busy) stopTimer();
 }
@@ -860,6 +882,13 @@ void LightSeekerView::refreshLights() {
     emberSources.clear();
     for (const auto& l : lights)
         if (planes.layered() && (l.kind == 0 || l.kind == 5)) emberSources.push_back(l);
+    if (scene.isMap() && planes.layered()) {
+        // Final touches: light motes rising over the sunlit land, under the sun and across
+        // the fields (sources of motes only, no glow of their own).
+        for (const auto& p : { juce::Point<float>(790, 104), juce::Point<float>(470, 122), juce::Point<float>(640, 118),
+                               juce::Point<float>(250, 150), juce::Point<float>(830, 200), juce::Point<float>(400, 245) })
+            emberSources.push_back({ p, 30.0f, 0 });
+    }
     embers.clear();
     birds.clear();
     // A visible sky: the top of the back plane mostly blue (sampled once per scene).
@@ -1042,8 +1071,56 @@ juce::Rectangle<int> LightSeekerView::mistArea() const {
     // Above the controls: under them the mist would only make the controls repaint.
     if (!planes.fog.isValid()) return {};
     const float sy = static_cast<float>(getHeight()) / dc::art::virtualHeight;
+    if (view == View::Map && scene.isMap()) {
+        // The map: the haze drifts along the horizon, at the foot of the far ranges.
+        return juce::Rectangle<float>(0.0f, 62.0f * sy, static_cast<float>(getWidth()), 78.0f * sy).getSmallestIntegerContainer();
+    }
     const float bottom = controlsShown ? controlsArea().getY() - 36.0f : 540.0f * sy;
     return juce::Rectangle<float>(0.0f, bottom - 150.0f * sy, static_cast<float>(getWidth()), 150.0f * sy).getSmallestIntegerContainer();
+}
+
+juce::Rectangle<int> LightSeekerView::airArea() const {
+    // The map's land, from just under the horizon to above the controls.
+    if (view != View::Map || !scene.isMap() || !planes.layered()) return {};
+    const float sy = static_cast<float>(getHeight()) / dc::art::virtualHeight;
+    const float bottom = controlsShown ? controlsArea().getY() - 36.0f : static_cast<float>(getHeight());
+    const float top = 92.0f * sy;
+    if (bottom <= top) return {};
+    return juce::Rectangle<float>(0.0f, top, static_cast<float>(getWidth()), bottom - top).getSmallestIntegerContainer();
+}
+
+const juce::Image& LightSeekerView::scaledTile(std::size_t slot, const juce::Image& source, int width, int height) {
+    auto& tile = scaledTiles[slot];
+    width = std::max(1, width); height = std::max(1, height);
+    if (tile.getWidth() != width || tile.getHeight() != height)
+        tile = source.rescaled(width, height, juce::Graphics::highResamplingQuality);
+    return tile;
+}
+
+void LightSeekerView::paintMapAir(juce::Graphics& g, double now, float ps) {
+    const auto area = juce::Rectangle<float>(airArea().toFloat()).transformedBy(juce::AffineTransform::scale(ps)).getSmallestIntegerContainer();
+    if (area.isEmpty() || !g.clipRegionIntersects(area)) return;
+    // Shadows of passing clouds drifting across the sunlit land: two sheets, the far one
+    // smaller and slower (perspective), soft lavender shade. A tileable texture, scaled.
+    const auto& tex = dc::art::cloudShadowTexture();
+    const float sx = ps * static_cast<float>(getWidth()) / dc::art::virtualWidth;
+    const float t = static_cast<float>(std::fmod(now, 20000.0));
+    const auto band = area.toFloat();
+    const float bottom = ps * static_cast<float>(getHeight()) * 540.0f / dc::art::virtualHeight;   // the land's own extent
+    const struct { float from, to, scale, speed; } sheets[] = { { 0.0f, 0.42f, 0.55f, 2.6f }, { 0.28f, 1.0f, 1.0f, 5.5f } };
+    g.saveState();
+    g.reduceClipRegion(area);
+    std::size_t slot = 0;
+    for (const auto& sheet : sheets) {
+        const int y0 = juce::roundToInt(band.getY() + (bottom - band.getY()) * sheet.from), y1 = juce::roundToInt(band.getY() + (bottom - band.getY()) * sheet.to);
+        const int w = juce::roundToInt(520.0f * sx * sheet.scale);
+        const auto& tile = scaledTile(slot++, tex, w, y1 - y0);
+        int x = static_cast<int>(std::fmod(t * sheet.speed * sx, static_cast<float>(w)));
+        if (x > 0) x -= w;
+        for (; x < area.getRight(); x += w)
+            if (g.clipRegionIntersects({ x, y0, w, tile.getHeight() })) g.drawImageAt(tile, x, y0);
+    }
+    g.restoreState();
 }
 
 void LightSeekerView::paintMoonGlow(juce::Graphics& g, double now) {
@@ -1071,15 +1148,17 @@ void LightSeekerView::paintMist(juce::Graphics& g, double now) {
     const struct { float height, speed, alpha; } sheets[] = { { 1.0f, 7.0f, 0.5f }, { 0.7f, -4.5f, 0.38f } };
     g.saveState();
     g.reduceClipRegion(area);
+    std::size_t slot = 2;
     for (const auto& sheet : sheets) {
-        const float h = band.getHeight() * sheet.height;
-        const float w = h * static_cast<float>(tex.getWidth()) / static_cast<float>(tex.getHeight());
-        const float y = band.getBottom() - h;
-        float x = std::fmod(t * sheet.speed * static_cast<float>(getWidth()) / dc::art::virtualWidth, w);
+        const int h = juce::roundToInt(band.getHeight() * sheet.height);
+        const int w = juce::roundToInt(static_cast<float>(h) * static_cast<float>(tex.getWidth()) / static_cast<float>(tex.getHeight()));
+        const auto& tile = scaledTile(slot++, tex, w, h);
+        const int y = juce::roundToInt(band.getBottom()) - h;
+        int x = static_cast<int>(std::fmod(t * sheet.speed * static_cast<float>(getWidth()) / dc::art::virtualWidth, static_cast<float>(w)));
         if (x > 0) x -= w;
         g.setOpacity(sheet.alpha);
-        for (; x < band.getRight(); x += w)
-            g.drawImage(tex, juce::Rectangle<float>(x, y, w + 1.0f, h), juce::RectanglePlacement::stretchToFit);
+        for (; x < area.getRight(); x += w)
+            if (g.clipRegionIntersects({ x, y, w, h })) g.drawImageAt(tile, x, y);
     }
     g.restoreState();
 }
@@ -1367,7 +1446,8 @@ void LightSeekerView::paint(juce::Graphics& g) {
         // again from the frame (the scene at rest); never a fill over the art. Only before
         // the very first scene is ready, a soft sky.
         juce::ignoreUnused(px);
-        if (frame.isValid()) g.drawImage(frame, getLocalBounds().toFloat());
+        if (view == View::Map && airFrame.isValid() && animateLife) g.drawImage(airFrame, getLocalBounds().toFloat());
+        else if (frame.isValid()) g.drawImage(frame, getLocalBounds().toFloat());
         else {
             g.setGradientFill(juce::ColourGradient(juce::Colour(0xffa9c8ec), 0.0f, 0.0f, juce::Colour(0xfff6ecd8), 0.0f, static_cast<float>(getHeight()) * 0.7f, false));
             g.fillAll();

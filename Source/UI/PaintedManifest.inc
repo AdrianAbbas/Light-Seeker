@@ -28,7 +28,7 @@ static const PaintedAnchor anchors21[] = { { 0, 720.5f, 174.8f, 0.0f }, { 0, 480
 static const PaintedAnchor anchors22[] = { { 0, 480.0f, 376.2f, 0.0f }, { 0, 480.0f, 246.5f, 1.0f }, { 0, 424.1f, 261.4f, 2.0f }, { 3, 480.0f, 260.6f, 26.0f } };
 static const PaintedAnchor anchors23[] = { { 0, 480.0f, 569.5f, 0.0f }, { 0, 405.9f, 246.2f, 1.0f }, { 0, 538.7f, 304.8f, 2.0f }, { 3, 480.0f, 273.8f, 30.0f }, { 3, 376.6f, 291.3f, 16.0f }, { 3, 553.3f, 301.3f, 16.0f } };
 static const PaintedAnchor anchors24[] = { { 0, 348.5f, 311.6f, 0.0f }, { 0, 237.0f, 286.8f, 1.0f }, { 0, 537.7f, 465.1f, 2.0f }, { 3, 346.8f, 302.9f, 26.0f }, { 3, 139.3f, 300.0f, 14.0f } };
-static const PaintedAnchor anchors25[] = { { 1, 480.0f, 186.5f, 0.0f }, { 1, 692.3f, 174.6f, 1.0f }, { 1, 153.8f, 281.1f, 2.0f }, { 1, 904.4f, 285.4f, 3.0f }, { 1, 322.0f, 357.9f, 4.0f }, { 1, 684.8f, 328.0f, 5.0f }, { 1, 320.5f, 157.9f, 6.0f }, { 1, 570.0f, 348.8f, 7.0f }, { 1, 234.3f, 210.1f, 8.0f }, { 1, 814.1f, 152.4f, 9.0f }, { 6, 480.0f, 142.9f, 30.0f }, { 6, 687.8f, 295.0f, 20.0f }, { 6, 904.9f, 282.6f, 18.0f }, { 2, 480.0f, 170.7f, 24.0f }, { 2, 686.0f, 314.4f, 18.0f }, { 2, 232.3f, 190.5f, 16.0f } };
+static const PaintedAnchor anchors25[] = { { 1, 480.0f, 192.2f, 0.0f }, { 1, 686.0f, 183.5f, 1.0f }, { 1, 155.0f, 278.6f, 2.0f }, { 1, 904.2f, 281.8f, 3.0f }, { 1, 317.8f, 347.1f, 4.0f }, { 1, 687.1f, 321.1f, 5.0f }, { 1, 325.9f, 169.2f, 6.0f }, { 1, 571.9f, 339.4f, 7.0f }, { 1, 239.3f, 214.3f, 8.0f }, { 1, 802.4f, 164.3f, 9.0f }, { 6, 480.0f, 149.4f, 30.0f }, { 6, 690.0f, 287.2f, 20.0f }, { 6, 904.7f, 278.9f, 18.0f }, { 2, 480.0f, 176.7f, 24.0f }, { 2, 688.3f, 307.2f, 18.0f }, { 2, 237.5f, 195.0f, 16.0f } };
 static const PaintedAnchor anchors26[] = { { 0, 314.6f, 322.1f, 0.0f }, { 0, 480.0f, 264.4f, 1.0f }, { 0, 644.3f, 281.0f, 2.0f }, { 6, 480.0f, 279.3f, 26.0f }, { 6, 441.0f, 347.0f, 14.0f }, { 6, 524.1f, 347.0f, 14.0f } };
 static const PaintedAnchor anchors27[] = { { 0, 488.7f, 344.8f, 0.0f }, { 0, 554.9f, 275.0f, 1.0f }, { 0, 497.7f, 277.2f, 2.0f } };
 static const PaintedAnchor anchors28[] = { { 0, 480.0f, 353.0f, 0.0f }, { 0, 480.0f, 322.9f, 1.0f }, { 0, 664.2f, 310.5f, 2.0f } };
@@ -62,7 +62,7 @@ static const PaintedScene paintedScenes[] = {
     { "golden-cathedral/choir-loft", "sky|far|mid|near", { 480.0f, 140.0f, 60.0f }, anchors22, 4 },
     { "golden-cathedral/nave-of-light", "sky|far|mid", { 480.0f, 120.0f, 60.0f }, anchors23, 6 },
     { "golden-cathedral/stained-glass-chapel", "sky|far|mid", { 480.0f, 150.0f, 60.0f }, anchors24, 5 },
-    { "map", "sky|far|mid", { 760.0f, 40.0f, 60.0f }, anchors25, 16 },
+    { "map", "sky|far|mid|fog", { 790.0f, 36.0f, 60.0f }, anchors25, 16 },
     { "royal-gardens/fountain-court", "sky|far|mid|near", { 480.0f, 100.0f, 60.0f }, anchors26, 6 },
     { "royal-gardens/marble-colonnade", "sky|far|mid|near", { 300.0f, 110.0f, 60.0f }, anchors27, 3 },
     { "royal-gardens/rose-garden", "sky|far|mid|near", { 640.0f, 110.0f, 60.0f }, anchors28, 3 },

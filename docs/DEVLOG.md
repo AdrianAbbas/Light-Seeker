@@ -125,9 +125,9 @@ usage limit or a compaction) continues from the first unticked line. Push to `ma
 
 **Final touches: the map's air and a Shimmer control** (see "Final touches" below; no other sound changes)
 
-- [ ] F1a. Map: realistic background mountains (layered ranges, snow, aerial perspective), the sun in the sky above them, re-rendered with contre-jour light; landmarks where they were
-- [ ] F1b. Map air pass: atmospheric perspective, layered haze, valley and sea mist (fog layer), cloud banks (warm tops, lavender undersides), rays, Orton glow, restrained; labels readable
-- [ ] F1c. Map life: drifting cloud shadows, mist and light motes (cheap, <= 30 fps, double-buffered); landmarks clickable; snapshots before/after; editor CPU; push `[skip ci]`
+- [x] F1a. Map: realistic background mountains (layered ranges, snow, aerial perspective), the sun in the sky above them, re-rendered with contre-jour light; landmarks where they were
+- [x] F1b. Map air pass: atmospheric perspective, layered haze, valley and sea mist (fog layer), cloud banks (warm tops, lavender undersides), rays, Orton glow, restrained; labels readable
+- [x] F1c. Map life: drifting cloud shadows, mist and light motes (cheap, <= 30 fps, double-buffered); landmarks clickable; snapshots before/after; editor CPU; push `[skip ci]`
 - [x] F2a. Shimmer about 20 % lower by default; a "Shimmer" parameter (0-150 %, default 100 %) scaling every shimmer, octave-shimmer and sparkle stage in both plug-ins, smoothed; saved; old sessions at the default; push `[skip ci]`
 - [x] F2b. The Shimmer slider with the main controls (light style); tests (0/100/150 % level-matched, no clicks, shimmer energy scales, strength at default, nothing else changed); push `[skip ci]`
 - [ ] F3. Whole suite green, DEVLOG handoff; final push without `[skip ci]`, CI green
@@ -1386,3 +1386,119 @@ and x86_64 77 passed each, auval and the AU harness for both plug-ins, the packa
 - Blender 5.2 writes only the Combined pass to the layers' EXR here, so the aerial perspective
   inside a layer follows the horizon line, not a depth pass.
 - The journey preset "Flight of the Dragon" keeps its name (no dragon is shown).
+
+---
+
+## Final touches: the map's air and a Shimmer control (2026-11-02)
+
+The developer: the sound and the look are great; two final touches. The map should be more
+atmospheric (this DEVLOG had noted it was still the most "3D" image, with little air), with
+the same light language as the re-lit scenes; then (a message during the work) the mountains
+in the background more realistic. And the shimmer a little lower everywhere, with a Shimmer
+control in both plug-ins. No other sound changes.
+
+### 1. The map: realistic mountains, the sun in the sky, air
+
+**What was wrong**: the camera looked down so steeply that the horizon was 40 px from the
+top; a single wall of ridged noise (`D.mountains`, snow on every crest) filled the whole
+top of the picture, and the sun was hidden behind it. No sky, no distance, no air.
+
+**The composition** (`tools/painted/scenes.py`, `v2_map`): the camera a little lower and
+wider (`(0, -450, 400)`, 26 mm instead of `(0, -520, 470)`, 28 mm), found by a search that
+keeps every landmark within 12 px of where it was (they are; the anchors are re-projected
+and compiled in, so they stay clickable) while the horizon comes down to y = 84. Behind
+the land, three planes, each paler and cooler than the last:
+- **Foothills** (the land's layer: no shadow seam): rolling wooded domes several times
+  wider than tall, soft fBm bumps (the crowns of woods), no snow.
+- **A middle range** (far layer), wooded and hazy, mostly hidden behind the foothills.
+- **The great range** (far layer, 8-11 km off): `D.alpine`, a new builder in `detail.py`:
+  distinct massifs (cones about as wide as tall, slopes of 30-40 degrees as in real
+  ranges) joined by a ridge spine, saddles between them, domain-warped ridged noise carving
+  arêtes and gullies that deepen with height (a cheap stand-in for erosion), the foot fading
+  into the plain; snow above the snow line on the gentler faces.
+- **The sun in the picture** at (790, 36), above the range, top right (first at 585, behind
+  the title: moved). The key light comes from it (`render.py` `backlight`): contre-jour,
+  landmarks and trees with lit rims, long shadows towards the viewer.
+- The volumetric cloud banks were dropped: at this distance they rendered as flat cream
+  ellipses and cost most of the render time (the far layer now takes 14 s instead of 2 min).
+
+**The air** (`tools/painted/map_air.py`, run by `paint.py` after the light pass for scenes
+whose meta sets `air`; reproducible from the scripts):
+- *Atmospheric perspective* on the land: distance from a ground-plane proxy
+  (`(h - horizon) / (y - horizon)`), the land paler (towards a cool blue-lavender haze, warm
+  cream-gold near the sun), less saturated and a little softer with distance (at the
+  landmarks' row about 15 %, near the horizon about 35 %).
+- *Layered haze* on the ranges: 10 % at the summits, up to 42 % at their foot (low-lying
+  haze), so each range stands in front of the next.
+- *Cloud banks* along the horizon behind the peaks (sky layer): flat bases, billowing tops,
+  lit from above and towards the sun (density sampled towards the light): warm cream-gold
+  tops, lavender undersides, a silver-gold lining near the sun; the sun's disc kept clear.
+  Thin stratus collars under the great range's skyline.
+- *Mist*, a new **fog layer** (half resolution): a band along the horizon at the foot of
+  the foothills, patchy low wisps in the valleys of the middle distance, mist over the river
+  and the sea (found as pale water in the land layer); kept clear of every landmark (a soft
+  hole 48 px around each anchor), so labels and landmarks stay readable.
+- The rays, rims, light wrap and Orton glow are the light pass's (`light.py`), now with a
+  visible sun to stream from; no extra glow was added (restraint).
+
+**The life** (`PluginEditor.cpp`, only on the map, off in Eco):
+- *Cloud shadows* drift across the land: a tileable texture of soft lavender shade
+  (`cloudShadowTexture`), two sheets (the far one smaller and slower: perspective),
+  composited over the frame into a cached image (`airFrame`) at 6 fps; every repaint on the
+  map blits that cache, so the motes' and glints' small regions never redraw the shadows.
+  The tiles are pre-scaled once to their drawn size (`scaledTile`): each step is a 1:1 blit.
+- *Mist* drifts along the horizon (the existing mist sheets, in a band at the foot of the
+  ranges on the map; 10 fps; also pre-scaled tiles now, in every scene).
+- *Light motes* rise over the sunlit land (six mote sources: under the sun and across the
+  fields), and the doves now pass over the map too (its sky is visible).
+- Cost (software rendering, this container): the map's life 7.0-7.1 % of one core (it was
+  4.7 % with no shadows, no mist and fewer motes; 23 % before the cache and the pre-scaled
+  tiles), a full repaint of the map 4.8-5.0 ms. Double-buffered as before, at most 30 fps.
+
+Snapshots: `docs/snapshots/map.jpg` and the three zoom frames (the editor at 200 %),
+`docs/snapshots/before/map.jpg` (the map before), `docs/snapshots/before-after/map.jpg`.
+The map's layers: 1.1 MB, as before (the fog layer is 52 KB).
+
+### 2. Shimmer: about 20 % lower, and a control
+
+**The stages it scales** (every shimmer, octave-shimmer and sparkle stage, in both plug-ins):
+- the signatures' shimmer and sparkle layers: pitch layers above the note that are not a
+  sung choir (the Throne's gold halo, Moonwell's water glass, Starlit Canopy's harmonics,
+  Diamond Vault's sparkle, Sky Harbour's rising fifth, Fountain Court, Mushroom Ring,
+  Firefly Hollow's glitter, Summit of Winds' soaring octave), the Cloud Steps spiral, the
+  Prism Hall prism, the Stained Glass hue shimmer: **15 % lower** at 100 %;
+- the shimmer cascades fed back into the reverbs (the Crypt's loop shimmer and the Vault's
+  octave cascade): **25 % lower** (they build up in the tail);
+- the instrument's own shimmer reverb (its places' instruments, e.g. Crystal Bells,
+  Shimmering Pluck): **20 % lower**.
+Overall about 19 % less shimmer energy at the default (measured: 1.6-1.9 dB below the
+design). The choirs (Sanctum, Choir Loft: formant voices) and the Atmosphere's fountain
+shimmer (a sound of the place, not an effect) are not shimmer stages.
+
+**Why the split bases**: with every stage 20 % lower the Throne of Light at Intensity 50 %
+measured 9.99 against its gate of 9.99 (it was 10.08: its halo is most of what it adds at
+half intensity). Lowering the reverb cascades more and the layers less keeps the overall
+cut and passes: 10.02. The Moonwell's reverb shimmer stays as designed at 100 % (its glassy
+signature shimmer is 15 % lower like every other): with any cut there it drifted towards
+Starlit Canopy in the distinctness gate (10.0 before, 9.1-9.7 with cuts of 15-25 %, 10.3
+with its reverb shimmer as designed). The slider still scales it from 0 to 150 %.
+
+**The control**: `shimmer` (Parameters.h, added last in both plug-ins), "Shimmer", 0-150 %,
+default 100 %, automatable, in the state (sessions, user presets, A/B, undo); a session
+saved before it opens at 100 %; a factory preset sets 100 %. Each module smooths its own
+amount (the Signature's shimmer gain over 50 ms, the Crypt's and Vault's shimmer amounts
+over 40-50 ms, the instrument's bus send over 80 ms), so moving it never clicks. The fader
+sits in the Levels group between Mix and Output (the faders a little narrower to fit).
+Level trims re-measured for the places whose raw level moved (up to 0.7 dB, Stained Glass
+Chapel); the captured spaces' trims kept (CI calibrates with the captures).
+
+**Tests** (`shimmer` group, `Tests/ShimmerTests.h`; in the Linux strength shard): the
+parameter in both plug-ins (range, default, automatable, text), saved and restored, an older
+session at 100 %, a user preset with it, a factory preset at 100 % (unmodified), moving it
+marks the preset modified; on seven places with every kind of stage, the shimmer's own
+energy (the difference from 0 %, the engine without the matcher) at 150 % about 1.5x that of
+100 % (+2.9 to +3.4 dB) and 100 % 15-25 % below the design; every place without a shimmer
+stage sample-identical at 0 % and 150 % (13 places); level-matched at 0 / 100 / 150 %
+through the processor (within 1.5 dB); no clicks while it sweeps 0 → 150 → 0 % every
+64-sample block and jumps (against the same timeline held at 150 %: glitter has steps of
+its own); the instrument's Crystal Bells shimmer grows with it, click-free.
