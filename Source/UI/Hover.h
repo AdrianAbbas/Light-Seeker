@@ -12,7 +12,7 @@ namespace dc::ui {
 
 class HoverButton : public juce::Button {
 public:
-    using juce::Button::Button;
+    explicit HoverButton(const juce::String& name) : juce::Button(name) {}
     bool hot() const noexcept { return hovered; }
     void setHot(bool on) {
         if (on == hovered) return;

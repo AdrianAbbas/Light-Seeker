@@ -139,7 +139,7 @@ private:
     // are in, its name on hover.
     class HotspotButton final : public dc::ui::HoverButton {
     public:
-        HotspotButton() : dc::ui::HoverButton({}) {}
+        HotspotButton() : dc::ui::HoverButton(juce::String()) {}
         void paintHover(juce::Graphics&, bool hover, bool down) override;
     };
     // An entry of the place list (top right): the selected place a gold diamond, its name
@@ -147,7 +147,7 @@ private:
     // moment the mouse leaves (Direction Update 2).
     class PlaceButton final : public dc::ui::HoverButton {
     public:
-        PlaceButton() : dc::ui::HoverButton({}) {}
+        PlaceButton() : dc::ui::HoverButton(juce::String()) {}
         void paintHover(juce::Graphics&, bool hover, bool down) override;
     };
     // The Advanced drawer: one row per module parameter, grouped by module.
