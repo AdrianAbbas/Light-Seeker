@@ -9,6 +9,7 @@ frame. paint.py turns these into the painted layers.
 """
 import argparse
 import json
+import math
 import os
 import sys
 import time
@@ -33,6 +34,7 @@ def main():
     build = scenes.REGISTRY[args.scene]
     meta = build()
     finish.finish(verbose=True)   # smooth shading, bevels, subdivision, broken rock (Direction Update 2)
+    backlight(meta, args.scene)   # contre-jour: the key light from the painted sun
     width, height = int(round(1920 * args.scale)), int(round(1120 * args.scale))
     blib.configure(width, height, args.samples)
 
@@ -54,12 +56,54 @@ def main():
     for layer in wanted:
         t = time.time()
         sc = blib.bpy.context.scene
-        # The fog layer is soft: render it at half resolution.
-        scale = 0.5 if layer == "fog" else 1.0
+        # The fog layer is soft: render it at half resolution. The far layer (distant ranges
+        # and the heaped volumetric cumulus, hazed and softened when painted) at 70 % and
+        # fewer samples: the clouds cost most of the render time.
+        scale = {"fog": 0.5, "far": 0.7}.get(layer, 1.0)
         sc.render.resolution_x, sc.render.resolution_y = int(width * scale), int(height * scale)
-        sc.cycles.samples = args.samples if layer != "fog" else max(16, args.samples // 2)
+        sc.cycles.samples = args.samples if layer not in ("fog", "far") else max(12, args.samples // 2)
         blib.render_layer(layer, os.path.join(os.path.abspath(args.out), layer + ".exr"))
         print(f"[{args.scene}] {layer}: {time.time() - t:.1f} s", flush=True)
+
+
+INTERIORS = {"hall-of-mirrors", "throne-of-light", "prism-hall", "diamond-vault", "choir-loft", "nave-of-light", "stained-glass-chapel", "sanctum"}
+
+
+def backlight(meta, scene):
+    """Contre-jour (Direction Update 2). The scenes were lit from behind the viewer while
+    their painted sun shone in the sky ahead: light and picture disagreed, and frontal
+    light is flat. Now the key light comes from where the sun is painted (raised to at
+    least 24 degrees so the fronts are not all in shadow): every edge facing it gets a
+    hot rim, shadows fall towards the viewer, the silhouettes glow. The old frontal key
+    stays as a soft warm fill (light bounced back from a sunny world), the sky as the
+    blue fill. Interiors keep their window light."""
+    from mathutils import Vector
+    bpy = blib.bpy
+    if scene.split("/")[-1] in INTERIORS:
+        return
+    key = bpy.data.objects.get("sun")
+    moon = meta.get("sky", {}).get("moon")
+    if key is None or key.type != "LIGHT" or not moon:
+        return
+    old_dir = (key.rotation_euler.to_matrix() @ Vector((0, 0, 1))).normalized()
+    strength = key.data.energy
+    _, d = blib.screen_ray(moon[0], moon[1])
+    d = Vector(d)
+    d.z = max(d.z, 0.0)
+    flat = Vector((d.x, d.y, 0)).normalized()
+    d = (flat * math.cos(math.radians(24)) + Vector((0, 0, math.sin(math.radians(24))))) if d.z < math.sin(math.radians(24)) else d.normalized()
+    key.rotation_euler = (-d).to_track_quat("-Z", "Y").to_euler()
+    key.data.energy = strength * 1.25
+    key.data.color = (1.0, 0.84, 0.62)
+    blib.sun(old_dir, (1.0, 0.88, 0.82), strength * 0.38, angle=14.0, name="frontfill")
+    # The physical sky lights the scene from the sun's side too.
+    w = bpy.context.scene.world
+    if w is not None and w.use_nodes:
+        for n in w.node_tree.nodes:
+            if n.type == "TEX_SKY":
+                n.sun_elevation = math.asin(max(0.05, d.z))
+                n.sun_rotation = math.atan2(d.x, d.y)
+    print("[backlight] sun from", tuple(round(c, 2) for c in d), flush=True)
 
 
 def bpy_objects():

@@ -300,6 +300,19 @@ def paint_sky(h, w, p, seed):
         lit = np.clip(0.55 + (mass - shift) * 9.0, 0.25, 1.15)
         cloud = np.array([1.0, 0.97, 0.93], np.float32) * lit[..., None] + np.array([0.62, 0.6, 0.82], np.float32) * (1 - np.clip(lit, 0, 1))[..., None] * 0.8
         cloud = cloud + np.array([1.0, 0.8, 0.5], np.float32) * (np.exp(-d / 220.0) * 0.5)[..., None]
+        # Silver linings (Direction Update 2): the edges of each cloud that face the sun
+        # glow gold, brightest near it; warm tops, cool lavender bases.
+        soft = ndimage.gaussian_filter(cover, h * 0.006)
+        inner = np.clip(cover - ndimage.gaussian_filter(cover, h * 0.012), 0, 1) * 3.0
+        gy, gx = np.gradient(soft)
+        nlen = np.hypot(gx, gy) + 1e-6
+        tx, ty = (mx - sx), (my - sy)
+        tlen = np.hypot(tx, ty) + 1e-6
+        facing = np.clip(-(gx * tx + gy * ty) / (nlen * tlen), 0, 1)
+        silver = inner * facing * (0.4 + 1.6 * np.exp(-d / 380.0))
+        cloud = cloud + np.array([1.0, 0.86, 0.6], np.float32) * silver[..., None]
+        base = np.clip(gy / (nlen + 1e-3), -1, 1)                 # density growing downwards: a top edge
+        cloud = cloud * (1 + 0.08 * base[..., None]) + np.array([0.55, 0.52, 0.78], np.float32) * np.clip(-base, 0, 1)[..., None] * 0.08
         out = out * (1 - cover[..., None]) + cloud * cover[..., None]
     # The sun: a bright disc with a soft rim.
     disc = np.clip((mr * 0.55 - d) / 2.0 + 0.5, 0, 1)
@@ -399,12 +412,17 @@ def over(dst, src):
     return src + dst * (1 - src[..., 3:4])
 
 
+# Scenes indoors: no sun in the picture (no rays or sun rim; the rest of the light pass).
+INTERIORS = {"hall-of-mirrors", "throne-of-light", "prism-hall", "diamond-vault", "choir-loft", "nave-of-light", "stained-glass-chapel", "sanctum"}
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("render")
     ap.add_argument("assets")
     ap.add_argument("--preview", default="")
     ap.add_argument("--width", type=int, default=0, help="output width (default: the render's)")
+    ap.add_argument("--no-light", action="store_true", help="skip the illustration light pass (comparisons)")
     args = ap.parse_args()
     meta = json.load(open(os.path.join(args.render, "anchors.json")))
     os.makedirs(args.assets, exist_ok=True)
@@ -414,11 +432,16 @@ def main():
     for name in meta["rendered"]:
         img = load_exr(os.path.join(args.render, name + ".exr"))
         layers[name] = img
-        if name != "fog":
+        if name not in ("fog", "far"):
             size = img.shape[:2]
     if size is None:
-        size = (1120, 1920)
+        size = (int(round(layers["far"].shape[0] / 0.7)), int(round(layers["far"].shape[1] / 0.7))) if "far" in layers else (1120, 1920)
     h, w = size
+    if "far" in layers and layers["far"].shape[:2] != (h, w):
+        # Rendered at 70 % (render.py): back to full size before painting.
+        f = layers["far"]
+        layers["far"] = np.dstack([ndimage.zoom(f[..., c], (h / f.shape[0], w / f.shape[1]), order=3)[:h, :w] for c in range(4)])
+        layers["far"][..., 3] = np.clip(layers["far"][..., 3], 0, 1)
     scale = w / 1920.0
     sky_params = meta.get("sky", {})
     out = {}
@@ -426,6 +449,10 @@ def main():
     for name, img in layers.items():
         s = scale * (0.5 if name == "fog" else 1.0)
         out[name] = process_layer(name, img, meta, seed + len(name), s)
+    # The illustration light (light.py): rays, light wrap, sun rim, glow, colour, vignette.
+    if not args.no_light:
+        import light
+        light.light_pass(out, meta, scale, interior=meta["scene"].split("/")[-1] in INTERIORS)
     save_layer(out["sky"], os.path.join(args.assets, "sky"), opaque=True)
     for name in layers:
         save_layer(out[name], os.path.join(args.assets, name), quality=86 if name != "fog" else 80)

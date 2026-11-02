@@ -22,7 +22,7 @@ VEGETATION = ("grass", "flower", "leaves", "blossom", "fringe", "petal", "sparkl
               "farwood", "valleywood", "elvenwood", "blossomwood", "fairywood", "_trunks", "_wood", "boughs")
 SKIP = ("fogcloud", "cloud", "fog", "glass", "mirror", "water", "sea", "river", "lake", "jet", "rays", "sky", "gate")
 ROCK = ("mesa", "isle", "peak", "ridge", "crag", "rock", "menhir", "lowerslope", "range", "cliff")
-SOFT = ("nest", "hoard", "cap", "stem", "pool", "well", "isletop", "mushroom", "bell", "dome", "spot", "egg")
+SOFT = ("nest", "hoard", "cap", "stem", "pool", "well", "mushroom", "bell", "dome", "spot", "egg")
 
 
 def _tex(name, kind, size, **props):
@@ -52,7 +52,7 @@ def finish(verbose=False):
         name = ob.name.lower()
         me = ob.data
         polys = len(me.polygons)
-        if polys <= 2 or any(v in name for v in VEGETATION) or any(s in name for s in SKIP) or _volume_only(ob):
+        if polys <= 2 or "isletop" in name or any(v in name for v in VEGETATION) or any(s in name for s in SKIP) or _volume_only(ob):
             continue
         dims = sorted(ob.dimensions)
         size = max(dims[1], 1e-3)          # the middle extent: a fair "how big"
@@ -70,10 +70,10 @@ def finish(verbose=False):
             if polys < 150000:
                 sub = ob.modifiers.new("subdiv", "SUBSURF")
                 sub.subdivision_type = "SIMPLE"; sub.levels = 0; sub.render_levels = 1
-            cell = _tex("rock_cells_%d" % int(size), "VORONOI", max(2.0, size * 0.035), distance_metric="DISTANCE", color_mode="INTENSITY",
+            cell = _tex("rock_cells_%d" % int(size), "VORONOI", max(4.0, size * 0.08), distance_metric="DISTANCE", color_mode="INTENSITY",
                         noise_intensity=1.0, weight_1=1.0, weight_2=-0.6)
-            lump = _tex("rock_lumps_%d" % int(size), "CLOUDS", max(4.0, size * 0.09), noise_depth=4)
-            for tex, strength in ((cell, 0.012), (lump, 0.02)):
+            lump = _tex("rock_lumps_%d" % int(size), "CLOUDS", max(4.0, size * 0.12), noise_depth=5)
+            for tex, strength in ((cell, 0.008), (lump, 0.03)):
                 d = ob.modifiers.new("displace", "DISPLACE")
                 d.texture = tex; d.texture_coords = "OBJECT"; d.strength = size * strength; d.mid_level = 0.5
             counts["rock"] += 1

@@ -751,8 +751,8 @@ def configure(width, height, samples):
     sc.cycles.volume_bounces = 1
     sc.cycles.transparent_max_bounces = 8
     try:
-        sc.cycles.volume_step_rate = 2.0
-        sc.cycles.volume_max_steps = 256
+        sc.cycles.volume_step_rate = 4.0      # the heaped cumulus (Direction Update 2): coarser steps, soft anyway
+        sc.cycles.volume_max_steps = 128
     except Exception:
         pass
     sc.render.film_transparent = True

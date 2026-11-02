@@ -991,8 +991,10 @@ def v2_light(key=(-0.55, -0.35, 0.75), strength=5.5, sky=0.2, rim=1.4):
 def v2_meadow(seed, ground, kinds=BLOOM, width=45, depth=70, grass_n=200000, flowers_n=14000, trees=((-24, 34, 20, "green"), (26, 44, 17, "blossom"))):
     B.heightfield(ground, -width * 2, width * 2, -10, depth, 160, 110, "near", D.mat_ground())
     D.grass(ground, -width, width, -8, depth, grass_n, "near", seed, height=(0.2, 0.55))
-    D.flowers(ground, -12, 12, -4, 10, flowers_n // 2, "near", seed + 1, size=0.16, kinds=kinds, stem=0.3)
-    D.flowers(ground, -width * 0.9, width * 0.9, -6, depth * 0.85, flowers_n, "near", seed + 2, size=0.22, kinds=kinds, stem=0.45)
+    # Fewer, bigger flowers close to the eye (each one readable, the grass between them),
+    # denser drifts of small ones further off (Direction Update 2).
+    D.flowers(ground, -12, 12, -4, 10, flowers_n // 14, "near", seed + 1, size=0.3, kinds=kinds, stem=0.35)
+    D.flowers(ground, -width * 0.9, width * 0.9, -6, depth * 0.85, flowers_n // 3, "near", seed + 2, size=0.22, kinds=kinds, stem=0.45)
     for k, (x, y, h, kind) in enumerate(trees):
         D.tree((x, y, ground(x, y)), h, seed * 10 + k, "near", kind=kind, leaves=18000 if kind == "green" else 24000)
 

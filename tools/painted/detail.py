@@ -213,7 +213,7 @@ def mat_ground(name="ground2", base=(0.16, 0.32, 0.07)):
     return m
 
 
-CLOUD_GLOW = 0.65
+CLOUD_GLOW = 0.4
 
 
 def mat_cloud(name="cumulus", density=6.0, w=0.0):
@@ -226,7 +226,7 @@ def mat_cloud(name="cumulus", density=6.0, w=0.0):
     nt, out = B._nodes(m)
     vol = nt.nodes.new("ShaderNodeVolumePrincipled")
     vol.inputs["Color"].default_value = (1.0, 0.99, 0.97, 1)
-    vol.inputs["Anisotropy"].default_value = 0.35
+    vol.inputs["Anisotropy"].default_value = 0.62   # forward scattering: backlit clouds get silver linings
     tc = nt.nodes.new("ShaderNodeTexCoord")
     # Shape: 1 - |p| (p in the box's -1..1), distorted by noise: billows.
     dist = nt.nodes.new("ShaderNodeTexNoise"); dist.inputs["Scale"].default_value = 1.6; dist.inputs["Detail"].default_value = 6
@@ -242,7 +242,7 @@ def mat_cloud(name="cumulus", density=6.0, w=0.0):
     shape = nt.nodes.new("ShaderNodeMath"); shape.operation = "SUBTRACT"; shape.inputs[0].default_value = 1.0
     nt.links.new(length.outputs["Value"], shape.inputs[1])
     billow = nt.nodes.new("ShaderNodeMath"); billow.operation = "MULTIPLY_ADD"
-    nt.links.new(dist.outputs["Fac"], billow.inputs[0]); billow.inputs[1].default_value = 1.1; billow.inputs[2].default_value = -0.55
+    nt.links.new(dist.outputs["Fac"], billow.inputs[0]); billow.inputs[1].default_value = 1.45; billow.inputs[2].default_value = -0.72
     add = nt.nodes.new("ShaderNodeMath"); add.operation = "ADD"
     nt.links.new(shape.outputs[0], add.inputs[0]); nt.links.new(billow.outputs[0], add.inputs[1])
     # A flatter base: fade out below 30 % of the height.
@@ -270,13 +270,19 @@ def mat_cloud(name="cumulus", density=6.0, w=0.0):
 
 # ------------------------------------------------------------------------- vegetation
 def grass(fn, x0, x1, y0, y1, count, layer, seed, height=(0.25, 0.7), width=0.025, near_y=None,
-          base=(0.07, 0.2, 0.03), tip=(0.42, 0.55, 0.12), name="grass"):
+          base=(0.07, 0.2, 0.03), tip=(0.42, 0.55, 0.12), name="grass", keep=None):
     """Curved, tapered blades (two quads and a tip each); denser near the viewer (near_y)."""
     rng = np.random.default_rng(seed)
     # Denser near the camera: y drawn with a bias towards y0.
     u = rng.random(count)
     ys = y0 + (y1 - y0) * u ** 1.8
     xs = x0 + (x1 - x0) * rng.random(count)
+    if keep is not None:
+        inside = np.array([keep(x, y) for x, y in zip(xs, ys)], bool)
+        xs, ys = xs[inside], ys[inside]
+        count = len(xs)
+        if count == 0:
+            return None
     zs = np.array([fn(x, y) for x, y in zip(xs, ys)], np.float32)
     grow = 1.0 + (ys - y0) / max(1.0, y1 - y0) * 3.0            # far blades bigger (still a few px)
     h = (height[0] + (height[1] - height[0]) * rng.random(count)) * grow
@@ -317,7 +323,7 @@ CORAL = ((0.98, 0.62, 0.5), (0.98, 0.8, 0.3))
 
 
 def flowers(fn, x0, x1, y0, y1, count, layer, seed, size=0.12, kinds=(DAISY, DAISY, DAISY, BUTTERCUP, PINK, LAVENDER), name="flowers",
-            stem=0.35):
+            stem=0.35, keep=None):
     """Meadow flowers: a ring of petals (12 for daisies, 6 for the others) around a domed
     centre, held a little above the ground, facing up and slightly towards the light."""
     rng = random.Random(seed)
@@ -326,6 +332,8 @@ def flowers(fn, x0, x1, y0, y1, count, layer, seed, size=0.12, kinds=(DAISY, DAI
         u = rng.random()
         y = y0 + (y1 - y0) * u ** 1.6
         x = rng.uniform(x0, x1)
+        if keep is not None and not keep(x, y):
+            continue
         grow = 1.0 + (y - y0) / max(1.0, y1 - y0) * 3.0
         s = size * grow * rng.uniform(0.7, 1.3)
         kind = kinds[rng.randrange(len(kinds))]
@@ -381,13 +389,28 @@ def tube_mesh(segments, layer, material, name, sides=8):
 
 
 def cumulus(location, size, layer, seed, density=6.0, name="cloud"):
-    """A volumetric cumulus cloud in a box (size = (x, y, z) extents)."""
+    """A volumetric cumulus heap (size = (x, y, z) extents of its body): a broad flat-based
+    body and a cluster of rounder puffs piled on it, each with its own billows, so it
+    towers and breaks into cauliflower domes instead of reading as one smooth blob
+    (Direction Update 2)."""
     x, y, z = location
     sx, sy, sz = size
-    v = [(-1, -1, 0), (1, -1, 0), (1, 1, 0), (-1, 1, 0), (-1, -1, 1), (1, -1, 1), (1, 1, 1), (-1, 1, 1)]
-    verts = [(x + a * sx / 2, y + b * sy / 2, z + c * sz) for a, b, c in v]
-    faces = [(0, 3, 2, 1), (4, 5, 6, 7), (0, 1, 5, 4), (1, 2, 6, 5), (2, 3, 7, 6), (3, 0, 4, 7)]
-    ob = B.mesh_object(name, verts, faces, layer, mat_cloud("cumulus%d" % seed, density, w=float(seed % 17) * 1.7))
+    rng = random.Random(seed * 31 + 7)
+
+    def box(cx, cy, cz, bx, by, bz, k):
+        v = [(-1, -1, 0), (1, -1, 0), (1, 1, 0), (-1, 1, 0), (-1, -1, 1), (1, -1, 1), (1, 1, 1), (-1, 1, 1)]
+        verts = [(cx + a * bx / 2, cy + b * by / 2, cz + c * bz) for a, b, c in v]
+        faces = [(0, 3, 2, 1), (4, 5, 6, 7), (0, 1, 5, 4), (1, 2, 6, 5), (2, 3, 7, 6), (3, 0, 4, 7)]
+        return B.mesh_object(name if k == 0 else "%s_puff%d" % (name, k), verts, faces, layer,
+                             mat_cloud("cumulus%d_%d" % (seed, k), density, w=float((seed * 7 + k * 13) % 23) * 1.7))
+    ob = box(x, y, z, sx, sy, sz * 0.8, 0)
+    puffs = 2 + rng.randrange(3)
+    for k in range(1, puffs + 1):
+        f = rng.uniform(0.32, 0.6)
+        px = x + rng.uniform(-0.32, 0.32) * sx
+        py = y + rng.uniform(-0.2, 0.2) * sy
+        pz = z + sz * rng.uniform(0.25, 0.65)
+        box(px, py, pz, sx * f, sy * f * 1.1, sz * f * 1.9, k)
     return ob
 
 
@@ -698,7 +721,7 @@ def isle2(cx, cy, z, radius, depth, layer, seed, trees=3, blossom=0.4):
     rho = np.linspace(0, 1, nr + 1)[1:, None]
     tx = cx + rho * rim[None, :] * 1.02 * np.cos(u[0])[None, :]
     ty = cy + rho * rim[None, :] * 1.02 * np.sin(u[0])[None, :]
-    tz = z + radius * 0.07 * (1 - rho ** 2) - 1.2 * rho ** 8 + 0.4 * _fbm2(u[:nr] * 3, rho.repeat(nu, 1) * 2, seed + 21, 3)
+    tz = np.broadcast_to(z + radius * 0.07 * (1 - rho ** 2) - 1.2 * rho ** 8, tx.shape)   # (no noise: the grass must sit on it, see top())
     tv = np.concatenate([[[cx, cy, z + radius * 0.07]], np.stack([tx, ty, tz], -1).reshape(-1, 3)])
     T = [(0, 1 + k, 1 + (k + 1) % nu) for k in range(nu)]
     for j in range(nr - 1):
@@ -707,18 +730,20 @@ def isle2(cx, cy, z, radius, depth, layer, seed, trees=3, blossom=0.4):
             T += [(a_, a_ + nu, b_ + nu), (a_, b_ + nu, b_)]
     big_mesh("isletop", tv, np.array(T), layer, mat_ground("isleground", (0.12, 0.24, 0.06)), smooth=True)
     def top(x, y):
-        q = min(1.0, math.hypot(x - cx, y - cy) / (radius * 0.98))
+        # The turf's own height at (x, y): the same profile, relative to the outline there.
+        a = math.atan2(y - cy, x - cx) % (2 * math.pi)
+        q = min(1.0, math.hypot(x - cx, y - cy) / (rim[int(a / (2 * math.pi) * nu) % nu] * 1.02))
         return z + radius * 0.07 * (1 - q * q) - 1.2 * q ** 8
-    # Grass and flowers in strips that fill the round top (not a square patch).
-    for k in range(12):
-        y0 = -1.2 + k * 0.2; y1 = y0 + 0.2
-        half = math.sqrt(max(0.0, 1.3 - min(y0 ** 2, y1 ** 2)))
-        if half <= 0.05:
-            continue
-        grass(top, cx - radius * half, cx + radius * half, cy + radius * y0, cy + radius * y1, int(radius * radius * 9 * half), layer, seed + k,
-              height=(0.3, 0.8))
-        flowers(top, cx - radius * half, cx + radius * half, cy + radius * y0, cy + radius * y1, int(radius * radius * 0.7 * half), layer, seed + 40 + k,
-                size=0.25)
+    # Grass and flowers over the whole top, inside its real outline (Direction Update 2:
+    # strips left bare patches where the outline reaches further than a circle).
+    def inside(x, y):
+        a = math.atan2(y - cy, x - cx) % (2 * math.pi)
+        return math.hypot(x - cx, y - cy) < rim[int(a / (2 * math.pi) * nu) % nu] * 0.98
+    R = float(rim.max()) * 1.02
+    for k in range(6):                        # bands front to back (their blades grow a little with distance)
+        y0 = cy - R + k * 2 * R / 6; y1 = y0 + 2 * R / 6
+        grass(top, cx - R, cx + R, y0, y1, int(R * R * 15), layer, seed + k, height=(0.3, 0.8), keep=inside)
+        flowers(top, cx - R, cx + R, y0, y1, int(R * R * 1.1), layer, seed + 40 + k, size=0.25, keep=inside)
     rng = random.Random(seed)
     for k in range(trees):
         tx_, ty_ = cx + rng.uniform(-0.5, 0.5) * radius, cy + rng.uniform(-0.4, 0.4) * radius
@@ -1256,7 +1281,7 @@ def mat_bark():
 
 
 LEAF_GREENS = np.array([[0.16, 0.34, 0.07], [0.23, 0.44, 0.09], [0.32, 0.52, 0.12], [0.13, 0.29, 0.08], [0.4, 0.55, 0.14]], np.float32)
-BLOSSOM_PINKS = np.array([[1.0, 0.8, 0.87], [1.0, 0.88, 0.92], [0.99, 0.72, 0.82], [1.0, 0.95, 0.95]], np.float32) * 1.08
+BLOSSOM_PINKS = np.array([[1.0, 0.45, 0.62], [1.0, 0.56, 0.7], [0.98, 0.4, 0.58], [1.0, 0.7, 0.8]], np.float32)   # linear: pink in sRGB
 AUTUMN = np.array([[0.85, 0.55, 0.15], [0.9, 0.7, 0.2], [0.6, 0.55, 0.15]], np.float32)
 
 
@@ -1372,7 +1397,7 @@ def tree(location, height, seed, layer, kind="green", leaves=9000, spread=0.55, 
             cols.append(LEAF_GREENS[nr.integers(0, len(LEAF_GREENS))] * 1.1)
     if blossom:
         n_flower = len(base) - len(base) // 7
-        cards_mesh(name + "_blossom", base[:n_flower], along[:n_flower], across[:n_flower], sizes[:n_flower], cols[:n_flower], layer, mat_leafcard("blossom", 0.3))
+        cards_mesh(name + "_blossom", base[:n_flower], along[:n_flower], across[:n_flower], sizes[:n_flower], cols[:n_flower], layer, mat_leafcard("blossom", 0.55))
         cards_mesh(name + "_leaves", base[n_flower:], along[n_flower:], across[n_flower:], sizes[n_flower:], cols[n_flower:], layer, mat_leafcard("leaf"))
     else:
         cards_mesh(name + "_leaves", base, along, across, sizes, cols, layer, mat_leafcard("leaf"))
