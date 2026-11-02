@@ -404,7 +404,9 @@ def cumulus(location, size, layer, seed, density=6.0, name="cloud"):
         return B.mesh_object(name if k == 0 else "%s_puff%d" % (name, k), verts, faces, layer,
                              mat_cloud("cumulus%d_%d" % (seed, k), density, w=float((seed * 7 + k * 13) % 23) * 1.7))
     ob = box(x, y, z, sx, sy, sz * 0.8, 0)
-    puffs = 2 + rng.randrange(3)
+    # Only clouds in the distant sky tower; banks closer in (a sea of cloud under the
+    # islands, mist round the peaks) stay low and flat, or they would rise in front of the eye.
+    puffs = 2 + rng.randrange(3) if layer == "far" else 0
     for k in range(1, puffs + 1):
         f = rng.uniform(0.32, 0.6)
         px = x + rng.uniform(-0.32, 0.32) * sx
