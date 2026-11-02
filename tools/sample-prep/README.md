@@ -1,7 +1,9 @@
 # Sample preparation (Milestone 15)
 
-`prepare.py` turns the developer's recordings (MP3s and WAVs in the root of the private
-`AdrianAbbas/Samples` repository) into what WORLDBUILDER's sampler loads: mono 16-bit
+`prepare.py` turns the developer's recordings (MP3s and WAVs of the private
+`AdrianAbbas/Samples` repository, in its root or in folders such as `01-voice/`; a
+manifest entry names a file by its path or, if it moved, by its name anywhere under the
+repository; WAVs at other rates are resampled to 44.1 kHz) into what WORLDBUILDER's sampler loads: mono 16-bit
 FLAC notes and one mapping file per instrument. The recordings and the prepared notes
 never go into this public repository: CI fetches the recordings with a token
 (`scripts/ci-fetch-samples.sh`) and the output lives in the build folder.
@@ -9,7 +11,7 @@ never go into this public repository: CI fetches the recordings with a token
     pip install -r tools/sample-prep/requirements.txt
     git clone https://github.com/AdrianAbbas/Samples ../samples      # needs access
     python3 tools/sample-prep/prepare.py --source ../samples --out build/samples
-    cmake -S . -B build -DWORLDBUILDER_SAMPLES_DIR=build/samples ...
+    cmake -S . -B build -DLS_SAMPLES_DIR=build/samples ...
 
 `manifest.json` says what each recording contains (from the Samples repository's
 `notes.txt`); the script checks it against the audio and prints a report (also written
@@ -68,3 +70,29 @@ time, once with short hits and once with long (held) hits. Per recording:
    (the sampler folds anything further by octaves). The report checks that the short
    hits really are the shorter (the static-y bass's two files are named the other way
    round: the manifest assigns them by what they contain).
+
+**The recordings update** (LIGHT SEEKER, after Direction Update 1):
+
+- **Pitch from the audio** (`"pitchFrom": "audio"`, the voice): the names say what was
+  meant, the audio decides where a note goes. Each sung note is found by the gaps between
+  notes (a voice swells and breathes inside a note), its pitch measured on its steady
+  middle (YIN over 55-1100 Hz, then an octave check both ways on the spectrum) and its
+  label taken from what is held in its loop. The report lists every note named
+  differently from how it sounds (all of the voice files are named an octave below what
+  was sung). A one-pitch file (a choir stack, a drone) gets one label, the median of its
+  takes; a take more than a semitone from the others is not used.
+- **Tracked chromatic sweeps** (`"pitchFrom": "track"`, the piano): every key from
+  `lowest` up; each onset's pitch is looked for near the key after the previous one, so
+  a repeated or skipped key never shifts the labels; a second onset inside a ringing bass
+  note (10 dB under the key's strongest) is not a take, and `oneTake` keeps one per key.
+- **Layers**: entries with the same `name` are one velocity layer (two files of one
+  dynamic: extra round-robins); `into` copies a file's notes into several layers (the
+  falsetto sweeps play at every velocity); `pick` takes a range of a file's notes
+  (`fileTakes` in all: the banjo's 5th-string file holds its soft, medium and hard hits).
+- **Levels**: `levelByFloor: false` keeps the dynamics of files recorded at one gain;
+  `gainGroup` gives several sets one gain (the voice's sweeps, stacks and drones keep their
+  levels relative to each other).
+- **Textures** (`"kind": "texture"`, the breaths): unpitched stretches, one take each,
+  every key. `fx: true` also copies the set into `<out>/fx/` with its own `index.json`:
+  what the effect's bundle carries (its Atmosphere layer).
+- `scripts/ci-fetch-samples.sh` prints `Prepared: N notes (<set>)` for every set.

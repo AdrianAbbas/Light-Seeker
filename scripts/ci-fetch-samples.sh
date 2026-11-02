@@ -6,7 +6,7 @@
 # (Copied from WORLDBUILDER. LIGHT SEEKER's change: without the token, or when the fetch
 # fails, it warns and leaves the output empty: the build goes on and the instruments that
 # use the recordings play their synthesised stand-ins.)
-# Usage: scripts/ci-fetch-samples.sh <checkout dir> <prepared output dir>
+# Usage: scripts/ci-fetch-samples.sh <checkout dir> <prepared output dir> [<captured IR output dir>]
 set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 checkout="${1:?checkout directory}"
@@ -25,13 +25,34 @@ if ! git -c http.extraheader="AUTHORIZATION: basic $auth" clone -q --depth 1 "ht
     echo "::warning title=Samples fetch failed::Could not clone $repo with SAMPLES_TOKEN (expired, or no Contents read access?): this build's instruments use their synthesised stand-ins."
     exit 0
 fi
-echo "Samples: $(git -C "$checkout" log -1 --format='%h %s') ($(find "$checkout" -maxdepth 1 -iname '*.mp3' | wc -l | tr -d ' ') MP3s, $(find "$checkout" -maxdepth 1 -iname '*.wav' | wc -l | tr -d ' ') WAVs)"
+# Recordings can sit in folders (e.g. 01-voice/) as well as in the root.
+echo "Samples: $(git -C "$checkout" log -1 --format='%h %s') ($(find "$checkout" -path "$checkout/.git" -prune -o -iname '*.mp3' -print | wc -l | tr -d ' ') MP3s, $(find "$checkout" -path "$checkout/.git" -prune -o -iname '*.wav' -print | wc -l | tr -d ' ') WAVs, $(find "$checkout" -path "$checkout/.git" -prune -o -name 'notes.txt' -print | wc -l | tr -d ' ') notes.txt)"
 
 python3 -m pip install --quiet -r "$here/tools/sample-prep/requirements.txt"
 if ! python3 "$here/tools/sample-prep/prepare.py" --source "$checkout" --out "$out" | tee "$out.log"; then
     echo "::warning title=Samples preparation failed::prepare.py failed (see the log): this build's instruments use their synthesised stand-ins."
     rm -rf "$out" && mkdir -p "$out"
 fi
+# The impulse responses derived from the developer's effect captures (never committed:
+# tools/captures/ci-build-irs.sh), made while the recordings are here.
+if [[ -n "${3:-}" ]]; then
+    if ! bash "$here/tools/captures/ci-build-irs.sh" "$checkout" "$3"; then
+        echo "::warning title=Captured spaces failed::tools/captures could not make the IRs: this build uses the fallback spaces."
+        rm -rf "$3"
+    fi
+fi
 # The recordings themselves are not needed after preparation.
 rm -rf "$checkout"
-if [[ -f "$out/index.json" ]]; then echo "Prepared: $(find "$out" -name '*.flac' | wc -l | tr -d ' ') notes"; fi
+if [[ -f "$out/index.json" ]]; then
+    # One line per sample set (and the total), for the CI log.
+    python3 - "$out" <<'PY'
+import json, os, sys
+out = sys.argv[1]
+total = 0
+for sid in json.load(open(os.path.join(out, "index.json")))["instruments"]:
+    zones = json.load(open(os.path.join(out, sid + ".json")))["zones"]
+    total += len(zones)
+    print(f"Prepared: {len(zones)} notes ({sid})")
+print(f"Prepared: {total} notes in all")
+PY
+fi

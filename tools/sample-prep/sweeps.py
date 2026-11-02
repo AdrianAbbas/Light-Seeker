@@ -49,8 +49,7 @@ def hz(midi):
 
 def load_wav(path):
     audio, rate = sf.read(path, dtype="float64", always_2d=True)
-    if rate != RATE:
-        raise SystemExit(f"{path}: {rate} Hz (expected {RATE})")
+    audio = P.to_rate(audio, rate)
     left, right = audio[:, 0], audio[:, -1]
     live = np.abs(left) > 1e-4
     corr = float(np.corrcoef(left[live], right[live])[0, 1]) if live.sum() > 1000 and audio.shape[1] > 1 else 1.0
@@ -251,7 +250,7 @@ def find_loop(y, f0, a, b, min_len=0.6, max_len=2.2):
 
 def process(spec, source, report):
     """The notes of one recording, labelled and trimmed (not yet levelled or written)."""
-    sid, path = spec["id"], os.path.join(source, spec["file"])
+    sid, path = spec["id"], P.resolve(source, spec["file"]) or os.path.join(source, spec["file"])
     keys, long_note = spec.get("keys", 37), spec["articulation"] == "long"
     if not os.path.exists(path):
         report["problems"].append(f"{sid}: missing file '{spec['file']}'")
