@@ -505,8 +505,10 @@ struct OrganVoice {
     }
 };
 
-// Grace notes climbing above the note (Cloud Steps' glissando): a major pentatonic.
-constexpr std::array<float, 8> runSteps { 2, 4, 7, 9, 12, 14, 16, 19 };
+// Cloud Steps' glissando (Direction Update 2): the most grace notes a run has (Character
+// at 100 %), and how close together notes must start to share one sweep (a chord).
+constexpr int maxRun = 8;
+constexpr float chordWindowSeconds = 0.035f;
 } // namespace
 
 struct Synth::Voice {
@@ -535,6 +537,7 @@ struct Synth::Voice {
     };
     bool on = false, keyDown = false, sustained = false, released = false, grace = false;
     int note = -1, patch = 0, delay = 0, layerMask = 0;
+    int sweep = -1, sweepIndex = 0, sweepCount = 0;   // a grace note: its sweep, place in it
     float velocity = 0, semis = 0, levelDb = 0, kill = 1, killStep = 0;
     uint32_t serial = 0;
     std::array<LayerVoice, Synth::maxLayers> layer;
@@ -951,12 +954,12 @@ void Synth::startLayers(Voice& voice) noexcept {
     }
 }
 
-void Synth::startNote(int note, float velocity, bool sustained) noexcept {
+void Synth::startNote(int note, float velocity, bool sustained, bool moved) noexcept {
     const auto& p = patch(current);
     const bool sampled = patchSampled(p);
-    const auto start = [&](int delaySamples, float semis, float levelDb, bool grace) {
+    const auto start = [&](int delaySamples, float semis, float levelDb, bool grace) -> Voice* {
         auto* v = freeVoice(current, !grace);
-        if (v == nullptr) return;
+        if (v == nullptr) return nullptr;
         v->on = true;
         v->keyDown = !sustained;
         v->sustained = sustained;
@@ -968,6 +971,7 @@ void Synth::startNote(int note, float velocity, bool sustained) noexcept {
         v->semis = semis;
         v->levelDb = levelDb;
         v->delay = delaySamples;
+        v->sweep = -1;
         v->kill = 1;
         v->killStep = 0;
         v->serial = ++serial;
@@ -985,21 +989,86 @@ void Synth::startNote(int note, float velocity, bool sustained) noexcept {
             v->layerMask |= 1 << k;
             v->layer[std::size_t(k)].on = false;
         }
-        if (v->layerMask == 0) { v->on = false; return; }
+        if (v->layerMask == 0) { v->on = false; return nullptr; }
         if (delaySamples <= 0) startLayers(*v);   // else updateChunk starts it when its time comes
+        return v;
     };
-    start(0, 0.0f, 0.0f, false);
-    // A run of grace notes climbing above the note (layers with `run`).
+    // A glissando (layers with `run`): grace notes sweep up through the notes held and the
+    // played note lands at the top. The Character macro sets how long the sweep is (as
+    // designed at 0.5, none at 0). Notes moved to this instrument by travel just sound.
     int run = 0;
     float runMs = 0;
     for (int k = 0; k < p.layerCount; ++k)
         if (p.layers[std::size_t(k)].run > 0) { run = p.layers[std::size_t(k)].run; runMs = p.layers[std::size_t(k)].runMs; }
-    if (run > 0) {
-        // The Character macro sets how far the run climbs (as designed at 0.5, none at 0).
-        const int count = std::clamp(int(std::lround(float(run) * 2.0f * macros.character)), 0, int(runSteps.size()));
-        for (int i = 0; i < count; ++i)
-            start(int(float(i + 1) * runMs * 0.001f * float(rate)), runSteps[std::size_t(i)], -3.0f - 2.2f * float(i), true);
+    const int count = run > 0 && !moved ? std::clamp(int(std::lround(float(run) * 2.0f * macros.character)), 0, maxRun) : 0;
+    if (count == 0) { start(0, 0.0f, 0.0f, false); return; }
+    // A note starting with (or just after) another one joins its sweep: one sweep per chord,
+    // rising into its highest note, every note of the chord landing together.
+    const auto window = uint64_t(chordWindowSeconds * float(rate));
+    for (int s = 0; s < maxSweeps; ++s) {
+        auto& sw = sweeps[std::size_t(s)];
+        if (!sw.active || clock - sw.start > window || clock >= sw.land) continue;
+        sw.members[std::size_t(note)] = true;
+        sw.top = std::max(sw.top, note);
+        start(int(sw.land - clock), 0.0f, 0.0f, false);
+        return;
     }
+    const int s = nextSweep;
+    nextSweep = (nextSweep + 1) % maxSweeps;
+    auto& sw = sweeps[std::size_t(s)];
+    sw = {};
+    sw.active = true;
+    sw.start = clock;
+    const auto step = std::max<uint64_t>(1, uint64_t(runMs * 0.001f * float(rate)));
+    sw.land = clock + step * uint64_t(count);
+    sw.top = note;
+    sw.members[std::size_t(note)] = true;
+    // The grace notes rise in level into the note (a crescendo); each one's pitch is chosen
+    // when it sounds, from what is held then (so a chord's later notes count). The first
+    // waits one sample: notes of the same chord arrive at the same moment.
+    for (int i = 0; i < count; ++i) {
+        auto* v = start(int(uint64_t(i) * step) + 1, 0.0f, -3.0f - 1.6f * float(count - 1 - i), true);
+        if (v == nullptr) continue;
+        v->sweep = s;
+        v->sweepIndex = i;
+        v->sweepCount = count;
+    }
+    start(int(sw.land - clock), 0.0f, 0.0f, false);
+}
+
+int Synth::sweepPitch(Voice& v) noexcept {
+    // The notes the sweep may use: the pitch classes held now (keys down, pedalled, and the
+    // sweep's own notes); one pitch class alone adds its fifth. Below the sweep's top note,
+    // nearest first, the run takes the count-th nearest for its first note and climbs.
+    auto& sw = sweeps[std::size_t(v.sweep)];
+    std::array<bool, 12> classes {};
+    int distinct = 0;
+    for (int n = 0; n < 128; ++n) {
+        const auto& k = keys[std::size_t(n)];
+        if (!(k.down || k.sustained || sw.members[std::size_t(n)])) continue;
+        if (!classes[std::size_t(n % 12)]) ++distinct;
+        classes[std::size_t(n % 12)] = true;
+    }
+    if (distinct == 0) return -1;
+    if (distinct == 1)
+        for (int c = 0; c < 12; ++c)
+            if (classes[std::size_t(c)]) { classes[std::size_t((c + 7) % 12)] = true; break; }
+    std::array<int, maxRun> below {};
+    int found = 0;
+    for (int m = sw.top - 1; m >= 0 && m >= sw.top - 36 && found < maxRun; --m)
+        if (classes[std::size_t(m % 12)]) below[std::size_t(found++)] = m;
+    if (found == 0) return -1;
+    const int want = std::min(v.sweepCount - 1 - v.sweepIndex, found - 1);
+    int pitch = below[std::size_t(want)];
+    // Always upwards: if the chord changed under the sweep, the next note above the last.
+    if (pitch <= sw.last) {
+        pitch = -1;
+        for (int k = found - 1; k >= 0; --k)
+            if (below[std::size_t(k)] > sw.last) { pitch = below[std::size_t(k)]; break; }
+        if (pitch < 0) return -1;
+    }
+    sw.last = pitch;
+    return pitch;
 }
 
 void Synth::releaseVoice(Voice& v) noexcept {
@@ -1102,7 +1171,7 @@ void Synth::setPatch(int index) noexcept {
     current = index;
     for (int note = 0; note < 128; ++note) {
         const auto& k = keys[std::size_t(note)];
-        if (k.down || k.sustained) startNote(note, k.velocity, !k.down);
+        if (k.down || k.sustained) startNote(note, k.velocity, !k.down, true);
     }
 }
 
@@ -1118,6 +1187,14 @@ void Synth::updateChunk() noexcept {
             v.delay -= chunk;
             if (v.delay <= 0) {
                 v.delay = 0;
+                if (v.sweep >= 0) {
+                    // A glissando's grace note: its pitch from what is held now.
+                    const int pitch = sweepPitch(v);
+                    if (pitch < 0) { v.on = false; continue; }
+                    v.semis = float(pitch - v.note);
+                    runLog[std::size_t(runLogged % runLogSize)] = { pitch, clock };
+                    ++runLogged;
+                }
                 startLayers(v);
                 if (v.released) {   // its key let go before it sounded: it plays and lets go
                     v.released = false;
@@ -1142,7 +1219,10 @@ void Synth::updateChunk() noexcept {
                     break;
                 case Engine::Pluck:
                     lv.pluck.bendTo(std::exp2(bend / 12.0f));
-                    alive = lv.pluck.active;
+                    // A released string ends once it is below -80 dB at the output: a damped
+                    // waveguide can keep a tiny residue near DC ringing for ever (inaudible,
+                    // but it held a voice).
+                    alive = lv.pluck.active && !(v.released && lv.pluck.peak * lv.gain < 1.0e-4f);
                     break;
                 case Engine::Bell:
                     if (std::abs(bend - lv.bent) > 1.0e-4f) {
@@ -1234,8 +1314,10 @@ void Synth::updateChunk() noexcept {
 
 void Synth::render(float* outL, float* outR, int n) noexcept {
     const float characterGain = 2.0f * macros.character;
+    const uint64_t base = clock;
     for (int i = 0; i < n; ++i) {
         if (chunkLeft <= 0) {
+            clock = base + uint64_t(i);
             updateChunk();
             chunkLeft = chunk;
         }
@@ -1312,6 +1394,7 @@ void Synth::render(float* outL, float* outR, int n) noexcept {
         outL[i] += finiteOr(l * g);
         outR[i] += finiteOr(r * g);
     }
+    clock = base + uint64_t(n);
 }
 
 } // namespace ls::inst

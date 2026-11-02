@@ -111,6 +111,17 @@ usage limit or a compaction) continues from the first unticked line. Push to `ma
 - [x] R3b. Instruments: Angelic Choir, Radiant Choir, Epic Choir and Brass (+ drones), Orchestral Chord Pad's Voices; Shimmering Pluck on the banjo; col legno on Bouncy Pizzicato; Minilogue soft pad short hits and pulse; the piano under the Celesta; breath air in the Windswept Isle atmosphere; stand-ins level-matched; push `[skip ci]`
 - [x] R4. Tests (MIDI, in tune across the range, loop clicks, levels, siblings), listening render of the changed instruments, DEVLOG (which recordings each instrument uses, weak notes); push without `[skip ci]`, CI green
 
+**Direction Update 2: GarageBand notes** ([docs/DIRECTION_UPDATE_2.md](DIRECTION_UPDATE_2.md); no instrument or place sound changes except the glissando)
+
+- [x] U1. Rising Harp Glissando: the run built from the held notes (chord tones and their octaves; a single note: octaves and fifth), rising into the played note; harp pluck tuning report across the range; in-key test with held chords in several keys; push `[skip ci]`
+- [ ] U2. Birds: no white rectangle (the dirty region repainted from the last good frame, never a fill); snapshot test of a frame with birds at several window sizes; push `[skip ci]`
+- [ ] U3. The window reopens as it was left: view (map or place) and scene, window scale, controls strip, Advanced drawer and Journey panel (and their scroll), keyboard position; kept in the processor and in the saved state; restore test; push `[skip ci]`
+- [ ] U4. Hover: the place list (and every hoverable control) clears its highlight on mouse exit; the selected place a distinct, stable state; hover-clear test; push `[skip ci]`
+- [ ] U5. Dragons removed from every scene, the map and the animations (Dragon's Peak keeps its name, cliffs, nest and sky); push `[skip ci]`
+- [ ] U6a. Art pipeline: smooth shading and subdivision, natural trees (branching, leaf cards with alpha, varied sizes), grass and flower scattering, displaced broken rock, better materials, atmospheric depth; CC0 log
+- [ ] U6b. Every location, sub-location and the map re-rendered; sizes about the same; `docs/snapshots/` before/after
+- [ ] U7. Whole suite green, DEVLOG handoff (what to look at in GarageBand); final push without `[skip ci]`, CI green
+
 ---
 
 ## Lessons carried over from DUNGEON CRAWLER (read first)

@@ -2801,7 +2801,7 @@ int main(int argc, char** argv) {
     if (run("navigation")) testNavigation(s);
     if (run("atmosphere")) testAtmosphere(s);
     if (run("workflow")) testWorkflow(s);
-    if (run("instrument")) testInstrument(s);
+    if (run("instrument")) { testInstrument(s); testGlissando(s); }
     if (run("instruments")) { testInstruments(s); testInstrumentPresets(s); }
     if (run("recorded")) testRecordedInstruments(s);
     if (only.contains("qa")) testQa(s);   // long (130 journeys): run explicitly

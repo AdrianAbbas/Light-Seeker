@@ -251,10 +251,12 @@ std::array<Patch, instrumentCount> build() {
     }
 
     // ---- Sky Temple: bells and voices --------------------------------------------------
-    {   // Cloud Steps: a harp whose every note climbs on in a rising glissando.
+    {   // Cloud Steps: a harp whose every note arrives on a rising glissando: a quick sweep
+        // up through the notes held (chord tones and their octaves; one note alone, its
+        // octaves and fifth) into the note played (Direction Update 2).
         auto a = pluck(BodyHarp, 0.3f, 0.45f, 3.5f, 0.68f);
         a.run = 4;
-        a.runMs = 42.0f;
+        a.runMs = 24.0f;
         a.release = 1.2f;
         a.keyPan = 0.35f;
         Builder p("Rising Harp Glissando", "Bells and voices", "Glissando");

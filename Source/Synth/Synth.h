@@ -76,8 +76,10 @@ struct Layer {
     const char* sample = nullptr;
     int lowKey = 0, highKey = 127;   // the keys this layer plays (after transposing)
     bool character = false;      // its level follows the Character macro
-    // A run of grace notes before the note (a harp's glissando): how many, the time
-    // between them, and the scale they climb (semitones below the note, nearest last).
+    // A run of grace notes before the note (a harp's glissando, Direction Update 2): how
+    // many (at Character 0.5) and the time between them. The run sweeps up through the
+    // notes held (chord tones and their octaves; one note alone: its octaves and fifth)
+    // and lands on the played note.
     int run = 0;
     float runMs = 0;
     // A crossfade by key (equal power over `fadeSpan` semitones from `fadeKey`): a layer
@@ -157,6 +159,13 @@ public:
     void render(float* l, float* r, int n) noexcept;
 
     int activeVoices() const noexcept;
+    // Tests: the pitches the glissando's grace notes started on (MIDI note numbers, in the
+    // order they sounded), and the sample each started at; cleared by clearRunLog().
+    struct RunNote { int pitch; uint64_t at; };
+    static constexpr int runLogSize = 256;
+    int runLogCount() const noexcept { return runLogged; }
+    RunNote runLogEntry(int k) const noexcept { return runLog[std::size_t(k % runLogSize)]; }
+    void clearRunLog() noexcept { runLogged = 0; }
     int heldKeys() const noexcept;
     bool keyDown(int note) const noexcept { return note >= 0 && note < 128 && keys[std::size_t(note)].down; }
     bool sustainDown() const noexcept { return pedal; }
@@ -166,7 +175,9 @@ public:
 private:
     struct Voice;
     struct Bus;
-    void startNote(int note, float velocity, bool sustained) noexcept;
+    // `moved`: a held note restarted on a new instrument by travel (no glissando).
+    void startNote(int note, float velocity, bool sustained, bool moved = false) noexcept;
+    int sweepPitch(Voice&) noexcept;
     void startLayers(Voice&) noexcept;
     void releaseVoice(Voice&) noexcept;
     Voice* freeVoice(int forPatch, bool enforceLimit) noexcept;
@@ -184,6 +195,20 @@ private:
     int chunkLeft = 0;
     uint32_t serial = 0;
     uint64_t noiseCounter = 1;
+    uint64_t clock = 0;          // samples rendered
+    // The glissandos in flight: notes that start within a few milliseconds of each other
+    // (a chord) share one sweep that rises into the highest of them.
+    struct Sweep {
+        bool active = false;
+        uint64_t start = 0, land = 0;
+        int top = -1, last = -1;
+        std::array<bool, 128> members {};
+    };
+    static constexpr int maxSweeps = 8;
+    std::array<Sweep, maxSweeps> sweeps {};
+    int nextSweep = 0;
+    std::array<RunNote, runLogSize> runLog {};
+    int runLogged = 0;
     lswb::dsp::Stream noise;
 };
 

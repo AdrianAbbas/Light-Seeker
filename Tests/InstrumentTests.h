@@ -1191,3 +1191,194 @@ int listenChanged(const juce::String& directory) {
     std::cout << written << " files in " << dir.getFullPathName() << (sampled ? " (with the recordings)" : " (stand-ins: no recordings)") << "\n";
     return written == expected ? 0 : 1;
 }
+
+// Direction Update 2: the Rising Harp Glissando (Cloud Steps). Its run must only use the
+// notes held (chord tones and their octaves; one note alone: octaves and its fifth), rise
+// into the played note, and share one sweep per chord. Checked twice: the pitches the
+// synth chose (its run log) and the sound (no pitch class outside the chord gains energy
+// compared with the same chord plucked without the run). And the harp itself in tune.
+void testGlissando(Suite& s) {
+    s.section("glissando: the Rising Harp Glissando stays in key (held chords in several keys) and the harp is in tune");
+    const int harp = instrumentByName("Rising Harp Glissando");
+    s.check(harp >= 0, "the Rising Harp Glissando exists");
+    if (harp < 0) return;
+    const auto setCharacter = [](InstrumentHost& h, float v) { h.set(dc::ids::instCharacter, v); };
+    // Out-of-chord energy (dB, relative to the whole) of the first 0.6 s.
+    const auto outside = [](const std::vector<float>& x, double sr, const std::set<int>& classes) {
+        const auto c = chroma(x, sr);
+        double in = 0, out = 0;
+        for (int k = 0; k < 12; ++k) (classes.count(k) ? in : out) += c[std::size_t(k)];
+        return 10.0 * std::log10(std::max(out, 1.0e-30) / std::max(in + out, 1.0e-30));
+    };
+    struct Chord { const char* name; std::vector<int> notes; };
+    const std::vector<Chord> chords {
+        { "C major (C4 E4 G4)", { 60, 64, 67 } },     { "A minor (A3 C4 E4)", { 57, 60, 64 } },
+        { "F# major (F#4 A#4 C#5)", { 66, 70, 73 } }, { "Bb major 7 (Bb3 D4 F4 A4)", { 58, 62, 65, 69 } },
+        { "E minor, open (E3 B3 G4)", { 52, 59, 67 } }, { "Db sus2 (Db4 Eb4 Ab4)", { 61, 63, 68 } },
+    };
+    int sweeps = 0, wrong = 0, notRising = 0, notBelow = 0, oldUnheard = 0;
+    double worstAdded = -99;
+    std::string worstChord;
+    for (const auto& chord : chords) {
+        std::set<int> classes;
+        for (int n : chord.notes) classes.insert(n % 12);
+        const int top = *std::max_element(chord.notes.begin(), chord.notes.end());
+        double plainOut = 0, runOut = 0, oldOut = 0;
+        // The old run, for comparison (that the check hears the fault): each note of the
+        // chord followed by its own major pentatonic above it, every 42 ms.
+        {
+            InstrumentHost h;
+            h.instrument(harp);
+            h.dry();
+            setCharacter(h, 0.0f);
+            h.render(0.05);
+            for (int n : chord.notes) h.noteOn(n, 0.8f);
+            const int steps[] = { 2, 4, 7, 9 };
+            for (int i = 0; i < 4; ++i) {
+                h.render(0.042);
+                for (int n : chord.notes) h.noteOn(n + steps[i], 0.65f - 0.08f * float(i));
+            }
+            h.render(0.6);
+            oldOut = outside(h.mono(h.at(0.05), h.at(0.05 + 0.6)), h.sr, classes);
+        }
+        for (int pass = 0; pass < 2; ++pass) {
+            InstrumentHost h;
+            h.instrument(harp);
+            h.dry();
+            setCharacter(h, pass == 0 ? 0.0f : 0.5f);
+            h.render(0.05);
+            auto& synth = const_cast<ls::inst::Synth&>(h.p->synthForTest());
+            synth.clearRunLog();
+            // The reference (pass 0): the chord's tones and their octaves over the two
+            // octaves under its top, plucked together without the run (softer below).
+            if (pass == 0) {
+                for (int m = top - 24; m <= top; ++m)
+                    if (classes.count(m % 12)) h.noteOn(m, std::count(chord.notes.begin(), chord.notes.end(), m) ? 0.8f : 0.5f);
+            } else
+                for (int n : chord.notes) h.noteOn(n, 0.8f);
+            h.render(0.8);
+            const auto x = h.mono(h.at(0.05), h.at(0.05 + 0.6));
+            (pass == 0 ? plainOut : runOut) = outside(x, h.sr, classes);
+            if (pass == 0) continue;
+            const int count = synth.runLogCount();
+            if (count == 4) ++sweeps;
+            int last = -1;
+            for (int k = 0; k < count; ++k) {
+                const auto e = synth.runLogEntry(k);
+                if (!classes.count(e.pitch % 12)) ++wrong;
+                if (e.pitch <= last) ++notRising;
+                if (e.pitch >= top) ++notBelow;
+                last = e.pitch;
+            }
+            std::cout << "  " << chord.name << ": run";
+            for (int k = 0; k < count; ++k) std::cout << " " << juce::MidiMessage::getMidiNoteName(synth.runLogEntry(k).pitch, true, true, 4);
+            std::cout << " -> " << juce::MidiMessage::getMidiNoteName(top, true, true, 4) << "\n";
+        }
+        const double added = runOut - std::max(plainOut, -14.0);
+        std::cout << "    out-of-chord energy: " << fmt(runOut) << " dB with the run, " << fmt(plainOut) << " dB its tones plucked plainly, "
+                  << fmt(oldOut) << " dB the old pentatonic run\n";
+        if (added > worstAdded) { worstAdded = added; worstChord = chord.name; }
+        if (oldOut < std::max(plainOut, -14.0) + 3.0) ++oldUnheard;
+    }
+    s.check(sweeps == int(chords.size()), "glissando: one sweep per chord (4 grace notes at Character 50 %), not one per note",
+            std::to_string(sweeps) + " of " + std::to_string(chords.size()));
+    s.check(wrong == 0, "glissando: every grace note is a chord tone (or its octave), six chords in six keys", std::to_string(wrong) + " outside");
+    s.check(notRising == 0 && notBelow == 0, "glissando: the run rises into the chord's top note",
+            std::to_string(notRising) + " not rising, " + std::to_string(notBelow) + " at or above the top");
+    // Out-of-chord energy (the harp's own harmonics: its twelfth and seventeenth) at most
+    // 2 dB above its chord tones plucked plainly (or -14 dB of the whole, if they are cleaner).
+    s.check(worstAdded <= 2.0, "glissando: in key by ear (no more out-of-chord energy than its chord tones and octaves plucked plainly)",
+            "worst " + worstChord + " +" + fmt(worstAdded) + " dB");
+    s.check(oldUnheard == 0, "glissando: the check hears the old pentatonic run's clash (at least 3 dB more out-of-chord energy)",
+            std::to_string(oldUnheard) + " chords not heard");
+    s.metric("glissando: out-of-chord energy added by the run (worst chord, dB)", worstAdded);
+
+    // One note alone: octaves and its fifth only, rising into it; it lands about 4 x 24 ms later.
+    {
+        int bad = 0, total = 0;
+        for (int note : { 48, 62, 67, 75, 81 }) {
+            InstrumentHost h;
+            h.instrument(harp);
+            h.dry();
+            h.render(0.05);
+            auto& synth = const_cast<ls::inst::Synth&>(h.p->synthForTest());
+            synth.clearRunLog();
+            h.noteOn(note, 0.8f);
+            h.render(0.4);
+            int last = -1;
+            for (int k = 0; k < synth.runLogCount(); ++k) {
+                const int pitch = synth.runLogEntry(k).pitch;
+                const int interval = ((note - pitch) % 12 + 12) % 12;
+                ++total;
+                if (!(interval == 0 || interval == 5) || pitch >= note || pitch <= last) ++bad;   // an octave, or the fifth (a fourth below)
+                last = pitch;
+            }
+        }
+        s.check(total >= 15 && bad == 0, "glissando: a single note sweeps only through its octaves and fifth, up into it",
+                std::to_string(bad) + " of " + std::to_string(total) + " wrong");
+    }
+    // A chord changed: the next chord's run uses the new chord (keys held at the time).
+    {
+        InstrumentHost h;
+        h.instrument(harp);
+        h.dry();
+        h.render(0.05);
+        auto& synth = const_cast<ls::inst::Synth&>(h.p->synthForTest());
+        for (int n : { 60, 64, 67 }) h.noteOn(n);
+        h.render(0.5);
+        for (int n : { 60, 64, 67 }) h.noteOff(n);
+        synth.clearRunLog();
+        for (int n : { 62, 65, 69 }) h.noteOn(n);   // D minor
+        h.render(0.5);
+        int wrongNext = 0;
+        for (int k = 0; k < synth.runLogCount(); ++k) {
+            const int pc = synth.runLogEntry(k).pitch % 12;
+            if (pc != 2 && pc != 5 && pc != 9) ++wrongNext;
+        }
+        s.check(synth.runLogCount() == 4 && wrongNext == 0, "glissando: the next chord (C major, then D minor) sweeps through the new chord",
+                std::to_string(wrongNext) + " outside of " + std::to_string(synth.runLogCount()));
+    }
+    // Character 0: no run, the note at once; the landing at about 96 ms with the run.
+    {
+        double onset[2] {};
+        for (int pass = 0; pass < 2; ++pass) {
+            InstrumentHost h;
+            h.instrument(harp);
+            h.dry();
+            setCharacter(h, pass == 0 ? 0.0f : 0.5f);
+            h.render(0.1);
+            h.noteOn(72, 0.9f);
+            h.render(0.5);
+            // The landing: the strongest 5 ms window.
+            const auto w = h.at(0.005);
+            double best = 0;
+            for (std::size_t i = h.at(0.1); i + w < h.end(); i += w / 2) {
+                const double r = h.rms(i, i + w);
+                if (r > best) { best = r; onset[pass] = double(i) / h.sr - 0.1; }
+            }
+        }
+        s.check(onset[0] < 0.02, "glissando: Character 0 plays the note at once (no run)", fmt(onset[0] * 1000.0) + " ms");
+        s.check(onset[1] > 0.07 && onset[1] < 0.14, "glissando: with the run the note lands on top of it (about 100 ms)", fmt(onset[1] * 1000.0) + " ms");
+    }
+    // The harp itself: in tune from C2 to C7 (single notes, no run), a cents report.
+    {
+        double worst = 0;
+        std::string worstNote, report;
+        for (int note = 36; note <= 96; note += 3) {
+            InstrumentHost h;
+            h.instrument(harp);
+            h.dry();
+            setCharacter(h, 0.0f);
+            h.render(0.05);
+            h.noteOn(note, 0.8f);
+            h.render(1.2);
+            const auto x = h.mono(h.at(0.05 + 0.08), h.at(0.05 + 1.2));
+            const double cents = centsOff(x, h.sr, note);
+            report += " " + juce::MidiMessage::getMidiNoteName(note, true, true, 4).toStdString() + " " + fmt(cents);
+            if (std::abs(cents) > std::abs(worst)) { worst = cents; worstNote = juce::MidiMessage::getMidiNoteName(note, true, true, 4).toStdString(); }
+        }
+        std::cout << "  harp tuning (cents):" << report << "\n";
+        s.check(std::abs(worst) <= 8.0, "glissando: the harp pluck in tune from C2 to C7 (within 8 cents)", "worst " + worstNote + " " + fmt(worst) + " cents");
+        s.metric("glissando: harp tuning, worst note (cents)", worst);
+    }
+}
