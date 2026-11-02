@@ -6,4 +6,5 @@
 __pycache__/
 *.wav
 /build-art/
-!assets/irs/*.wav
+# Derived from the developer's private captures and recordings: made in CI, never committed.
+/assets/irs/

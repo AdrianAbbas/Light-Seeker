@@ -193,7 +193,7 @@ namespace conv { class Convolver; struct IrSpectra; }
 class Vault {
 public:
     static constexpr int kinds = 35;   // 0 = none
-    static constexpr int firstCaptured = 32;   // 32..34: captured spaces (assets/irs)
+    static constexpr int firstCaptured = 32;   // 32..34: captured spaces (made in CI from the captures, or fallbacks)
     Vault();
     ~Vault();
     void prepare(double sampleRate);
@@ -206,6 +206,8 @@ public:
     float level() const noexcept { return tail; }
     // Seconds of IR per kind (tests and the CPU report).
     static double kindSeconds(int kind) noexcept;
+    // Whether the captured spaces (32..34) are the real captures or their generated stand-ins.
+    static bool capturedSpacesBuiltIn() noexcept;
     static const char* kindName(int kind) noexcept;
 private:
     double sr = 48000;

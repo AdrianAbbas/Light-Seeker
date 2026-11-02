@@ -103,6 +103,14 @@ usage limit or a compaction) continues from the first unticked line. Push to `ma
 - [x] D6a. 30+ instrument presets (50: 31 instruments at home, 2 dry/gentle, 8 carried elsewhere, 9 journeys)
 - [x] D6b. Tests (every instrument plays from MIDI, in tune, distinct from siblings, level-matched; no hung notes during travel; both plug-ins validate), listening render, DEVLOG handoff; push without `[skip ci]`
 
+**Recordings update: voice, banjo, col legno, Minilogue, captures out of the repository** (see "Recordings update" below)
+
+- [x] R1. Sample prep: recordings in subfolders and as WAV, pitch from the audio (not the names), the voice (vowel sweeps soft/full, falsetto, choir stacks, drones), banjo (sweeps + 5th string round-robins), "Prepared: N notes" per set in the CI log; push `[skip ci]`
+- [x] R2. Captures: `assets/irs` removed from the repository, generated in CI from the Samples captures (`tools/captures`), compiled in at build time, fallback spaces without them; other capture-derived files checked; push `[skip ci]`
+- [ ] R3a. Voice sampler engine: vowel morph (Vowel macro), Ensemble macro from the 5-take stacks (detune, timing, spread), looped sustains; the two macros on the panel; push `[skip ci]`
+- [ ] R3b. Instruments: Angelic Choir, Radiant Choir, Epic Choir and Brass (+ drones), Orchestral Chord Pad's Voices; Shimmering Pluck on the banjo; col legno on Bouncy Pizzicato; Minilogue soft pad short hits and pulse; breath air in the Windswept Isle atmosphere; stand-ins level-matched; push `[skip ci]`
+- [ ] R4. Tests (MIDI, in tune across the range, loop clicks, levels, siblings), listening render of the changed instruments, DEVLOG (which recordings each instrument uses, weak notes); push without `[skip ci]`, CI green
+
 ---
 
 ## Lessons carried over from DUNGEON CRAWLER (read first)

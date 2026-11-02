@@ -43,10 +43,36 @@ set(LS_SHARED_SOURCES
 juce_add_binary_data(LightSeekerFonts NAMESPACE LightSeekerFonts SOURCES
     assets/fonts/CormorantGaramond-SemiBold.ttf assets/fonts/CormorantGaramond-Bold.ttf assets/fonts/Cinzel-SemiBold.ttf)
 set_target_properties(LightSeekerFonts PROPERTIES POSITION_INDEPENDENT_CODE ON)
-# Captured impulse responses (tools/captures/export_irs.py), 48 kHz 16-bit stereo.
-juce_add_binary_data(LightSeekerIrs NAMESPACE LightSeekerIrs HEADER_NAME LightSeekerIrs.h SOURCES
-    assets/irs/radiant-shimmer-hall.wav assets/irs/cliff-hall-echo.wav assets/irs/chorus-hall.wav)
-set_target_properties(LightSeekerIrs PROPERTIES POSITION_INDEPENDENT_CODE ON)
+# Captured impulse responses (48 kHz 16-bit stereo). They are derived from the developer's
+# private effect captures, so they are not in this repository: CI makes them from the
+# Samples repository (tools/captures/ci-build-irs.sh) and names the folder with
+# LS_IRS_DIR; they are compiled into both plug-ins. Without them the Vault's captured
+# spaces use generated fallback spaces of the same character (Vault.cpp).
+set(LS_IRS_DIR "" CACHE PATH "Captured impulse responses (tools/captures/ci-build-irs.sh) to compile in")
+set(LS_IR_FILES radiant-shimmer-hall.wav cliff-hall-echo.wav chorus-hall.wav)
+set(ls_have_irs FALSE)
+if(LS_IRS_DIR)
+    set(ls_have_irs TRUE)
+    set(ls_ir_sources "")
+    foreach(ls_ir IN LISTS LS_IR_FILES)
+        if(EXISTS "${LS_IRS_DIR}/${ls_ir}")
+            list(APPEND ls_ir_sources "${LS_IRS_DIR}/${ls_ir}")
+        else()
+            set(ls_have_irs FALSE)
+        endif()
+    endforeach()
+endif()
+add_library(LightSeekerIrsConfig INTERFACE)
+if(ls_have_irs)
+    message(STATUS "Captured spaces: compiled in from ${LS_IRS_DIR}")
+    juce_add_binary_data(LightSeekerIrs NAMESPACE LightSeekerIrs HEADER_NAME LightSeekerIrs.h SOURCES ${ls_ir_sources})
+    set_target_properties(LightSeekerIrs PROPERTIES POSITION_INDEPENDENT_CODE ON)
+    target_link_libraries(LightSeekerIrsConfig INTERFACE LightSeekerIrs)
+    target_compile_definitions(LightSeekerIrsConfig INTERFACE LS_HAVE_CAPTURED_IRS=1)
+else()
+    message(STATUS "Captured spaces: not found (LS_IRS_DIR), the fallback spaces are built in")
+    target_compile_definitions(LightSeekerIrsConfig INTERFACE LS_HAVE_CAPTURED_IRS=0)
+endif()
 
 function(ls_add_plugin target)
     cmake_parse_arguments(LS "SYNTH" "PRODUCT;NAME;CODE;BUNDLE;PREFIX;DESCRIPTION;AUTYPE" "CATEGORIES" ${ARGN})
@@ -85,7 +111,7 @@ function(ls_add_plugin target)
         JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0
         JUCE_DISPLAY_SPLASH_SCREEN=0 JUCE_REPORT_APP_USAGE=0)
     target_link_libraries(${target} PRIVATE juce::juce_audio_utils juce::juce_dsp
-        PUBLIC juce::juce_recommended_config_flags LightSeekerFonts LightSeekerIrs)
+        PUBLIC juce::juce_recommended_config_flags LightSeekerFonts LightSeekerIrsConfig)
     # The painted art (tools/painted builds it into assets/painted) ships inside every
     # bundle at Contents/Resources/Painted; development builds and the tests fall back to
     # the source tree. The instrument's bundles also carry the prepared recordings
@@ -105,6 +131,12 @@ function(ls_add_plugin target)
             if(LS_SYNTH AND LS_SAMPLES_DIR)
                 add_custom_command(TARGET ${ls_target} POST_BUILD
                     COMMAND ${CMAKE_COMMAND} -E copy_directory "${LS_SAMPLES_DIR}" "${ls_res}/Samples"
+                    COMMAND ${CMAKE_COMMAND} -E rm -rf "${ls_res}/Samples/fx"
+                    VERBATIM)
+            elseif(LS_SAMPLES_DIR AND EXISTS "${LS_SAMPLES_DIR}/fx/index.json")
+                # The effect carries only what its Atmosphere layer plays (the breaths).
+                add_custom_command(TARGET ${ls_target} POST_BUILD
+                    COMMAND ${CMAKE_COMMAND} -E copy_directory "${LS_SAMPLES_DIR}/fx" "${ls_res}/Samples"
                     VERBATIM)
             endif()
         endif()

@@ -1,6 +1,8 @@
 #include "Modules.h"
 #include "Convolver.h"
+#if LS_HAVE_CAPTURED_IRS
 #include "LightSeekerIrs.h"
+#endif
 #include <juce_audio_formats/juce_audio_formats.h>
 #include <map>
 #include <mutex>
@@ -14,8 +16,11 @@
 //
 // Spaces 32..34 are captured: impulse responses measured from the developer's own effect
 // captures (tools/captures: analysed, the direct sound removed, the tail continued at the
-// measured RT60 per octave, exported to assets/irs at 48 kHz) and compiled in. They are
-// resampled to the host's rate when the set is built.
+// measured RT60 per octave, 48 kHz) and compiled in. They are derived from private
+// recordings, so they are not in the repository: CI makes them from the Samples
+// repository (tools/captures/ci-build-irs.sh, CMake's LS_IRS_DIR). A build without them
+// (LS_HAVE_CAPTURED_IRS 0) uses generated spaces of the same character instead
+// (fallbackRecipes). They are resampled to the host's rate when the set is built.
 namespace dc {
 using namespace dsp;
 
@@ -98,6 +103,14 @@ const IrRecipe recipes[Vault::kinds] = {
     { .seconds = 3.2f, .preMs = 18, .bloomMs = 60, .rtLow = 3, .rtMid = 3, .rtHigh = 2, .lowCut = 50, .highCut = 11000, .bodyHz = 300, .bodyDb = 3, .width = 1, .early = 5, .earlyMs = 50, .earlyGain = 0.16f, .earlyLp = 8000, .glints = 18, .glintHz = 3800, .glintGain = 0.2f },
     // 31 Heroic Summit (Summit of Winds): huge, heroic and wide.
     { .seconds = 8, .preMs = 70, .bloomMs = 350, .rtLow = 7, .rtMid = 8, .rtHigh = 6, .lowCut = 45, .highCut = 15000, .bodyHz = 400, .bodyDb = 1, .width = 1, .early = 3, .earlyMs = 150, .earlyGain = 0.08f, .earlyLp = 9000 },
+};
+
+// The captured spaces' stand-ins, for builds without the captures: generated spaces in
+// their spirit (a long bright shimmering hall; a bright hall with far echoes; a lush hall).
+const IrRecipe fallbackRecipes[3] = {
+    { .seconds = 9.5f, .preMs = 20, .bloomMs = 250, .rtLow = 3, .rtMid = 7.5f, .rtHigh = 6.5f, .lowCut = 120, .highCut = 17000, .width = 1, .early = 3, .earlyMs = 60, .earlyGain = 0.08f, .earlyLp = 12000, .glints = 20, .glintHz = 5000, .glintGain = 0.16f },
+    { .seconds = 6, .preMs = 15, .bloomMs = 60, .rtLow = 1, .rtMid = 3.4f, .rtHigh = 2.2f, .lowCut = 140, .highCut = 15000, .width = 1, .echoes = 3, .echoMs = { 380, 760, 1140 }, .echoGain = { 0.3f, 0.2f, 0.12f }, .echoBlurMs = 18, .echoLp = 8000, .tailGain = 0.8f },
+    { .seconds = 5, .preMs = 12, .bloomMs = 120, .rtLow = 5, .rtMid = 4.8f, .rtHigh = 2.4f, .lowCut = 60, .highCut = 12000, .bodyHz = 400, .bodyDb = 1, .width = 1, .early = 4, .earlyMs = 40, .earlyGain = 0.1f, .earlyLp = 9000 },
 };
 
 double lengthScale(double sampleRate) { return sampleRate > 50000.0 ? 0.6 : 1.0; }   // memory at 88.2/96 kHz
@@ -195,7 +208,7 @@ std::array<std::vector<float>, 2> generate(const IrRecipe& r, double sr, std::ui
     return out;
 }
 
-// The captured spaces, in kind order from Vault::firstCaptured (assets/irs).
+// The captured spaces, in kind order from Vault::firstCaptured (made in CI: LS_IRS_DIR).
 constexpr const char* capturedFiles[] = { "radiant-shimmer-hall.wav", "cliff-hall-echo.wav", "chorus-hall.wav" };
 constexpr double capturedSeconds[] = { 9.5, 6.0, 5.0 };   // as exported (export_irs.py)
 
@@ -204,9 +217,13 @@ std::array<std::vector<float>, 2> captured(int index, double sr) {
     const char* file = capturedFiles[std::clamp(index, 0, 2)];
     int size = 0;
     const char* data = nullptr;
+#if LS_HAVE_CAPTURED_IRS
     for (int i = 0; i < LightSeekerIrs::namedResourceListSize; ++i)
         if (juce::String(LightSeekerIrs::originalFilenames[i]) == file)
             data = LightSeekerIrs::getNamedResource(LightSeekerIrs::namedResourceList[i], size);
+#else
+    juce::ignoreUnused(file);
+#endif
     if (data != nullptr) {
         juce::WavAudioFormat wav;
         std::unique_ptr<juce::AudioFormatReader> reader(wav.createReaderFor(new juce::MemoryInputStream(data, static_cast<std::size_t>(size), false), true));
@@ -231,7 +248,8 @@ std::array<std::vector<float>, 2> captured(int index, double sr) {
             }
         }
     }
-    if (out[0].empty()) for (auto& h : out) { h.assign(static_cast<std::size_t>(0.1 * sr), 0.0f); h[0] = 1.0f; }   // never: the resources are built in
+    if (out[0].empty())   // built without the captures: the generated stand-in
+        return generate(fallbackRecipes[std::clamp(index, 0, 2)], sr, 0x5eedca70u + static_cast<std::uint32_t>(index) * 977u);
     double energy = 0;
     for (const auto& h : out) for (float v : h) energy += double(v) * v;
     const float norm = static_cast<float>(std::sqrt(2.0 / std::max(1.0e-20, energy)));
@@ -268,6 +286,8 @@ std::shared_ptr<const IrSet> irSetFor(double sr) {
     return result;
 }
 }
+
+bool Vault::capturedSpacesBuiltIn() noexcept { return LS_HAVE_CAPTURED_IRS != 0; }
 
 double Vault::kindSeconds(int k) noexcept {
     if (k >= firstCaptured && k < kinds) return capturedSeconds[k - firstCaptured];

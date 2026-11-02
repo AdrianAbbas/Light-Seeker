@@ -1,7 +1,8 @@
 """Turns analysed capture IRs (run_all.py's <out>/<unit>/<patch>/ir.wav) into the compact
-impulse responses LIGHT SEEKER compiles in (assets/irs/<name>.wav, 48 kHz, 16-bit stereo).
+impulse responses LIGHT SEEKER compiles in (<out>/<name>.wav, 48 kHz, 16-bit stereo; CI only:
+ci-build-irs.sh, never committed: they are derived from private recordings).
 
-    python3 -I tools/captures/export_irs.py <analysis out-dir> assets/irs
+    python3 -I tools/captures/export_irs.py <analysis out-dir> <out-dir>
 
 Per IR: the leading silence before the first arrival is removed; the direct sound (the
 unit's dry path, 3 ms) is taken out, since the plug-in adds the dry itself; the captured
