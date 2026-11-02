@@ -11,6 +11,7 @@
 #include <juce_audio_utils/juce_audio_utils.h>
 #include "PluginProcessor.h"
 #include "EngravedLookAndFeel.h"
+#include "Hover.h"
 
 namespace dc::ui {
 
@@ -21,6 +22,10 @@ public:
     ~InstrumentPanel() override;
     void paint(juce::Graphics&) override;
     void resized() override;
+    // Stale hovers cleared on every mouse move, enter and exit (Direction Update 2).
+    void mouseMove(const juce::MouseEvent& e) override { sweepHover(*this, e.getScreenPosition().toFloat()); }
+    void mouseEnter(const juce::MouseEvent& e) override { sweepHover(*this, e.getScreenPosition().toFloat()); }
+    void mouseExit(const juce::MouseEvent& e) override { sweepHover(*this, e.getScreenPosition().toFloat()); }
 
     // Tests.
     juce::String instrumentName() const { return name.getText(); }
@@ -45,6 +50,8 @@ private:
     void showInstrumentMenu();
     void step(int direction);
     void refreshName();
+    void storeKeyboard();
+    int storedLowest = -1, restoreLowest = -1;
 
     LightSeekerProcessor& processor;
     EngravedLookAndFeel look;

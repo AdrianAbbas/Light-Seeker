@@ -114,6 +114,21 @@ public:
 
     // Milestone 11 (message thread). The window's scale (saved with the state).
     std::atomic<float> editorScale { 1.0f };
+    // The window as it was left (Direction Update 2): which view (the map or a place's
+    // scene), the controls strip, the Advanced drawer and the Journey panel (open, scrolled
+    // to), the on-screen keyboard's position. Kept here so a closed and reopened window
+    // comes back exactly as it was, and saved with the session (a project reopens it too).
+    struct ViewState {
+        bool valid = false;            // an editor has stored it (else: the defaults)
+        bool place = false;            // a place's scene; false: the world map
+        int location = 0, sub = 0;     // the scene shown then (the place follows the parameters)
+        bool controls = true, advanced = false, journey = false;
+        int advancedScroll = 0, journeyScroll = 0;
+        int lowestKey = 36;            // the instrument panel's keyboard
+        bool operator==(const ViewState&) const = default;
+    };
+    ViewState viewState() const;
+    void updateViewState(const std::function<void(ViewState&)>&);
     int qualityMode() const noexcept;
     // Presets: factory (favourite spots, journeys) and user presets (state files).
     void applyFactoryPreset(int index);
@@ -194,6 +209,8 @@ private:
     std::atomic<int> manualEpoch { 0 }, processedEpoch { 0 };
     std::atomic<bool> midiCancel { false };
     juce::String stopSteeringLocked();
+    mutable juce::SpinLock viewLock;
+    ViewState view;
     void setPlain(const char* id, float plain);
     // The settings the current preset loaded (for "modified"); none after loading a
     // project saved with a modified preset.

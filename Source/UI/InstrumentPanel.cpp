@@ -94,7 +94,9 @@ InstrumentPanel::InstrumentPanel(LightSeekerProcessor& p) : processor(p) {
     addAndMakeVisible(sustain);
 
     keyboard.setAvailableRange(24, 108);
-    keyboard.setLowestVisibleKey(36);
+    // Where the keyboard was scrolled to when the window was last open (Direction Update 2).
+    restoreLowest = processor.viewState().valid ? processor.viewState().lowestKey : 36;
+    keyboard.setLowestVisibleKey(restoreLowest);
     keyboard.setKeyWidth(15.0f);
     keyboard.setScrollButtonsVisible(true);
     keyboard.setMidiChannel(1);
@@ -112,9 +114,11 @@ InstrumentPanel::InstrumentPanel(LightSeekerProcessor& p) : processor(p) {
     keyboardState.addListener(this);
     refreshName();
     startTimerHz(15);
+    addMouseListener(this, true);   // stale hovers swept on any mouse event in the panel
 }
 
 InstrumentPanel::~InstrumentPanel() {
+    storeKeyboard();
     stopTimer();
     keyboardState.removeListener(this);
     setLookAndFeel(nullptr);
@@ -182,8 +186,17 @@ void InstrumentPanel::refreshName() {
     shownLocked = processor.instrumentLocked();
 }
 
+void InstrumentPanel::storeKeyboard() {
+    const int lowest = keyboard.getLowestVisibleKey();
+    if (lowest != storedLowest) {
+        storedLowest = lowest;
+        processor.updateViewState([lowest](LightSeekerProcessor::ViewState& v) { v.lowestKey = lowest; });
+    }
+}
+
 void InstrumentPanel::timerCallback() {
     if (processor.instrumentIndex() != shownIndex || processor.instrumentLocked() != shownLocked) refreshName();
+    storeKeyboard();
     // The host's notes light the keys (on a channel the panel never sends back).
     for (int note = 0; note < 128; ++note) {
         const bool lit = processor.keyLit(note);
@@ -235,8 +248,12 @@ void InstrumentPanel::resized() {
     bend.setBounds(12, 126, 26, 62);
     mod.setBounds(46, 126, 26, 62);
     sustain.setBounds(80, 150, 66, 30);
+    const int lowest = keyboard.getLowestVisibleKey();
     keyboard.setBounds(154, 114, getWidth() - 162, getHeight() - 120);
     keyboard.setKeyWidth(juce::jmax(10.0f, static_cast<float>(keyboard.getWidth() - 30) / 50.0f));
+    // Where it was scrolled to (as left, Direction Update 2), once it has its width.
+    keyboard.setLowestVisibleKey(restoreLowest >= 0 ? restoreLowest : lowest);
+    restoreLowest = -1;
 }
 
 } // namespace dc::ui

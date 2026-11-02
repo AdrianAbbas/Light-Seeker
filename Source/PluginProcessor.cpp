@@ -308,6 +308,7 @@ bool LightSeekerProcessor::loadUserPreset(const juce::File& file) {
     pushUndo();
     const int keepQuality = qualityMode();
     const float keepScale = editorScale.load();
+    const auto keepView = viewState();
     juce::MemoryBlock data;
     copyXmlToBinary(*xml, data);
     {
@@ -317,6 +318,7 @@ bool LightSeekerProcessor::loadUserPreset(const juce::File& file) {
     // Presets carry sounds, not the window or the quality setting.
     if (auto* q = parameters.getParameter(dc::ids::quality)) q->setValueNotifyingHost(q->convertTo0to1(static_cast<float>(keepQuality)));
     editorScale.store(keepScale);
+    if (keepView.valid) updateViewState([&keepView](ViewState& v) { v = keepView; });
     presetName = xml->getStringAttribute("presetName", file.getFileNameWithoutExtension());
     presetIndex = -1;
     manualEpoch.fetch_add(1, std::memory_order_acq_rel);
@@ -638,6 +640,17 @@ void LightSeekerProcessor::process(juce::AudioBuffer<float>& buffer, bool forced
     cpuLoad.store(0.9f * cpuLoad.load() + 0.1f * static_cast<float>(seconds * rate / numSamples), std::memory_order_relaxed);
 }
 
+LightSeekerProcessor::ViewState LightSeekerProcessor::viewState() const {
+    const juce::SpinLock::ScopedLockType sl(viewLock);
+    return view;
+}
+
+void LightSeekerProcessor::updateViewState(const std::function<void(ViewState&)>& change) {
+    const juce::SpinLock::ScopedLockType sl(viewLock);
+    change(view);
+    view.valid = true;
+}
+
 juce::AudioProcessorParameter* LightSeekerProcessor::getBypassParameter() const { return parameters.getParameter(dc::ids::bypass); }
 juce::AudioProcessorEditor* LightSeekerProcessor::createEditor() { return new LightSeekerEditor(*this); }
 
@@ -651,6 +664,20 @@ void LightSeekerProcessor::getStateInformation(juce::MemoryBlock& data) {
     for (const auto& st : route()) stops.add(juce::String(st.location) + ":" + juce::String(st.sub));
     state.setProperty("route", stops.joinIntoString(","), nullptr);
     if (instrumentMode) state.setProperty("lockedInstrument", lockedInstrument.load() >= 0 ? lockedInstrument.load() : shownInstrument.load(), nullptr);
+    // The window as it was left (Direction Update 2): a child older versions ignore.
+    if (const auto v = viewState(); v.valid) {
+        juce::ValueTree w("EditorView");
+        w.setProperty("place", v.place, nullptr);
+        w.setProperty("location", v.location, nullptr);
+        w.setProperty("sub", v.sub, nullptr);
+        w.setProperty("controls", v.controls, nullptr);
+        w.setProperty("advanced", v.advanced, nullptr);
+        w.setProperty("journey", v.journey, nullptr);
+        w.setProperty("advancedScroll", v.advancedScroll, nullptr);
+        w.setProperty("journeyScroll", v.journeyScroll, nullptr);
+        w.setProperty("lowestKey", v.lowestKey, nullptr);
+        state.appendChild(w, nullptr);
+    }
     if (auto xml = state.createXml()) copyXmlToBinary(*xml, data);
 }
 
@@ -681,6 +708,20 @@ void LightSeekerProcessor::setStateInformation(const void* data, int size) {
         if (std::isfinite(scale)) editorScale.store(juce::jlimit(0.5f, 2.0f, scale));
     }
     if (incoming.hasProperty("presetName")) presetName = incoming.getProperty("presetName").toString();
+    // The window as it was left (Direction Update 2), when the state has it.
+    if (const auto w = incoming.getChildWithName("EditorView"); w.isValid()) {
+        updateViewState([&w](ViewState& v) {
+            v.place = static_cast<bool>(w.getProperty("place", false));
+            v.location = juce::jlimit(0, dc::LocationCount - 1, static_cast<int>(w.getProperty("location", 0)));
+            v.sub = juce::jlimit(0, dc::maxSubLocations, static_cast<int>(w.getProperty("sub", 0)));
+            v.controls = static_cast<bool>(w.getProperty("controls", true));
+            v.advanced = static_cast<bool>(w.getProperty("advanced", false));
+            v.journey = static_cast<bool>(w.getProperty("journey", false)) && !v.advanced;
+            v.advancedScroll = juce::jlimit(0, 100000, static_cast<int>(w.getProperty("advancedScroll", 0)));
+            v.journeyScroll = juce::jlimit(0, 100000, static_cast<int>(w.getProperty("journeyScroll", 0)));
+            v.lowestKey = juce::jlimit(0, 127, static_cast<int>(w.getProperty("lowestKey", 36)));
+        });
+    }
     // The journey route (version 3); older states have none.
     std::vector<dc::Stop> stops;
     for (const auto& token : juce::StringArray::fromTokens(incoming.getProperty("route").toString(), ",", ""))

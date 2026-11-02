@@ -107,7 +107,7 @@ double nowSeconds() { return juce::Time::getMillisecondCounterHiRes() * 0.001; }
 float ease(float t) { t = juce::jlimit(0.0f, 1.0f, t); return t * t * (3.0f - 2.0f * t); }
 }
 
-void LightSeekerView::LandmarkButton::paintButton(juce::Graphics& g, bool highlighted, bool) {
+void LightSeekerView::LandmarkButton::paintHover(juce::Graphics& g, bool highlighted, bool) {
     if (!highlighted) return;
     // A soft pale halo and a hairline ring around the landmark.
     const auto r = getLocalBounds().toFloat().reduced(3.0f);
@@ -118,7 +118,7 @@ void LightSeekerView::LandmarkButton::paintButton(juce::Graphics& g, bool highli
     g.drawEllipse(r.reduced(2.0f), 0.9f);
 }
 
-void LightSeekerView::HotspotButton::paintButton(juce::Graphics& g, bool highlighted, bool) {
+void LightSeekerView::HotspotButton::paintHover(juce::Graphics& g, bool highlighted, bool) {
     const auto r = getLocalBounds().toFloat();
     const auto ring = juce::Rectangle<float>(22.0f, 22.0f).withCentre({ r.getCentreX(), 14.0f });
     const bool here = getToggleState();
@@ -148,6 +148,44 @@ void LightSeekerView::HotspotButton::paintButton(juce::Graphics& g, bool highlig
     }
 }
 
+void LightSeekerView::PlaceButton::paintHover(juce::Graphics& g, bool hover, bool down) {
+    const auto bounds = getLocalBounds().toFloat().reduced(3.0f, 3.0f);
+    const bool selected = getToggleState();
+    const auto text = getButtonText();
+    const auto font = labelFont(juce::jmin(16.0f, static_cast<float>(getHeight()) * 0.58f));
+    const float textWidth = juce::GlyphArrangement::getStringWidth(font, text);
+    // Hover (only while the mouse is over it): a soft glow behind the name.
+    if (hover || down) {
+        g.setGradientFill(juce::ColourGradient(colours::ivory.withAlpha(down ? 0.12f : 0.08f), bounds.getCentre(),
+                                               colours::ivory.withAlpha(0.0f), bounds.getCentre().translated(bounds.getWidth() * 0.6f, 0.0f), true));
+        g.fillRect(bounds);
+    }
+    // Selected (stable, whatever the mouse does): a gold diamond before the name and a gold
+    // rule under it as wide as the name.
+    if (selected) {
+        const float cx = bounds.getCentreX() - textWidth * 0.5f - 10.0f, cy = bounds.getCentreY();
+        juce::Path diamond;
+        diamond.addQuadrilateral(cx, cy - 3.5f, cx + 3.5f, cy, cx, cy + 3.5f, cx - 3.5f, cy);
+        g.setColour(colours::blood);
+        g.fillPath(diamond);
+        const auto rule = juce::Rectangle<float>(textWidth + 8.0f, 1.5f).withCentre({ bounds.getCentreX(), bounds.getBottom() - 1.0f });
+        juce::ColourGradient grad(colours::blood.withAlpha(0.0f), rule.getX(), 0, colours::blood.withAlpha(0.0f), rule.getRight(), 0, false);
+        grad.addColour(0.5, colours::blood);
+        grad.addColour(0.15, colours::blood.withAlpha(0.8f));
+        grad.addColour(0.85, colours::blood.withAlpha(0.8f));
+        g.setGradientFill(grad);
+        g.fillRect(rule);
+    } else if (hover) {
+        // A faint rule under a hovered name: what a click would choose.
+        const auto rule = juce::Rectangle<float>(textWidth * 0.6f, 1.0f).withCentre({ bounds.getCentreX(), bounds.getBottom() - 1.0f });
+        g.setColour(colours::blood.withAlpha(0.35f));
+        g.fillRect(rule);
+    }
+    g.setFont(font);
+    g.setColour(selected ? colours::ivory : (hover ? colours::ivory.withAlpha(0.92f) : colours::ash));
+    g.drawText(text, getLocalBounds().reduced(4, 1), juce::Justification::centred, true);
+}
+
 LightSeekerView::LightSeekerView(LightSeekerProcessor& p)
     : processor(p), cache([this] { sceneReady(); }), drawer(p.parameters),
       journeyPanel(p, [this] { return dc::Stop { shown, dc::clampSubLocation(shown, shownSub) }; }) {
@@ -169,8 +207,10 @@ LightSeekerView::LightSeekerView(LightSeekerProcessor& p)
             if (already) goTo(View::Place, { i, 0 }, 1);
             else { zoomAt = nowSeconds() + 0.55; wakeTimer(); }
         };
-        button->onStateChange = [this, i] {
-            const bool over = landmarks[static_cast<std::size_t>(i)]->isOver();
+        // The landmark's name plate follows its own hover flag (cleared on exit, when
+        // hidden, and by the sweep), so it never stays up.
+        button->onHover = [this, i] {
+            const bool over = landmarks[static_cast<std::size_t>(i)]->hot();
             if (over != (hovered == i)) { hovered = over ? i : (hovered == i ? -1 : hovered); repaint(); }
         };
         addAndMakeVisible(*button);
@@ -181,7 +221,7 @@ LightSeekerView::LightSeekerView(LightSeekerProcessor& p)
         spot->onClick = [this, k] { travelManually(shown, k); };
         addChildComponent(*spot);
         auto& button = subs[static_cast<std::size_t>(k)];
-        button = std::make_unique<juce::TextButton>();
+        button = std::make_unique<PlaceButton>();
         button->setClickingTogglesState(false);
         button->onClick = [this, k] { travelManually(shown, k); };
         addChildComponent(*button);
@@ -246,8 +286,9 @@ LightSeekerView::LightSeekerView(LightSeekerProcessor& p)
             drawer.grabKeyboardFocus();
         }
         repaint();
+        storeViewState();
     };
-    drawer.onClose = [this] { advancedToggle.setToggleState(false, juce::dontSendNotification); drawer.setVisible(false); repaint(); };
+    drawer.onClose = [this] { advancedToggle.setToggleState(false, juce::dontSendNotification); drawer.setVisible(false); repaint(); storeViewState(); };
     addAndMakeVisible(advancedToggle);
     journeyToggle.setClickingTogglesState(true);
     journeyToggle.onClick = [this] {
@@ -259,8 +300,9 @@ LightSeekerView::LightSeekerView(LightSeekerProcessor& p)
             journeyPanel.grabKeyboardFocus();
         }
         repaint();
+        storeViewState();
     };
-    journeyPanel.onClose = [this] { journeyToggle.setToggleState(false, juce::dontSendNotification); journeyPanel.setVisible(false); repaint(); };
+    journeyPanel.onClose = [this] { journeyToggle.setToggleState(false, juce::dontSendNotification); journeyPanel.setVisible(false); repaint(); storeViewState(); };
     addAndMakeVisible(journeyToggle);
     addChildComponent(journeyPanel);
     // The Journey / Roam badge with its Stop button, and the short note.
@@ -322,6 +364,7 @@ LightSeekerView::LightSeekerView(LightSeekerProcessor& p)
         controlsToggle.setButtonText(juce::String::fromUTF8(controlsShown ? "\xe2\x96\xbe" : "\xe2\x96\xb4"));
         resized();
         repaint();
+        storeViewState();
     };
     addAndMakeVisible(controlsToggle);
     addChildComponent(drawer);
@@ -333,6 +376,64 @@ LightSeekerView::LightSeekerView(LightSeekerProcessor& p)
     setWantsKeyboardFocus(true);
     setSize(defaultWidth, defaultHeight);
     refreshSteering();
+    // Direction Update 2: the window comes back as it was left (never back to the map
+    // unless it was on the map): the view and scene, the controls strip, the panels open
+    // and where they were scrolled to. No zoom: the scene simply appears.
+    const auto saved = processor.viewState();
+    if (saved.valid) {
+        if (!saved.controls) controlsToggle.onClick();
+        if (saved.place && shown >= 0) {
+            view = View::Place;
+            scene = { shown, dc::clampSubLocation(shown, shownSub) };
+            updateCrumbs();
+            layoutOverlays();
+            const auto px = pixelSize();
+            cache.request(scene, px.x, px.y);
+        }
+        if (saved.advanced) {
+            advancedToggle.setToggleState(true, juce::dontSendNotification);
+            advancedToggle.onClick();
+            drawer.setScroll(saved.advancedScroll);
+        } else if (saved.journey) {
+            journeyToggle.setToggleState(true, juce::dontSendNotification);
+            journeyToggle.onClick();
+            journeyPanel.setScroll(saved.journeyScroll);
+        }
+    }
+    storeViewState();
+}
+
+void LightSeekerView::storeViewState() {
+    const bool place = (pending ? pendingView : view) == View::Place;
+    const auto shownScene = pending ? pendingScene : scene;
+    const bool advanced = drawer.isVisible(), journey = journeyPanel.isVisible();
+    const int advancedScroll = drawer.scroll(), journeyScroll = journeyPanel.scroll();
+    const bool controls = controlsShown;
+    processor.updateViewState([&](LightSeekerProcessor::ViewState& v) {
+        v.place = place;
+        if (place) { v.location = shownScene.location; v.sub = shownScene.sub; }
+        else if (shown >= 0) { v.location = shown; v.sub = dc::clampSubLocation(shown, shownSub); }
+        v.controls = controls;
+        v.advanced = advanced;
+        v.journey = journey;
+        if (advanced) v.advancedScroll = advancedScroll;
+        if (journey) v.journeyScroll = journeyScroll;
+    });
+}
+
+void LightSeekerView::scaleChanged() {
+    // The window was resized (a new transform, not a new size): the art at the new pixel
+    // size. The current frame is scaled until it is ready.
+    const auto px = pixelSize();
+    cache.request(scene, px.x, px.y);
+    wakeTimer();
+}
+
+void LightSeekerView::refreshFrame() {
+    if (transition.active) return;
+    const auto px = pixelSize();
+    auto image = cache.get(scene, px.x, px.y);   // queues the scene if it is not ready
+    if (image.isValid() && !(image == frame)) { frame = image; repaint(); }
 }
 
 void LightSeekerView::travelManually(int l, int k) {
@@ -395,6 +496,7 @@ void LightSeekerView::closePanels() {
     journeyPanel.setVisible(false);
     drawer.setVisible(false);
     if (any) repaint();
+    storeViewState();
 }
 
 bool LightSeekerView::keyPressed(const juce::KeyPress& key) {
@@ -430,6 +532,7 @@ void LightSeekerView::SteerBadge::resized() {
 }
 
 LightSeekerView::~LightSeekerView() {
+    storeViewState();
     for (auto* parameter : processor.getParameters()) parameter->removeListener(this);
     follower.stopTimer();
     stopTimer();
@@ -534,6 +637,7 @@ void LightSeekerView::goTo(View target, dc::art::SceneId id, int kind) {
     const auto px = pixelSize();
     cache.request(pendingScene, px.x, px.y);
     wakeTimer();
+    storeViewState();
 }
 
 void LightSeekerView::wakeTimer() {
@@ -543,7 +647,7 @@ void LightSeekerView::wakeTimer() {
 void LightSeekerView::sceneReady() {
     // A scene finished rendering: show it (or start the transition that waited for it).
     timerCallback();
-    if (!transition.active && !pending) refreshLights();
+    if (!transition.active && !pending) { refreshFrame(); refreshLights(); }
     repaint();
 }
 
@@ -572,6 +676,7 @@ void LightSeekerView::timerCallback() {
             view = pendingView;
             scene = pendingScene;
             pending = false;
+            if (transition.to.isValid()) frame = transition.to;
             if (transition.from.isNull()) transition.active = false;   // nothing to transition from
             updateCrumbs();
             layoutOverlays();
@@ -586,6 +691,7 @@ void LightSeekerView::timerCallback() {
             transition.fromPlanes = {};
             transition.toPlanes = {};
             layoutOverlays();
+            refreshFrame();
             refreshLights();
         }
         repaint();
@@ -742,6 +848,7 @@ void LightSeekerView::followSteering() {
     if (current) wasSteering = steering;
     if (journeyPanel.isVisible()) journeyPanel.refresh();
     refreshSteering();
+    if (drawer.isVisible() || journeyPanel.isVisible()) storeViewState();   // where they are scrolled to
 }
 
 void LightSeekerView::refreshLights() {
@@ -901,6 +1008,7 @@ void LightSeekerView::settleForTest() {
     transition.toPlanes = {};
     pathTo = -1;
     layoutOverlays();
+    refreshFrame();
     refreshLights();
     stopTimer();
 }
@@ -1075,7 +1183,9 @@ void LightSeekerView::layoutOverlays() {
     for (int k = 0; k < dc::placesPerLocation; ++k) {
         auto& button = *subs[static_cast<std::size_t>(k)];
         button.setBounds(getWidth() - listWidth - 14, 16 + k * rowHeight, listWidth, rowHeight);
-        button.setVisible(place && k <= count);
+        // Shown throughout a place (also while travelling between its places): hiding it
+        // under the mouse and showing it again was one way a hover could stick.
+        button.setVisible(view == View::Place && k <= count);
     }
     // Breadcrumb, top left.
     mapCrumb.setBounds(14, 14, 74, 28);
@@ -1251,10 +1361,14 @@ void LightSeekerView::paint(juce::Graphics& g) {
     g.setImageResamplingQuality(juce::Graphics::mediumResamplingQuality);
     if (transition.active) paintTransition(g, now);
     else {
-        const auto image = cache.get(scene, px.x, px.y);
-        if (image.isValid()) g.drawImage(image, getLocalBounds().toFloat());
+        // Double-buffered (Direction Update 2): every region, however small, is painted
+        // again from the frame (the scene at rest); never a fill over the art. Only before
+        // the very first scene is ready, a soft sky.
+        juce::ignoreUnused(px);
+        if (frame.isValid()) g.drawImage(frame, getLocalBounds().toFloat());
         else {
-            g.fillAll(colours::ink);
+            g.setGradientFill(juce::ColourGradient(juce::Colour(0xffa9c8ec), 0.0f, 0.0f, juce::Colour(0xfff6ecd8), 0.0f, static_cast<float>(getHeight()) * 0.7f, false));
+            g.fillAll();
             g.setColour(colours::ash.withAlpha(0.6f));
             g.setFont(labelFont(14.0f));
             g.drawText(scene.isMap() ? "unrolling the map..." : "travelling...", getLocalBounds(), juce::Justification::centred);
@@ -1532,6 +1646,7 @@ void LightSeekerEditor::resized() {
     const float scale = static_cast<float>(getWidth()) / static_cast<float>(defaultWidth);
     content.setBounds(0, 0, defaultWidth, defaultHeight);
     content.setTransform(juce::AffineTransform::scale(scale));
+    content.scaleChanged();
     if (panel != nullptr) {
         panel->setBounds(0, defaultHeight, defaultWidth, dc::ui::InstrumentPanel::panelHeight);
         panel->setTransform(juce::AffineTransform::scale(scale));

@@ -18,6 +18,7 @@
 #include "UI/EngravedLookAndFeel.h"
 #include "UI/SceneCache.h"
 #include "UI/InstrumentPanel.h"
+#include "UI/Hover.h"
 
 class LightSeekerView final : public juce::Component, private juce::Timer, private juce::AudioProcessorParameter::Listener {
 public:
@@ -31,10 +32,37 @@ public:
     // Panels close on Esc and on a click outside them (Hotfix 2).
     bool keyPressed(const juce::KeyPress&) override;
     void mouseDown(const juce::MouseEvent&) override;
+    // Every mouse move, enter and exit in the window (its children too) sweeps stale hovers.
+    void mouseMove(const juce::MouseEvent& e) override { dc::ui::sweepHover(*this, e.getScreenPosition().toFloat()); }
+    void mouseEnter(const juce::MouseEvent& e) override { dc::ui::sweepHover(*this, e.getScreenPosition().toFloat()); }
+    void mouseExit(const juce::MouseEvent& e) override { dc::ui::sweepHover(*this, e.getScreenPosition().toFloat()); }
     int shownLocation() const noexcept { return shown; }
     int shownSubLocation() const noexcept { return shownSub; }
     juce::Button& locationButton(int index) { return *landmarks[static_cast<std::size_t>(index)]; }
     juce::Button& subLocationButton(int index) { return *subs[static_cast<std::size_t>(index)]; }
+    // Tests (Direction Update 2): the hover each place-list entry, hotspot and landmark
+    // shows; a sweep with the mouse at a screen point.
+    bool placeHoverShown(int index) const { return subs[static_cast<std::size_t>(index)]->hot(); }
+    bool hotspotHoverShown(int index) const { return hotspots[static_cast<std::size_t>(index)]->hot(); }
+    bool landmarkHoverShown(int index) const { return landmarks[static_cast<std::size_t>(index)]->hot(); }
+    int hoveredLandmark() const noexcept { return hovered; }
+    int sweepHoverForTest(juce::Point<float> screen) { return dc::ui::sweepHover(*this, screen); }
+    // Tests: the frame the view paints from (the last scene image that was ready), and
+    // forgetting every rendered scene (as if the window's pixel size had just changed).
+    const juce::Image& frameForTest() const noexcept { return frame; }
+    void forgetScenesForTest() { cache.clearForTest(); }
+    // Tests: the birds moved on by some seconds; where they are.
+    void stepBirdsForTest(float seconds) { for (float t = 0; t < seconds; t += 1.0f / 15.0f) stepBirds(1.0f / 15.0f, 0.0); }
+    juce::Rectangle<int> birdsAreaForTest() const { return birdsArea(); }
+    void clearBirdsForTest() { birds.clear(); }
+    void closePanelsForTest() { closePanels(); }
+    bool controlsShownForTest() const noexcept { return controlsShown; }
+    // Direction Update 2: the window's state into the processor (also on every change).
+    void storeViewState();
+    // The window's scale changed (the editor's transform): the art at the new pixel size.
+    void scaleChanged();
+    juce::Viewport* drawerViewportForTest() { return drawer.viewportForTest(); }
+    juce::Viewport* journeyViewportForTest() { return journeyPanel.viewportForTest(); }
     juce::Button& hotspotButton(int index) { return *hotspots[static_cast<std::size_t>(index)]; }
     juce::Button& advancedButton() { return advancedToggle; }
     juce::Button& mapButton() { return mapCrumb; }
@@ -102,17 +130,25 @@ private:
     };
     // A landmark on the map: an invisible button over the engraved landmark that rings
     // when hovered.
-    class LandmarkButton final : public juce::Button {
+    class LandmarkButton final : public dc::ui::HoverButton {
     public:
-        LandmarkButton(const juce::String& name) : juce::Button(name) {}
-        void paintButton(juce::Graphics&, bool highlighted, bool down) override;
+        LandmarkButton(const juce::String& name) : dc::ui::HoverButton(name) {}
+        void paintHover(juce::Graphics&, bool hover, bool down) override;
     };
     // A point of interest inside a scene: a small engraved ring, red for the place you
     // are in, its name on hover.
-    class HotspotButton final : public juce::Button {
+    class HotspotButton final : public dc::ui::HoverButton {
     public:
-        HotspotButton() : juce::Button({}) {}
-        void paintButton(juce::Graphics&, bool highlighted, bool down) override;
+        HotspotButton() : dc::ui::HoverButton({}) {}
+        void paintHover(juce::Graphics&, bool hover, bool down) override;
+    };
+    // An entry of the place list (top right): the selected place a gold diamond, its name
+    // in full ink and a gold rule under it (stable); a hovered one a soft glow, cleared the
+    // moment the mouse leaves (Direction Update 2).
+    class PlaceButton final : public dc::ui::HoverButton {
+    public:
+        PlaceButton() : dc::ui::HoverButton({}) {}
+        void paintHover(juce::Graphics&, bool hover, bool down) override;
     };
     // The Advanced drawer: one row per module parameter, grouped by module.
     class Drawer final : public juce::Component {
@@ -122,6 +158,9 @@ private:
         void resized() override;
         juce::Button& closeButton() { return close; }
         std::function<void()> onClose;
+        juce::Viewport* viewportForTest() { return &viewport; }
+        int scroll() const { return viewport.getViewPositionY(); }
+        void setScroll(int y) { viewport.setViewPosition(0, y); }
     private:
         juce::TextButton close;
         struct Row {
@@ -149,6 +188,9 @@ private:
         juce::Button& clearButton() { return clear; }
         juce::Button& closeButton() { return close; }
         std::function<void()> onClose;
+        juce::Viewport* viewportForTest() { return &viewport; }
+        int scroll() const { return viewport.getViewPositionY(); }
+        void setScroll(int y) { viewport.setViewPosition(0, y); }
     private:
         // The panel's contents scroll under its title row (it ends above the controls).
         struct Body final : juce::Component {
@@ -249,6 +291,12 @@ private:
     LightSeekerProcessor& processor;
     dc::ui::EngravedLookAndFeel look;
     dc::art::SceneCache cache;
+    // The frame the view paints from (Direction Update 2: double-buffered): the shown
+    // scene composited at rest, kept until the next one is ready. A repaint of any region
+    // (the birds', a button's) draws it again from here, never a fill: if the art at a new
+    // pixel size is still rendering, the previous frame is scaled meanwhile.
+    juce::Image frame;
+    void refreshFrame();
     View view = View::Map;
     dc::art::SceneId scene { -1, 0 };
     // A requested change of view that waits for its image.
@@ -288,7 +336,7 @@ private:
 
     std::array<std::unique_ptr<LandmarkButton>, dc::LocationCount> landmarks;
     std::array<std::unique_ptr<HotspotButton>, dc::placesPerLocation> hotspots;
-    std::array<std::unique_ptr<juce::TextButton>, dc::placesPerLocation> subs;
+    std::array<std::unique_ptr<PlaceButton>, dc::placesPerLocation> subs;
     juce::TextButton mapCrumb { juce::String::fromUTF8("\xe2\x80\xb9  Map") }, locationCrumb;
     juce::Label placeCrumb;
     std::unique_ptr<juce::ParameterAttachment> locationAttachment, subLocationAttachment;
