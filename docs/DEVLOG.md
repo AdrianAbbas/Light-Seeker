@@ -1264,3 +1264,61 @@ golden eggs on the hoard, on a grassy plateau. (A journey preset is still called
 of the Dragon": a name only, kept so saved sessions find it.)
 
 ### 6. The art: less polygonal, a little more real
+
+The developer's verdict on the first re-render: "they all look SO FAKE", with a luminous
+fantasy illustration as the reference (a white castle on cliffs, backlit, glowing, a meadow
+of flowers): *whimsical yet realistic*; and the instruction to get there the way DUNGEON
+CRAWLER did: not with better models but with **light**.
+
+**What the genre does with light** (a study of luminous fantasy and anime background
+painting, backlight tutorials, the Orton effect and compositing light wrap):
+- **Contre-jour**: the sun *in* the picture, behind the subject; a hot rim on every edge
+  facing it, glowing silhouettes, the fronts in soft coloured shade.
+- **Coloured shadows, warm light**: shadows lavender, rose and teal, never grey; highlights
+  warm cream and gold, without turning the whole picture yellow.
+- **Clouds** with warm-lit tops, cool lavender undersides and silver linings towards the sun.
+- **Atmospheric perspective**: the distance paler, lighter and cooler; detail and contrast in
+  front; a darker, cooler foreground (repoussoir) so the light lives in the distance.
+- **Glow**: bloom around the brightest light, an Orton glow (a blurred copy screened over the
+  picture) for the dreamy watercolour quality, used with restraint so contrast survives.
+- **Light wrap**: a bright background bleeds over the edges of what stands in front of it, so
+  things sit in the air rather than looking cut out.
+
+**What was wrong with ours**: the 3D key light came from *behind the viewer* while the painted
+sun shone in the sky *ahead*: the light contradicted the picture, and frontal light is flat.
+That, more than the models, is what made the scenes read as fake.
+
+**What changed** (pipeline, `tools/painted`):
+- `render.py` `backlight`: the key light now comes from where the sun is painted (raised to at
+  least 24 degrees), stronger and warmer; the old frontal key stays as a soft warm fill (light
+  bounced back from a sunny world); the physical sky follows the sun. Interiors keep their
+  window light.
+- `light.py`, the illustration light pass, on the painted layers (same screen-space maths on
+  every layer, so the plug-in's parallax still lines up): crepuscular rays (a radial blur of
+  the sky wherever nothing hides it, gold, over every layer with the air in front of it),
+  light wrap (the blurred, bright background over each layer's outline, back to front), a
+  warm rim on every outline facing the sun, bloom (its glow spills past the outline), an
+  Orton glow, an S-curve, split toning (lavender-rose shadows, cream-gold highlights),
+  vibrance (pastels lifted, strong colours left alone), repoussoir, a warm vignette.
+- The 2D sky's clouds have silver linings towards the sun, warm tops and cool bases; the
+  volumetric cumulus is a heap (a flat-based body and 2-4 billowing puffs piled on it, each
+  with its own noise) that scatters forwards (silver linings when backlit) with less flat
+  self-glow; the far layer renders at 70 % with half the samples (it is hazed and softened
+  anyway; the volumes cost most of the render time).
+- Models (from the first pass of this update, kept): natural trees (recursive skeleton,
+  golden-angle branching, tropism, pipe-model taper, smooth continuous tubes, a crown of
+  alpha-cut leaf cards textured with a sprig drawn in numpy, every tree different), distant
+  woods with a soft core and a leafy fringe, `finish.py` (smooth shading with sharp edges
+  above 40 degrees, small bevels on the architecture, subdivision on soft shapes, rock broken
+  by Voronoi and cloud displacement), bark and golden-bough materials, the woven nest.
+- Fixes found while looking: the blossom read purple (sky-lit pink: now a stronger pink,
+  more translucent so the backlight glows through it); the meadow was a carpet of petals
+  (fewer, bigger flowers close to the eye, grass between them); the floating islands'
+  grass was half buried under a noise bump of their turf that the grass did not follow (a
+  bare patch on every island, also in the old art): the turf and the scatter now agree.
+
+Sources consulted (techniques only; nothing copied): Clip Studio Tips on backlighting
+("Glow Up Your Art", "How to Create Captivating Backlit Illustrations"), Creative Bloq on
+painterly atmospheric environments, the Orton effect write-ups (Adorama, Lenscraft), James
+Gurney on painting in the Ghibli style, and the developer's reference image (palette and
+light only).
