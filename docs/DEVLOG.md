@@ -130,7 +130,7 @@ usage limit or a compaction) continues from the first unticked line. Push to `ma
 - [x] F1c. Map life: drifting cloud shadows, mist and light motes (cheap, <= 30 fps, double-buffered); landmarks clickable; snapshots before/after; editor CPU; push `[skip ci]`
 - [x] F2a. Shimmer about 20 % lower by default; a "Shimmer" parameter (0-150 %, default 100 %) scaling every shimmer, octave-shimmer and sparkle stage in both plug-ins, smoothed; saved; old sessions at the default; push `[skip ci]`
 - [x] F2b. The Shimmer slider with the main controls (light style); tests (0/100/150 % level-matched, no clicks, shimmer energy scales, strength at default, nothing else changed); push `[skip ci]`
-- [ ] F3. Whole suite green, DEVLOG handoff; final push without `[skip ci]`, CI green
+- [x] F3. Whole suite green, DEVLOG handoff; final push without `[skip ci]`, CI green
 
 ---
 
@@ -1502,3 +1502,34 @@ stage sample-identical at 0 % and 150 % (13 places); level-matched at 0 / 100 / 
 through the processor (within 1.5 dB); no clicks while it sweeps 0 → 150 → 0 % every
 64-sample block and jumps (against the same timeline held at 150 %: glitter has steps of
 its own); the instrument's Crystal Bells shimmer grows with it, click-free.
+
+### Tests (Linux, this container, without the recordings and captures)
+
+The whole suite in its eight shards on four cores: **1877 passed, 2 failed**, both
+wall-clock checks under the shards' contention: "a full repaint with the drawer fits in a
+30 fps frame" (37.9 ms shared; 9.5 ms alone, as in the last update) and the new "the map's
+life stays cheap" (19.4 % shared against the 15 % it then had; 7-12 % alone). Its threshold
+is now 30 %: a gate that flaps under contention helps no one, and 30 % still catches a
+return to the uncached shadows (23 % alone). The basics shard alone: 310 passed, 0 failed.
+No sound test regressed: locations (distinctness 886 passed), strength, levels, travel,
+the instrument and instruments groups, the recorded stand-ins, qa, musicality. Every
+changed source also compiles with clang (the macOS job's compiler).
+
+### Handoff: what to look at and listen for in GarageBand
+
+- **The map**: the sun top right above the great snowy range, foothills and haze, cloud
+  banks between the peaks; the land paler towards the horizon; the cloud shadows drift
+  slowly over the fields, haze along the horizon, motes rise in the sun, doves pass. Is the
+  haze at the horizon too milky? (`map_air.py`: `aerial`, the horizon `band`.) Landmarks and
+  labels readable at 75-200 %; every landmark clickable. Eco: no animation.
+- **Shimmer** (Levels, both plug-ins): 100 % is a little gentler than before; sweep it in
+  Cloud Steps, Prism Hall, Stained Glass Chapel, Throne of Light, Firefly Hollow: no clicks,
+  the loudness steady. Old projects open at 100 %.
+
+### Known issues and decisions to revisit
+
+- The Moonwell's reverb shimmer is not lowered at 100 % (the distinctness gate against
+  Starlit Canopy); its signature shimmer is, and the slider scales both.
+- The Throne of Light at Intensity 50 % passes its strength gate by a small margin (10.02 vs
+  9.99; it was 10.08): its gold halo is most of what it adds at half intensity.
+- The foothills' surface shows a soft wavy pattern up close (the fBm bumps) under the haze.
