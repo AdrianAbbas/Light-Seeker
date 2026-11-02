@@ -117,9 +117,10 @@ usage limit or a compaction) continues from the first unticked line. Push to `ma
 - [x] U2. Birds: no white rectangle (the dirty region repainted from the last good frame, never a fill); snapshot test of a frame with birds at several window sizes; push `[skip ci]`
 - [x] U3. The window reopens as it was left: view (map or place) and scene, window scale, controls strip, Advanced drawer and Journey panel (and their scroll), keyboard position; kept in the processor and in the saved state; restore test; push `[skip ci]`
 - [x] U4. Hover: the place list (and every hoverable control) clears its highlight on mouse exit; the selected place a distinct, stable state; hover-clear test; push `[skip ci]`
-- [ ] U5. Dragons removed from every scene, the map and the animations (Dragon's Peak keeps its name, cliffs, nest and sky); push `[skip ci]`
-- [ ] U6a. Art pipeline: smooth shading and subdivision, natural trees (branching, leaf cards with alpha, varied sizes), grass and flower scattering, displaced broken rock, better materials, atmospheric depth; CC0 log
-- [ ] U6b. Every location, sub-location and the map re-rendered; sizes about the same; `docs/snapshots/` before/after
+- [x] U5. Dragons removed from every scene, the map and the animations (Dragon's Peak keeps its name, cliffs, nest and sky); push `[skip ci]`
+- [x] U6a. Art pipeline: smooth shading and subdivision, natural trees (branching, leaf cards with alpha, varied sizes), grass and flower scattering, displaced broken rock, better materials, atmospheric depth; CC0 log
+- [x] U6b. Every location, sub-location and the map re-rendered; sizes about the same; `docs/snapshots/` before/after
+- [x] U6c. The developer: "they all look SO FAKE" (a luminous fantasy illustration as the reference): a study of how the genre uses light; contre-jour lighting from the painted sun and the illustration light pass (`light.py`); every scene and the map re-rendered again
 - [ ] U7. Whole suite green, DEVLOG handoff (what to look at in GarageBand); final push without `[skip ci]`, CI green
 
 ---
@@ -1322,3 +1323,49 @@ Sources consulted (techniques only; nothing copied): Clip Studio Tips on backlig
 painterly atmospheric environments, the Orton effect write-ups (Adorama, Lenscraft), James
 Gurney on painting in the Ghibli style, and the developer's reference image (palette and
 light only).
+
+**The art, re-rendered** (all 32 scenes and the map, 1920 x 1120, 20 samples, the far layer
+at 70 % and 10; about three hours on four cores): 50 MB of layers (47 MB before, +6 %).
+Snapshots: `docs/snapshots/*.jpg` (the editor at 200 %), `docs/snapshots/contact-sheet.jpg`,
+`docs/snapshots/before-after/<scene>.jpg` (the old art beside the new for every scene),
+`docs/snapshots/before/contact-sheet.jpg` (the old contact sheet), `birds-over-scene.png`
+(and a 3x detail: the doves over the sky, no box). Found while reviewing the full render: in
+the floating-isles scenes the heaped clouds rose in front of the camera (Sky Harbour was
+almost all white): only clouds in the far sky tower now; low banks (the sea of cloud under the
+islands, the mist round the peaks) stay flat; those six scenes were rendered again.
+
+### Tests
+
+The whole Linux suite (eight shards on four cores, without the recordings and captures here):
+**1820 passed, 1 failed**: the failure was the wall-clock "a full repaint with the drawer fits
+in a 30 fps frame" (49 ms while eight shards shared four cores); alone it measures 8.1 ms and
+passes (the editor group: 83 passed, 0 failed). No sound test regressed (the instrument and
+instruments groups, recorded stand-ins, strength, levels, locations, travel). New: the
+`glissando` checks (in the `instrument` group, so also on macOS) and the `window` checks (in
+the `editor` group).
+
+### Handoff: what to look at in GarageBand
+
+- **Cloud Steps' harp**: chords in several keys and single notes: one sweep into each chord,
+  in key; does the ~0.1 s landing feel late when you play live? (Glissando 0 % plays at once;
+  the step and count are two numbers in `Source/Synth/Patches.cpp`.)
+- **The doves**: no white box, at any window size, also right after resizing.
+- **Close and reopen** the window, and reopen the project: the same scene, panels, size.
+- **Hover** over the place list after clicking a place: nothing stays lit; the selected place
+  keeps its gold diamond.
+- **The art** (look at it at 100 % and 200 %): every scene lit from its painted sun, glowing
+  edges, rays, heaped clouds, natural trees, pink blossom, no dragons. Worth a critical look:
+  the map (still the most "3D" of all: high above, little air), the Windswept Isle's turf edge
+  (a thin green lip over the rock on the right, from its geometry), the Eyrie's and Summit's
+  rock (grey-blue rather than golden), Mirror Lake's peaks (sharp and jagged).
+
+### Known issues and decisions to revisit
+
+- The glissando lands its note about 96 ms after the key (a sweep into a note must come
+  before it); 0 % Glissando avoids it. If it feels late live, the next step would be a shorter
+  sweep (3 notes at 18 ms) at the default.
+- The procedural pipeline will not reach a hand-painted illustration; this pass gets the light
+  right, which matters most. Drop-in art (`docs/ART_SOURCES.md`) still replaces any scene.
+- Blender 5.2 writes only the Combined pass to the layers' EXR here, so the aerial perspective
+  inside a layer follows the horizon line, not a depth pass.
+- The journey preset "Flight of the Dragon" keeps its name (no dragon is shown).
