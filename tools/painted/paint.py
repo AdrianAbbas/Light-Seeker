@@ -78,6 +78,25 @@ def load_exr(path):
         return np.dstack([get("R"), get("G"), get("B"), get("A")])
 
 
+# Aerial perspective inside a layer (Direction Update 2: soft atmospheric depth): what
+# lies towards the horizon melts a little more into the air than what is close (below
+# it on screen); things standing above the horizon count as distant. (Blender 5 writes
+# only the Combined pass here, so the horizon line stands in for depth.)
+DEPTH_HAZE = {"far": 0.10, "mid": 0.12, "near": 0.04}
+
+
+def depth_haze(img, horizon, amount, hc):
+    if amount <= 0 or horizon is None:
+        return img
+    h, w = img.shape[:2]
+    rgb, a = unpremultiply(img)
+    _, sy = screen_xy(h, w)
+    t = np.clip(1.0 - (sy - horizon) / max(40.0, VH - horizon), 0, 1)
+    k = (amount * t ** 1.6)[..., None]
+    rgb = rgb * (1 - k) + hc * k
+    return np.dstack([rgb * a[..., None], a])
+
+
 def fbm(h, w, cells_y, cells_x, octaves, seed, persistence=0.5):
     """Smooth fractal value noise in [0, 1] (cubic upsampled random grids)."""
     rng = np.random.default_rng(seed)
@@ -338,6 +357,8 @@ def process_layer(name, img, meta, seed, scale):
         a = np.clip(a, 0, 1)
         img = np.dstack([np.clip(rgb, 0, None), a])
     amount = meta.get("haze", {}).get("amount", 0.7)
+    if name in DEPTH_HAZE:
+        img = depth_haze(img, meta.get("sky", {}).get("horizon"), DEPTH_HAZE[name] * min(1.0, amount / 0.5 + 0.3), haze_colour(h, w, meta))
     if haze > 0:
         rgb, a = unpremultiply(img)
         hc = haze_colour(h, w, meta)

@@ -194,3 +194,30 @@ installed and validated" (two auval PASS lines).
 9. **Save and reopen** the project: the place, the locked instrument and the panel come back.
 10. Logic Pro: the same from an AU Instruments slot; four instances on four tracks with
     chords held should stay well within the MacBook Air's CPU.
+
+## Direction Update 2 (the GarageBand notes)
+
+1. **Rising Harp Glissando** (Sky Temple → Cloud Steps, Intensity 0 % first, then in its
+   place): play single notes, then held chords in a few keys (C, F#, Bb maj7, an open E
+   minor). Each chord should arrive on one quick upward harp sweep through its own notes
+   (and their octaves) that lands on the chord; a single note sweeps through its octaves
+   and fifth. Nothing should sound out of key. The sweep makes the note land about 0.1 s
+   after you play it; turn **Glissando** (the Character macro) to 0 % for plain harp notes
+   at once, up for a longer sweep.
+2. **Birds**: on a scene with open sky (Cloud Steps, Spire Summit, the meadows) wait for the
+   doves (every 25-50 s). They fly across with no white box around them, at 75 %, 100 %,
+   150 % and 200 % window size, and right after resizing the window.
+3. **Reopen**: go to a place (say Golden Cathedral → Stained Glass Chapel), open the
+   Advanced drawer and scroll it, hide the controls (▾), set the window to 125 %. Close the
+   plug-in window and open it again: everything as you left it, never the world map. Save
+   the GarageBand project, quit, reopen it: the same. Loading a preset changes the sound,
+   not the window.
+4. **Hover**: in a place, click a name in the place list (top right), then move the mouse
+   up and down over the other names and away: a name glows only while the mouse is over
+   it. The place you are in keeps its gold diamond and gold rule. The same on the map's
+   landmarks, the hotspots, the toolbar and the instrument panel.
+5. **Dragon's Peak**: Eyrie, Golden Nest and Summit of Winds show golden cliffs, the woven
+   nest with its golden eggs, peaks and sky; no dragon anywhere (nor on the map).
+6. **Art**: every place and the map have been re-rendered: natural branching trees with
+   leafy crowns, broken rock, smooth columns and domes with softly bevelled edges, more
+   atmospheric depth. Compare with `docs/snapshots/before-after/`.

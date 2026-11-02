@@ -279,7 +279,7 @@ def world_map():
     L = [
         ((0, 1100, 60), "citadel"), ((520, 1300, 60), "temple"), ((-560, 700, 30), "elven"), ((700, 650, 30), "crystal"),
         ((-200, 350, 20), "meadow"), ((300, 500, 30), "cathedral"), ((-420, 1450, 200), "isles"), ((120, 150, 20), "gardens"),
-        ((-760, 300, 20), "fairy"), ((900, 1500, 100), "dragon")]
+        ((-760, 300, 20), "fairy"), ((900, 1500, 100), "peak")]
     anchors = []
     for i, (p, kind) in enumerate(L):
         x, y, z = p
@@ -312,7 +312,7 @@ def world_map():
             for k in range(5):
                 mushroom((x + (k - 2) * 26, y + 10 * (k % 2), z), 30, "mid", B.mat_stone("cap", (0.92, 0.45, 0.6), bump=0.1))
             tree((x, y + 60, z), 80, 81, "mid", blossom=True)
-        elif kind == "dragon":
+        elif kind == "peak":
             B.crag((x, y, z - 40), 90, 260, 9, "mid", rock(1.0), spikes=0.5)
             spires(x, y, z + 210, "mid", 1, 60, 91, radius=8)
         anchors.append({"kind": "landmark", "index": i, "world": (x, y, z + 80)})
@@ -834,16 +834,7 @@ def fairy_court():
 
 
 # ========================================================================== DRAGON'S PEAK
-def golden_dragon(location, scale, layer, rotation_z=0.0):
-    before = set(bpy.data.objects.keys())
-    B.dragon(location, scale, layer, rotation_z=rotation_z, eye_strength=6.0)
-    mat = B.mat_metal((0.92, 0.7, 0.4), 0.35, "dragongold")
-    for name in set(bpy.data.objects.keys()) - before:
-        ob = bpy.data.objects[name]
-        if ob.type in ("MESH", "META") and ob.data.materials and "eye" not in ob.name:
-            for i in range(len(ob.data.materials)):
-                if "eye" not in ob.data.materials[i].name:
-                    ob.data.materials[i] = mat
+# (Direction Update 2: no dragon anywhere. The peaks keep their name, cliffs, nest and sky.)
 
 
 def peak(seed, sun, cam=((0, -60, 80), (0, 500, 180))):
@@ -858,15 +849,14 @@ def peak(seed, sun, cam=((0, -60, 80), (0, 500, 180))):
 
 
 @scene("dragons-peak/eyrie")
-def dragon_eyrie():
+def peak_eyrie():
     sun = (700, 90)
     peak(91, sun)
-    golden_dragon((0, 560, 425), 7.0, "mid", rotation_z=0.4)
     return place_meta(sun, 3, [(0, 560, 460), (-120, 500, 250), (0, 600, 520)], [lightpt((0, 560, 460), 20, "glint")], horizon=350, clouds=0.8)
 
 
 @scene("dragons-peak/golden-nest")
-def dragon_nest():
+def peak_nest():
     sun = (650, 110)
     B.camera((0, -40, 40), (0, 160, 20), lens=26)
     daylight(sun)
@@ -875,7 +865,6 @@ def dragon_nest():
     rnd = random.Random(92)
     for k in range(90):
         B.cylinder((rnd.uniform(-38, 38), 150 + rnd.uniform(-30, 30), rnd.uniform(8, 12)), rnd.uniform(1, 2.5), 0.4, "mid", gold(0.2), sides=10, name="coin")
-    golden_dragon((0, 160, 10), 4.0, "mid", rotation_z=-0.6)
     peakfar = rock(1.05)
     B.crag((-400, 900, -200), 180, 420, 93, "far", peakfar, spikes=0.4)
     B.crag((380, 1000, -200), 200, 460, 94, "far", peakfar, spikes=0.4)
@@ -886,11 +875,10 @@ def dragon_nest():
 
 
 @scene("dragons-peak/summit-of-winds")
-def dragon_summit():
+def peak_summit():
     sun = (360, 110)
     peak(93, sun, cam=((0, -40, 420), (0, 500, 360)))
     B.rock((0, 120, 380), 30, 97, "near", rock(1.1), squash=(1.6, 1.2, 0.6))
-    golden_dragon((10, 140, 400), 3.5, "near", rotation_z=2.6)
     return place_meta(sun, 3, [(0, 500, 300), (-120, 500, 300), (0, 40, 420)], [lightpt((-30, 120, 420), 18, "glint")],
                       horizon=330, clouds=0.9, rays=0.9, haze=0.65)
 
@@ -1804,7 +1792,6 @@ def v2_eyrie():
     G.tower(b, -60, 560, 418, 10, 90, rng, tiers=4, spire_ratio=1.8, depth=1)
     G.tower(b, 50, 580, 418, 7, 60, rng, tiers=3, spire_ratio=1.6, depth=1)
     b.flush("mid", G.materials(), "eyrie")
-    golden_dragon((0, 540, 420), 7.0, "mid", rotation_z=0.4)
     return meta((700, 90), spots3(3, [(0, 540, 450), (-120, 500, 250), (0, 600, 520)]) + [lightpt((0, 540, 450), 20, "glint")], horizon=350, clouds=0.3)
 
 
@@ -1813,13 +1800,24 @@ def v2_nest():
     B.camera((0, -10, 40), (0, 160, 16), lens=24)
     v2_light((-0.5, -0.4, 0.6), strength=5.0, sky=0.25)
     D.mesa(0, 160, -170, 160, 170, "mid", 92)
-    B.lathe((0, 150, 0), [(46, 0), (50, 6), (40, 10), (0, 8)], "mid", B.mat_stone("nest2", (0.6, 0.46, 0.3), bump=0.9, scale=6.0), sides=64, name="nest")
+    # The nest: a broad ring woven of golden boughs and twigs (Direction Update 2: no
+    # dragon), a soft lining of golden grass, the hoard inside it.
+    D.woven_nest(0, 150, 0, 48, 13, "mid", 92)
     rng = random.Random(92)
     for k in range(200):
         B.cylinder((rng.uniform(-38, 38), 150 + rng.uniform(-30, 30), rng.uniform(8, 12)), rng.uniform(0.8, 2.0), 0.35, "mid", D.mat_gold(rough=0.18), sides=12, name="coin")
-    golden_dragon((-70, 420, 90), 7.0, "mid", rotation_z=0.9)
-    # A heap of gold under the dragon: a mound and coins strewn over it.
-    B.lathe((0, 150, 7), [(40, 0), (34, 3), (24, 8), (12, 12.5), (0, 14)], "mid", D.mat_gold(rough=0.3), sides=64, name="hoard")
+    # A heap of gold in the nest: a mound and coins strewn over it.
+    B.lathe((0, 150, 7), [(40, 0), (34, 3), (24, 8), (12, 12.5), (0, 14)], "mid", D.mat_gold("hoardgold", rough=0.45), sides=64, name="hoard")
+    # Three great golden eggs resting on the hoard.
+    pearl_gold = D.mat_gold("egggold", rough=0.3)
+    for k, (ex, ey, ez, er) in enumerate([(-6, 148, 17, 6.5), (7, 152, 16.5, 6.0), (0, 160, 15.5, 5.5)]):
+        B.lathe((ex, ey, ez - er * 0.9), [(0.01, 0), (er * 0.75, er * 0.35), (er * 0.95, er * 0.95), (er * 0.8, er * 1.55), (er * 0.4, er * 2.0), (0, er * 2.15)],
+                "mid", pearl_gold, sides=48, name="egg")
+    # Tufts of grass and a few flowers on the plateau around the nest (patchy, the rock
+    # showing between them).
+    plateau = lambda x, y: 0.0
+    D.grass(plateau, -150, 150, 70, 300, 38000, "mid", 931, height=(0.8, 2.2), width=0.09, base=(0.12, 0.22, 0.04), tip=(0.62, 0.62, 0.2))
+    D.flowers(plateau, -140, 140, 80, 290, 1600, "mid", 932, size=0.9, kinds=BLOOM, stem=0.6)
     for k in range(420):
         rr = 36 * math.sqrt(rng.random()); a = rng.uniform(0, 2 * math.pi)
         hz = 7 + 14 * max(0.0, 1 - rr / 40) ** 1.3
@@ -1836,7 +1834,7 @@ def v2_nest():
 @scene("dragons-peak/summit-of-winds")
 def v2_winds():
     """The highest peak: a wind-carved ridge of rock and snow in front, a sea of cloud far
-    below with other sharp peaks rising through it, the golden dragon soaring past."""
+    below with other sharp peaks rising through it, golden light on the snow."""
     B.camera((0, -30, 560), (0, 700, 480), lens=24)
     v2_light((-0.4, -0.5, 0.45), strength=5.5, sky=0.25)
     D.peak(230, 160, 300, 220, 210, "near", 97, snow_line=0.6, name="ridge")
@@ -1848,7 +1846,6 @@ def v2_winds():
     D.mountains(99, y=2600, height=900, base_z=0)
     for k, (cx_, cy_) in enumerate([(-120, 380), (160, 420), (0, 560)]):
         D.cumulus((cx_, cy_, 250), (620, 360, 160), "mid", 990 + k, density=0.018, name="fogcloud_sea%d" % k)
-    golden_dragon((-60, 420, 520), 6.0, "mid", rotation_z=2.2)
     D.sparkles((0, 200, 540), (200, 120, 60), 60, "near", 96, size=0.3)
     return meta((360, 110), spots3(3, [(-60, 420, 540), (-460, 900, 600), (30, 90, 545)]) + [lightpt((-60, 420, 530), 18, "glint")],
                 horizon=330, clouds=0.4, rays=0.9, haze=0.3)

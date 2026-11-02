@@ -15,6 +15,7 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import blib  # noqa: E402
+import finish  # noqa: E402
 import scenes  # noqa: E402
 
 
@@ -31,6 +32,7 @@ def main():
     blib.reset()
     build = scenes.REGISTRY[args.scene]
     meta = build()
+    finish.finish(verbose=True)   # smooth shading, bevels, subdivision, broken rock (Direction Update 2)
     width, height = int(round(1920 * args.scale)), int(round(1120 * args.scale))
     blib.configure(width, height, args.samples)
 

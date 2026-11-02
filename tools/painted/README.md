@@ -10,7 +10,11 @@ scenes.py   one function per scene (the map and all 31 places): composition, cam
             anchors (hotspots, landmarks, lights); v2 templates for meadows, skies, gothic
             interiors, isles and peaks (later registrations replace the first sketches)
 detail.py   the detail builders, numpy-fast: grass (100-250 thousand blades), meadow flowers,
-            branching trees with thousands of leaves or petals, cliff mesas, mountain ranges,
+            natural trees (Direction Update 2: a recursive skeleton with golden-angle branching,
+            tropism and pipe-model taper as continuous smooth tubes, a crown of alpha-cut leaf
+            cards textured with a sprig drawn in numpy, every tree a little different),
+            distant woods (a soft core and a fringe of leaf cards), the woven golden nest,
+            cliff mesas, mountain ranges,
             sharp peaks, rolling valleys, distant groves, volumetric cumulus, floating isles,
             crystals, mushrooms, butterflies, sparkles; and the realistic materials (cliff
             stone, marble, gold, ashlar, stained glass, fields, polished floors, foliage)
@@ -18,8 +22,12 @@ gothic.py   a recursive gothic generator: towers with buttresses, string courses
             pinnacles on pinnacles, crocketed spires with gold finials, halls with flying
             buttresses, whole citadels (~25 towers)
 blib.py     the base builders and materials (from DUNGEON CRAWLER)
+finish.py   the finishing pass before rendering (Direction Update 2): smooth shading with sharp
+            edges kept above 40 degrees, small bevels on the architecture, subdivision on the
+            soft shapes, rock and cliffs broken by Voronoi and cloud displacement
 render.py   renders one scene's layers with Cycles (CPU) to multi-layer EXR + anchors.json
-paint.py    denoise (OIDN), haze by layer (pale blue-cream air), bloom, a lifted daylight tone
+paint.py    denoise (OIDN), haze by layer (pale blue-cream air) and inside each layer towards the
+            horizon (soft atmospheric depth), bloom, a lifted daylight tone
             curve, a high-key grade (cream highlights, lavender shadows), a light-handed
             Kuwahara (oil paint), brush streaks, dabs, fine grain; the sky where none is
             rendered; writes the finished layers

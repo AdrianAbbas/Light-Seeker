@@ -1128,3 +1128,139 @@ takes disagree. Worth re-recording, worst first:
   place's job.
 - Memory: the recordings now take 123.6 MB (82.7 before) in every process that loads the
   instrument.
+
+## Direction Update 2: the GarageBand notes (2026-11-02)
+
+The developer tested in GarageBand: the sound is excellent; no instrument or place sound
+was to change except the glissando. The rest is the window and the art
+([DIRECTION_UPDATE_2.md](DIRECTION_UPDATE_2.md)).
+
+### 1. Rising Harp Glissando: in key
+
+**Cause** (as the developer found): every note's grace notes climbed a fixed major
+pentatonic above *that* note (`runSteps` 2, 4, 7, 9 ... semitones), so the run played notes
+outside the key, and in a chord every note ran its own scale: a C major triad sounded
+D, E, G, A over C, F#, G#, B, C# over E, and A, B, D, E over G at once.
+
+**Now** (`Synth::startNote`, `Synth::sweepPitch`):
+- one sweep per chord: notes that start within 35 ms of each other share it; it rises
+  into the chord's highest note and every note of the chord lands together;
+- the run's pitches are chosen when each grace note sounds, from the notes held then (keys
+  down, the pedal, the chord's own notes): their pitch classes, in every octave over the
+  three octaves under the top note, the nearest ones; a single note alone adds its fifth
+  (so it sweeps through octaves and fifths); always upwards (a chord changed under a sweep
+  continues from the next note above);
+- the run comes *before* the note: 4 grace notes 24 ms apart at Character 50 % (the
+  Glissando macro), a crescendo (-7.8 dB to -3 dB) into the note, which lands about 96 ms
+  after the key; Character 0 % plays the note at once, 100 % sweeps 8 notes (about 0.2 s).
+  The DEVLOG of the instrument edition had chosen a run *after* each note so as not to delay
+  it; the developer asked for a run rising *into* the note, and a sweep into a note is
+  necessarily before it. Worth checking by ear whether 96 ms feels late when playing live
+  (the step and count are two numbers in `Patches.cpp`);
+- notes moved to the harp by travel (keys held while arriving at Cloud Steps) just sound;
+- the harp's level trim follows (+2.2 dB: one run per chord now, not one per note).
+
+**The harp itself is in tune**: single notes C2 to C7 every 3 semitones, harmonic peaks:
+within 0.3 cents everywhere (the waveguide's fractional delay is exact), so the old clash was
+the run alone.
+
+**Tests** (`glissando`, run with the `instrument` group, also on macOS): six chords in six
+keys (C major, A minor, F# major, Bb maj7, an open E minor, Db sus2): one sweep of 4 per
+chord, every grace note a chord tone, rising, below the top; by ear, the out-of-chord
+energy (chroma) of the swept chord is no higher than its chord tones plucked plainly
+(-15 to -22 dB of the whole, the harp's own twelfths and seventeenths), while the old
+pentatonic run, reproduced in the test, measures -2.4 to -3.7 dB: the check hears the fault
+it fixes. Single notes (C3 to A5) sweep only octaves and fifths; a chord change (C major,
+then D minor) sweeps through the new chord; Character 0 lands at once, 50 % at about 100 ms;
+the tuning report. Runs (C major): E3 G3 C4 E4 → G4; F# major: A#3 C#4 F#4 A#4 → C#5.
+
+**Found on the way**: the "31 instruments in a row, then silence" check failed once the run
+changed: a released Concert Harp string kept a residue of about -85 dBFS near DC for ever
+(a damped waveguide's loop gain at DC; which voice hits it depends on the noise seeds, so
+fewer grace voices moved it to another note). A released pluck now ends below -80 dB at the
+output. Inaudible; the voice no longer hangs.
+
+### 2. Birds: the white rectangle
+
+**Cause**: the view painted every region by looking up the scene image *at the current
+pixel size* in the scene cache, and when it was not there it filled the region with the
+panel colour (pearl, nearly white) and queued a render. The doves repaint only their own
+small region every frame, so any time the cache had no image at that exact pixel size the
+region came out as a white box. Several ways in: the window's scale is a transform, so a
+resized window never re-requested the art at the new size (only the next paint, which then
+missed); the size is computed from the display's scale, which an out-of-process host view
+(GarageBand) can report differently from moment to moment. The same fill could leave a
+pale plate behind a button (item 4).
+
+**Now** (double-buffered): the view keeps a **frame**, the scene composited at rest, and
+every region is painted from it, whatever its size (scaled if the art at the new size is
+not ready yet); the frame changes only when a new image is ready (`refreshFrame` on
+`sceneReady`, at the end of a transition, on settling). `paint` never looks anything up and
+never fills; only before the very first scene exists is there a soft sky. The editor's resize
+requests the art at the new pixel size at once (`scaleChanged`). The birds are drawn with
+alpha over the frame (as before); their region is repainted from the frame.
+
+**Tests** (`editor` group, `testWindow`): at 75, 100, 125, 150 and 200 % a flock over Cloud
+Steps: the window painted, the birds moved on, only their old and new regions repainted
+into it (as the operating system does): the region matches a whole fresh frame (< 0.2 %
+of pixels differ), only the strokes differ from the scene without birds; then every
+prepared scene forgotten (the art at a new size not ready) and the region repainted: it
+shows the scene (< 1 % differ), no more white than the scene has; a resize shows the scaled
+frame at once, then the art at the new size. `--window-snapshots dir` writes
+`docs/snapshots/birds-over-scene.png` (and a detail).
+
+### 3. The window reopens as it was left
+
+`LightSeekerProcessor::ViewState` (behind a spin lock; the editor writes it on every change,
+at 10 Hz while a panel is open for its scroll, and when it closes): the view (map or a
+place's scene; the place itself follows the parameters, as the sound does), the controls
+strip, the Advanced drawer or the Journey panel and where each was scrolled, the
+instrument keyboard's position; the window scale was already kept. Saved in the session as
+an `EditorView` child of the state (older versions ignore it; older sessions without it open
+on the map as before) and restored when the editor is created: no zoom from the map, the
+scene simply appears. Loading a preset keeps the window as it is (presets carry sounds).
+There is no separate "instrument drawer" in this editor: the instrument panel is always
+shown under the world; its keyboard position is what it has to remember (at 100 % the whole
+range fits, so it only matters when the window is small).
+
+**Tests**: close and reopen at Golden Cathedral → Stained Glass Chapel with the Advanced drawer
+open and scrolled, the window at 125 %: same scene (not the map), same place selected, the
+drawer open and scrolled where it was, same size, same keyboard; then the Journey panel; the
+controls hidden; left on the map it reopens on the map; a saved session (a new processor from
+the saved state) reopens on its scene with its panel; a preset keeps the window; a new
+instance has no stored window.
+
+### 4. Hover never sticks
+
+The place list (top right) was made of plain text buttons whose highlight is JUCE's
+"mouse over" state. Two ways it could stick: the list was hidden and shown again under the
+mouse whenever a click started a travel (a hidden button misses its exit), and a missed exit
+in the host. Also the white-fill above could leave a pale plate.
+
+**Now**: `UI/Hover.h`: `HoverButton` keeps its own hover flag (set on enter, cleared on exit
+and whenever hidden) and paints from it: the place list (`PlaceButton`), the hotspots and the
+landmarks (whose name plate follows it). `sweepHover` runs on every mouse move, enter and
+exit anywhere in the window (and the instrument panel): any button still lit where the mouse
+is not is cleared (JUCE's state and ours). The place list stays shown throughout a location
+(no hide and show under the mouse). The selected place has its own stable look: a gold
+diamond before its name, full ink, a gold rule as wide as the name; a hovered one a soft glow
+and a faint short rule, only while the mouse is over it.
+
+**Tests**: after clicking a place, the mouse over every other name and away: each lights
+while over it and clears on exit; only the selected place stays marked; a missed exit
+(every entry lit, JUCE's state too) cleared by the next mouse move elsewhere; a hotspot hidden
+while hovered comes back clear; every visible button of the window and the instrument panel
+(map, list, toolbar, panel: 30+) set to "over" and swept: none left lit; a landmark's name
+plate shows while hovered and goes on exit.
+
+### 5. No dragons
+
+The sleeping-dragon builder (`blib.dragon`) and the golden dragon over the three Dragon's Peak
+scenes (`golden_dragon`, the Eyrie's, the Golden Nest's and the Summit of Winds') are gone
+from the scripts; the map never had one (its Dragon's Peak landmark is a peak with a tower).
+No animation draws one (the doves are doves). Dragon's Peak keeps its name, its golden
+cliffs, peaks and sky; the Golden Nest is now a great nest woven of golden boughs with three
+golden eggs on the hoard, on a grassy plateau. (A journey preset is still called "Flight
+of the Dragon": a name only, kept so saved sessions find it.)
+
+### 6. The art: less polygonal, a little more real

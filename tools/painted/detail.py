@@ -360,74 +360,6 @@ def flowers(fn, x0, x1, y0, y1, count, layer, seed, size=0.12, kinds=(DAISY, DAI
     return big_mesh(name, np.array(verts), np.array(tris), layer, mat_vegetation("petal2", 0.4, 0.45), np.array(cols))
 
 
-def tree(location, height, seed, layer, kind="green", leaves=9000, spread=0.55, name="tree"):
-    """A broadleaf tree: a trunk and branches (tapered, gently curved), and a crown of
-    leaves (or blossom petals) in clumps at the branch ends, densest on the outer shell."""
-    rng = random.Random(seed)
-    x, y, z = location
-    bark = mat_bark()
-    # Trunk and branches as tapered segments.
-    segments = []
-
-    def branch(p, d, length, radius, depth):
-        n = 4
-        cur = Vector(p)
-        dirv = Vector(d).normalized()
-        for k in range(n):
-            nxt = cur + dirv * (length / n)
-            segments.append((cur.copy(), nxt.copy(), radius * (1 - 0.18 * k), radius * (1 - 0.18 * (k + 1))))
-            dirv = (dirv + Vector((rng.uniform(-0.25, 0.25), rng.uniform(-0.25, 0.25), rng.uniform(-0.05, 0.2)))).normalized()
-            cur = nxt
-        tips.append(cur.copy())
-        if depth > 0:
-            for _ in range(rng.randint(2, 3)):
-                nd = (dirv + Vector((rng.uniform(-1, 1), rng.uniform(-1, 1), rng.uniform(0.2, 0.9))) * 0.9).normalized()
-                branch(cur, nd, length * rng.uniform(0.55, 0.7), radius * 0.55, depth - 1)
-
-    tips = []
-    trunk_h = height * 0.42
-    branch((x, y, z), (rng.uniform(-0.08, 0.08), rng.uniform(-0.08, 0.08), 1), trunk_h, height * 0.035, 0)
-    top = tips.pop()
-    for k in range(rng.randint(4, 6)):
-        a = k * 2 * math.pi / 5 + rng.uniform(-0.4, 0.4)
-        branch(top, (math.cos(a) * 0.8, math.sin(a) * 0.8, 0.9), height * 0.3, height * 0.022, 2)
-    tube_mesh(segments, layer, bark, name + "_wood")
-    # Leaves: clumps around the tips (and a few inner ones), as small diamonds.
-    rng2 = np.random.default_rng(seed)
-    centres = np.array([[t.x, t.y, t.z] for t in tips], np.float32)
-    per = max(1, leaves // len(centres))
-    clump_r = height * 0.13
-    offs = rng2.normal(size=(len(centres) * per, 3)).astype(np.float32)
-    offs /= np.linalg.norm(offs, axis=1, keepdims=True) + 1e-6
-    rad = (rng2.random((len(offs), 1)) ** 0.35) * clump_r          # towards the shell
-    pos = np.repeat(centres, per, axis=0) + offs * rad * np.array([1.0, 1.0, 0.8], np.float32)
-    leaf = height * (0.012 if kind != "blossom" else 0.009)
-    n = len(pos)
-    a1 = rng2.normal(size=(n, 3)).astype(np.float32); a1 /= np.linalg.norm(a1, axis=1, keepdims=True)
-    a2 = np.cross(a1, offs); a2 /= np.linalg.norm(a2, axis=1, keepdims=True) + 1e-6
-    verts = np.stack([pos - a1 * leaf, pos - a2 * leaf * 0.5, pos + a1 * leaf, pos + a2 * leaf * 0.5], 1)
-    tris = (np.array([[0, 1, 2], [0, 2, 3]])[None] + (np.arange(n) * 4)[:, None, None]).reshape(-1, 3)
-    shade = (offs[:, 2:3] * 0.5 + 0.5) * 0.35 + 0.75                 # upper leaves lighter
-    if kind == "blossom":
-        palette = np.array([[0.98, 0.74, 0.82], [0.99, 0.86, 0.9], [0.96, 0.62, 0.74], [1.0, 0.95, 0.95]], np.float32)
-    elif kind == "autumn":
-        palette = np.array([[0.85, 0.55, 0.15], [0.9, 0.7, 0.2], [0.6, 0.55, 0.15]], np.float32)
-    else:
-        palette = np.array([[0.13, 0.32, 0.06], [0.2, 0.42, 0.08], [0.3, 0.5, 0.1], [0.1, 0.26, 0.07]], np.float32)
-    c = palette[rng2.integers(0, len(palette), n)] * shade
-    cols = np.repeat(c, 4, axis=0)
-    big_mesh(name + "_leaves", verts.reshape(-1, 3), tris, layer, mat_vegetation("leaf2", 0.45, 0.5), cols)
-
-
-def mat_bark():
-    key = ("bark",)
-    if key in _mats:
-        return _mats[key]
-    m = B.mat_stone("bark2", (0.25, 0.18, 0.12), rough=0.9, bump=0.9, scale=6.0)
-    _mats[key] = m
-    return m
-
-
 def tube_mesh(segments, layer, material, name, sides=8):
     """Tapered tubes for branches: each segment (a, b, ra, rb) a ring-to-ring sleeve."""
     verts, tris = [], []
@@ -980,46 +912,6 @@ def valley(seed, z0, x0=-5000, x1=5000, y0=300, y1=4000, amp=45, layer="far", nx
     return h
 
 
-def grove(fn, x0, x1, y0, y1, count, layer, seed, size=(10, 22), blossom=0.2, name="grove", clump=0.6, avoid=(), min_z=None):
-    """Distant trees: each a trunk and a crown of 4-7 lumpy lobes (vertex colours: sunlit
-    tops, shaded undersides); clumped into woods. One mesh: hundreds of trees cheaply."""
-    rng = np.random.default_rng(seed)
-    # A low-poly lumpy sphere template.
-    import bmesh
-    bm = bmesh.new(); bmesh.ops.create_icosphere(bm, subdivisions=2, radius=1.0)
-    sv = np.array([v.co[:] for v in bm.verts], np.float32)
-    st = np.array([[v.index for v in f.verts] for f in bm.faces], np.int32)
-    bm.free()
-    centres = rng.uniform((x0, y0), (x1, y1), (max(1, int(count * (1 - clump) / 6) + 3), 2))
-    V, T, C = [], [], []
-    base_n = 0
-    for k in range(count):
-        if rng.random() < clump:
-            c = centres[rng.integers(len(centres))]
-            x, y = c[0] + rng.normal(0, (x1 - x0) * 0.03), c[1] + rng.normal(0, (y1 - y0) * 0.03)
-        else:
-            x, y = rng.uniform(x0, x1), rng.uniform(y0, y1)
-        z = fn(x, y)
-        s = rng.uniform(*size)
-        bl = rng.random() < blossom
-        if any(math.hypot(x - ax, y - ay) < ar for ax, ay, ar in avoid) or (min_z is not None and z < min_z):
-            continue
-        top = np.array((1.0, 0.78, 0.86) if bl else (0.26 + rng.uniform(-0.05, 0.08), 0.45 + rng.uniform(-0.06, 0.06), 0.12), np.float32)
-        # Trunk: a thin box.
-        tw = s * 0.06
-        tv = np.array([[-tw, -tw, 0], [tw, -tw, 0], [tw, tw, 0], [-tw, tw, 0], [-tw, -tw, s * 0.55], [tw, -tw, s * 0.55], [tw, tw, s * 0.55], [-tw, tw, s * 0.55]], np.float32)
-        tt = np.array([[0, 1, 5], [0, 5, 4], [1, 2, 6], [1, 6, 5], [2, 3, 7], [2, 7, 6], [3, 0, 4], [3, 4, 7]], np.int32)
-        V.append(tv + (x, y, z)); T.append(tt + base_n); C.append(np.tile((0.22, 0.15, 0.09), (8, 1))); base_n += 8
-        for lobe in range(rng.integers(4, 8)):
-            r = s * rng.uniform(0.22, 0.36)
-            off = np.array((rng.normal(0, s * 0.16), rng.normal(0, s * 0.16), s * (0.55 + rng.uniform(0, 0.35))), np.float32)
-            v = sv * r * (1 + 0.18 * rng.standard_normal(sv.shape).astype(np.float32))
-            v[:, 2] *= 0.85
-            shade = np.clip(0.55 + 0.45 * sv[:, 2:3], 0.3, 1.0)
-            V.append(v + off + (x, y, z)); T.append(st + base_n); C.append(top * shade); base_n += len(sv)
-    return big_mesh(name, np.concatenate(V), np.concatenate(T), layer, mat_vegetation(name + "mat", translucency=0.2), colours=np.concatenate(C))
-
-
 # ------------------------------------------------------------------ interiors (v3)
 STAINED = ((1.0, 0.78, 0.3), (0.95, 0.42, 0.5), (0.35, 0.55, 1.0), (1.0, 0.92, 0.7), (0.55, 0.85, 0.7), (0.8, 0.5, 0.95), (1.0, 0.6, 0.25))
 
@@ -1154,3 +1046,463 @@ def mat_cap(cap, name=None):
     L(bsdf.outputs[0], out.inputs["Surface"])
     _mats[key] = m
     return m
+
+
+# ------------------------------------------------------------- foliage (Direction Update 2)
+# Natural trees: a recursive branching skeleton (golden-angle phyllotaxis, tropism, pipe-
+# model taper) as continuous smooth tubes, and a crown of leaf cards: quads textured with a
+# sprig of leaves (or blossom) drawn here in numpy (alpha-cut, original, no external
+# images). Distant woods: the same cards around a dense core, so every crown has a broken,
+# leafy silhouette instead of a lumpy sphere.
+import os as _os
+
+TEXTURES = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "..", "..", "build-art", "textures")
+
+
+def _sprig_image(kind, size=512, seed=7):
+    """A sprig on a transparent ground (RGBA float, rows top to bottom): a thin stem and
+    alternate lanceolate leaves with a midrib and a lighter half, or five-petalled blossoms
+    in clusters. The colour is mostly a light value (the card's vertex colour gives the hue)."""
+    S = size * 2                                   # drawn at twice the size, then averaged
+    rng = np.random.default_rng(seed + (0 if kind == "leaf" else 50))
+    yy, xx = np.mgrid[0:S, 0:S].astype(np.float32)
+    rgb = np.zeros((S, S, 3), np.float32)
+    alpha = np.zeros((S, S), np.float32)
+
+    def stem_at(t):
+        return np.array([S * (0.5 + 0.07 * math.sin(t * math.pi * 1.2)), S * (0.97 - 0.9 * t)], np.float32)
+
+    # The stem.
+    for t in np.linspace(0, 0.97, 220):
+        c = stem_at(t)
+        r = S * (0.010 * (1 - t) + 0.003)
+        m = (xx - c[0]) ** 2 + (yy - c[1]) ** 2 < r * r
+        rgb[m] = (0.42, 0.40, 0.26); alpha[m] = 1.0
+    if kind == "leaf":
+        n = 11
+        for i in range(n):
+            t = 0.1 + 0.85 * i / (n - 1) + rng.uniform(-0.02, 0.02)
+            side = 1 if i % 2 else -1
+            base = stem_at(t)
+            ang = math.radians(rng.uniform(32, 58)) * side            # from the stem (pointing up)
+            d = np.array([math.sin(ang), -math.cos(ang)], np.float32)
+            nrm = np.array([-d[1], d[0]], np.float32)
+            L = S * rng.uniform(0.2, 0.3) * (1.05 - 0.35 * t)
+            W = L * rng.uniform(0.28, 0.36)
+            px, py = xx - base[0], yy - base[1]
+            u = (px * d[0] + py * d[1]) / L
+            v = (px * nrm[0] + py * nrm[1]) / W
+            prof = np.clip(np.sin(np.pi * np.clip(u, 0, 1) ** 0.75), 0, 1) ** 0.9
+            inside = (u > 0) & (u < 1) & (np.abs(v) < prof)
+            # Value: a lighter half, a darker midrib, faint side veins, darker towards the edge.
+            val = 0.82 + 0.16 * np.sign(v) * side - 0.18 * np.exp(-(v / 0.07) ** 2)
+            val -= 0.07 * (np.abs(v) / np.maximum(prof, 1e-3)) ** 3
+            val -= 0.05 * (np.sin((u * 9.0 + np.abs(v) * 3.0) * np.pi) > 0.85)
+            val += 0.08 * u
+            col = np.stack([val * 0.96, val, val * 0.86], -1)
+            rgb[inside] = col[inside]; alpha[inside] = 1.0
+    else:
+        for k in range(16):
+            t = rng.uniform(0.15, 1.0)
+            c = stem_at(min(t, 0.97)) + rng.normal(0, S * 0.09, 2).astype(np.float32)
+            R = S * rng.uniform(0.055, 0.08)
+            rot = rng.uniform(0, 2 * math.pi)
+            px, py = xx - c[0], yy - c[1]
+            rr = np.hypot(px, py); th = np.arctan2(py, px) - rot
+            petal = rr < R * (0.55 + 0.45 * np.abs(np.cos(2.5 * th)) ** 0.6)
+            val = 0.9 + 0.1 * (rr / R) - 0.08 * (np.cos(5 * th) > 0.6)
+            col = np.stack([val, val, val], -1)
+            rgb[petal] = col[petal]; alpha[petal] = 1.0
+            centre = rr < R * 0.18
+            rgb[centre] = (1.15, 0.95, 0.45); alpha[centre] = 1.0
+    # Average down (soft, antialiased edges); colour premultiplied then divided back.
+    pre = rgb * alpha[..., None]
+    pre = pre.reshape(size, 2, size, 2, 3).mean((1, 3)); a = alpha.reshape(size, 2, size, 2).mean((1, 3))
+    col = pre / np.maximum(a[..., None], 1e-4)
+    return np.dstack([np.clip(col, 0, 1.2), a])
+
+
+def _sprig_texture(kind):
+    """The sprig as a Blender image (made once per build into build-art/textures)."""
+    name = "sprig-%s" % kind
+    if name in bpy.data.images:
+        return bpy.data.images[name]
+    _os.makedirs(TEXTURES, exist_ok=True)
+    path = _os.path.abspath(_os.path.join(TEXTURES, name + ".png"))
+    if not _os.path.exists(path):
+        from PIL import Image
+        img = _sprig_image(kind)
+        Image.fromarray((np.clip(img, 0, 1) * 255 + 0.5).astype(np.uint8), "RGBA").save(path)
+    im = bpy.data.images.load(path)
+    im.name = name
+    im.alpha_mode = "STRAIGHT"
+    return im
+
+
+def mat_leafcard(kind="leaf", translucency=0.4):
+    """A leaf card: the sprig's value times the card's colour, cut out by its alpha,
+    lit from both sides, a little roughness variation from leaf to leaf."""
+    key = ("leafcard", kind)
+    if key in _mats:
+        return _mats[key]
+    m, nt, out, bsdf = _principled("leafcard_" + kind)
+    L = nt.links.new
+    tex = nt.nodes.new("ShaderNodeTexImage"); tex.image = _sprig_texture(kind); tex.interpolation = "Linear"
+    uv = nt.nodes.new("ShaderNodeUVMap"); uv.uv_map = "UVMap"
+    L(uv.outputs["UV"], tex.inputs["Vector"])
+    col = _attr_colour(nt)
+    mul = nt.nodes.new("ShaderNodeMix"); mul.data_type = "RGBA"; mul.blend_type = "MULTIPLY"; mul.inputs["Factor"].default_value = 1.0
+    L(tex.outputs["Color"], mul.inputs["A"]); L(col, mul.inputs["B"])
+    L(mul.outputs["Result"], bsdf.inputs["Base Color"])
+    rn = nt.nodes.new("ShaderNodeTexNoise"); rn.inputs["Scale"].default_value = 3.0
+    rr = nt.nodes.new("ShaderNodeMapRange"); rr.inputs["To Min"].default_value = 0.38; rr.inputs["To Max"].default_value = 0.62
+    L(rn.outputs["Fac"], rr.inputs["Value"]); L(rr.outputs["Result"], bsdf.inputs["Roughness"])
+    try:
+        bsdf.inputs["Specular IOR Level"].default_value = 0.35
+    except KeyError:
+        pass
+    tr = nt.nodes.new("ShaderNodeBsdfTranslucent"); L(mul.outputs["Result"], tr.inputs["Color"])
+    leaf = nt.nodes.new("ShaderNodeMixShader"); leaf.inputs["Fac"].default_value = translucency
+    L(bsdf.outputs[0], leaf.inputs[1]); L(tr.outputs[0], leaf.inputs[2])
+    clear = nt.nodes.new("ShaderNodeBsdfTransparent")
+    cut = nt.nodes.new("ShaderNodeMixShader")
+    L(tex.outputs["Alpha"], cut.inputs["Fac"]); L(clear.outputs[0], cut.inputs[1]); L(leaf.outputs[0], cut.inputs[2])
+    L(cut.outputs[0], out.inputs["Surface"])
+    _mats[key] = m
+    return m
+
+
+def cards_mesh(name, base, along, across, size, colours, layer, material, aspect=0.9):
+    """Leaf cards: one quad per row, from `base` along `along` (unit) for `size`, `aspect`
+    times as wide across `across` (unit); UVs over the sprig."""
+    base = np.asarray(base, np.float32); a = np.asarray(along, np.float32); b = np.asarray(across, np.float32)
+    s = np.asarray(size, np.float32)[:, None]
+    w = s * aspect * 0.5
+    v = np.stack([base - b * w, base + b * w, base + a * s + b * w, base + a * s - b * w], 1)
+    n = len(base)
+    tris = (np.array([[0, 1, 2], [0, 2, 3]])[None] + (np.arange(n) * 4)[:, None, None]).reshape(-1, 3)
+    ob = big_mesh(name, v.reshape(-1, 3), tris, layer, material, np.repeat(np.asarray(colours, np.float32), 4, axis=0))
+    me = ob.data
+    uvl = me.uv_layers.new(name="UVMap")
+    quad = np.array([[0, 0], [1, 0], [1, 1], [0, 0], [1, 1], [0, 1]], np.float32)
+    uvl.data.foreach_set("uv", np.tile(quad, (n, 1)).ravel())
+    return ob
+
+
+def tube_chains(chains, layer, material, name):
+    """Continuous smooth tubes, one per chain of points (a ring at each point, oriented by
+    parallel transport so they never twist), sides from 12 on the trunk to 4 on twigs."""
+    V, T = [], []
+    count = 0
+    for pts, rads in chains:
+        P = np.array([[p.x, p.y, p.z] for p in pts], np.float32)
+        R = np.asarray(rads, np.float32)
+        sides = int(np.clip(4 + R[0] / max(1e-4, chains[0][1][0]) * 8, 4, 12))
+        tang = np.gradient(P, axis=0); tang /= np.linalg.norm(tang, axis=1, keepdims=True) + 1e-9
+        ref = np.array([0, 0, 1], np.float32) if abs(tang[0, 2]) < 0.9 else np.array([1, 0, 0], np.float32)
+        u = np.cross(tang[0], ref); u /= np.linalg.norm(u) + 1e-9
+        ang = np.linspace(0, 2 * np.pi, sides, endpoint=False)
+        rings = []
+        for i in range(len(P)):
+            u = u - tang[i] * np.dot(u, tang[i]); u /= np.linalg.norm(u) + 1e-9
+            w = np.cross(tang[i], u)
+            rings.append(P[i] + (np.cos(ang)[:, None] * u + np.sin(ang)[:, None] * w) * R[i])
+        V.append(np.concatenate(rings))
+        for i in range(len(P) - 1):
+            for k in range(sides):
+                a0 = count + i * sides + k; a1 = count + i * sides + (k + 1) % sides
+                b0 = a0 + sides; b1 = a1 + sides
+                T += [(a0, a1, b1), (a0, b1, b0)]
+        count += len(P) * sides
+    return big_mesh(name, np.concatenate(V), np.array(T, np.int32), layer, material, smooth=True)
+
+
+def mat_bark():
+    """Bark: grey-brown, long vertical furrows (stretched noise and cells), lichen patches,
+    rough, with a matching bump."""
+    key = ("bark3",)
+    if key in _mats:
+        return _mats[key]
+    m, nt, out, bsdf = _principled("bark3")
+    L = nt.links.new
+    tc = nt.nodes.new("ShaderNodeTexCoord")
+    sc = nt.nodes.new("ShaderNodeMapping"); sc.inputs["Scale"].default_value = (3.0, 3.0, 0.6)
+    L(tc.outputs["Object"], sc.inputs["Vector"])
+    vor = nt.nodes.new("ShaderNodeTexVoronoi"); vor.feature = "DISTANCE_TO_EDGE"; vor.inputs["Scale"].default_value = 2.5
+    L(sc.outputs["Vector"], vor.inputs["Vector"])
+    nz = nt.nodes.new("ShaderNodeTexNoise"); nz.inputs["Scale"].default_value = 4.0; nz.inputs["Detail"].default_value = 10
+    L(sc.outputs["Vector"], nz.inputs["Vector"])
+    ramp = nt.nodes.new("ShaderNodeValToRGB")
+    ramp.color_ramp.elements[0].position = 0.0; ramp.color_ramp.elements[0].color = (0.10, 0.075, 0.055, 1)
+    ramp.color_ramp.elements[1].position = 0.12; ramp.color_ramp.elements[1].color = (0.36, 0.30, 0.24, 1)
+    L(vor.outputs["Distance"], ramp.inputs["Fac"])
+    lich = nt.nodes.new("ShaderNodeTexNoise"); lich.inputs["Scale"].default_value = 1.6; lich.inputs["Detail"].default_value = 6
+    L(tc.outputs["Object"], lich.inputs["Vector"])
+    lm = nt.nodes.new("ShaderNodeMapRange"); lm.inputs["From Min"].default_value = 0.58; lm.inputs["From Max"].default_value = 0.68
+    L(lich.outputs["Fac"], lm.inputs["Value"])
+    mix = nt.nodes.new("ShaderNodeMix"); mix.data_type = "RGBA"
+    L(lm.outputs["Result"], mix.inputs["Factor"]); L(ramp.outputs["Color"], mix.inputs["A"]); mix.inputs["B"].default_value = (0.5, 0.55, 0.38, 1)
+    tint = nt.nodes.new("ShaderNodeMix"); tint.data_type = "RGBA"; tint.blend_type = "MULTIPLY"; tint.inputs["Factor"].default_value = 0.3
+    L(mix.outputs["Result"], tint.inputs["A"]); L(nz.outputs["Color"], tint.inputs["B"])
+    L(tint.outputs["Result"], bsdf.inputs["Base Color"])
+    bsdf.inputs["Roughness"].default_value = 0.88
+    bump = nt.nodes.new("ShaderNodeBump"); bump.inputs["Strength"].default_value = 0.7
+    add = nt.nodes.new("ShaderNodeMath"); add.operation = "ADD"
+    L(vor.outputs["Distance"], add.inputs[0]); L(nz.outputs["Fac"], add.inputs[1])
+    L(add.outputs[0], bump.inputs["Height"]); L(bump.outputs["Normal"], bsdf.inputs["Normal"])
+    L(bsdf.outputs[0], out.inputs["Surface"])
+    _mats[key] = m
+    return m
+
+
+LEAF_GREENS = np.array([[0.16, 0.34, 0.07], [0.23, 0.44, 0.09], [0.32, 0.52, 0.12], [0.13, 0.29, 0.08], [0.4, 0.55, 0.14]], np.float32)
+BLOSSOM_PINKS = np.array([[1.0, 0.8, 0.87], [1.0, 0.88, 0.92], [0.99, 0.72, 0.82], [1.0, 0.95, 0.95]], np.float32) * 1.08
+AUTUMN = np.array([[0.85, 0.55, 0.15], [0.9, 0.7, 0.2], [0.6, 0.55, 0.15]], np.float32)
+
+
+def _skeleton(rng, height, levels, spread):
+    """The branches of a broadleaf tree as chains of points with radii, and the terminal
+    branches (where leaves grow). Height 1, base at the origin; scaled by the caller."""
+    up = Vector((0, 0, 1))
+    chains, tips = [], []
+    trunk_r = rng.uniform(0.026, 0.034)
+    clear = rng.uniform(0.26, 0.4)
+    def perp(d, rot):
+        ref = Vector((1, 0, 0)) if abs(d.x) < 0.9 else Vector((0, 1, 0))
+        p = d.cross(ref).normalized()
+        q = d.cross(p).normalized()
+        return (p * math.cos(rot) + q * math.sin(rot)).normalized()
+
+    def grow(p, d, length, r0, level):
+        n = 3 + int(length / 0.07) if level < 3 else 3
+        pts, rads = [p.copy()], [r0]
+        cur, dirv = p.copy(), d.normalized()
+        taper = 0.55 if level < levels else 0.8
+        for i in range(n):
+            t = (i + 1) / n
+            wob = Vector((rng.gauss(0, 0.13), rng.gauss(0, 0.13), rng.gauss(0, 0.05)))
+            trop = up * (0.07 if level <= 1 else 0.02) - up * (0.05 * level * t if level >= 2 else 0.0)
+            dirv = (dirv + wob + trop).normalized()
+            cur = cur + dirv * (length / n)
+            pts.append(cur.copy()); rads.append(max(r0 * (1 - taper * t), 0.0015))
+        chains.append((pts, rads, level))
+        if level >= levels:
+            tips.append((pts, level))
+            return
+        if level == 0:
+            kids = rng.randint(3, 5)
+            ts = [rng.uniform(0.82, 1.0) for _ in range(kids)]
+        else:
+            kids = {1: rng.randint(4, 6), 2: rng.randint(3, 5)}.get(level, rng.randint(2, 4))
+            ts = sorted(rng.uniform(0.3, 0.98) for _ in range(kids))
+        rot0 = rng.uniform(0, 2 * math.pi)
+        for j, t in enumerate(ts):
+            i = min(len(pts) - 1, max(1, int(round(t * (len(pts) - 1)))))
+            base = pts[i]; pd = (pts[i] - pts[i - 1]).normalized()
+            rot = rot0 + j * 2.39996
+            a = math.radians(rng.uniform(22, 38) if level == 0 else rng.uniform(32, 58))
+            cd = (pd * math.cos(a) + perp(pd, rot) * math.sin(a)).normalized()
+            if level == 0:
+                cd = (cd + Vector((cd.x, cd.y, 0)) * (spread - 0.4)).normalized()
+            cl = length * (rng.uniform(0.95, 1.25) if level == 0 else rng.uniform(0.5, 0.72) * (1.15 - 0.45 * t))
+            if level == 0:
+                cl = (1.0 - clear) * rng.uniform(0.5, 0.62)
+            cr = rads[i] * rng.uniform(0.62, 0.78)
+            grow(base, cd, cl, cr, level + 1)
+        if level >= levels - 1:
+            tips.append((pts, level))
+
+    trunk_dir = Vector((rng.uniform(-0.06, 0.06), rng.uniform(-0.06, 0.06), 1)).normalized()
+    grow(Vector((0, 0, -0.01)), trunk_dir, clear, trunk_r, 0)
+    # The root flare: the trunk's first ring wider.
+    chains[0][1][0] *= 1.6
+    return chains, tips
+
+
+def tree(location, height, seed, layer, kind="green", leaves=9000, spread=0.55, name="tree"):
+    """A broadleaf tree (or a blossoming one): a trunk dividing into leaders, branches in a
+    golden-angle spiral, twigs, all continuous tapering tubes; a crown of leaf cards on the
+    twigs (sunlit and lighter above, cooler and darker inside and below). Every tree is a
+    little different in height, spread, lean and how its crown breaks up."""
+    rng = random.Random(seed)
+    x, y, z = location
+    height *= rng.uniform(0.88, 1.12)
+    spread *= rng.uniform(0.85, 1.2)
+    chains, tips = _skeleton(rng, height, 3, spread)
+    # Normalise: the crown's top at `height`.
+    top = max(p.z for pts, _, _ in chains for p in pts)
+    k = height / max(top, 1e-3)
+    origin = Vector((x, y, z))
+    scaled = [([origin + p * k for p in pts], [r * k for r in rads]) for pts, rads, _ in chains]
+    tube_chains(scaled, layer, mat_bark(), name + "_wood")
+    # Leaf cards on the terminal branches (and the tips of the ones before them).
+    cards = max(40, leaves // 5)
+    blossom = kind == "blossom"
+    nr = np.random.default_rng(seed)
+    per = max(2, cards // max(1, len(tips)))
+    base, along, across, sizes, cols = [], [], [], [], []
+    centre = origin + Vector((0, 0, height * 0.65))
+    for pts, level in tips:
+        n = per if level >= 3 else max(1, per // 3)
+        for _ in range(n):
+            t = nr.uniform(0.25, 1.0) if level >= 3 else nr.uniform(0.8, 1.0)
+            fi = t * (len(pts) - 1); i = int(fi); f = fi - i
+            p = pts[min(i, len(pts) - 1)].lerp(pts[min(i + 1, len(pts) - 1)], f)
+            P = origin + p * k
+            out_ = (P - centre); out_.z *= 0.6
+            out_ = out_.normalized() if out_.length > 1e-6 else Vector((0, 0, 1))
+            d = Vector(nr.normal(0, 1, 3)).normalized() * 0.7 + out_ * 0.8 + Vector((0, 0, 0.35))
+            d.normalize()
+            side = d.cross(Vector(nr.normal(0, 1, 3))).normalized()
+            s = height * (0.095 if not blossom else 0.08) * nr.uniform(0.7, 1.25)
+            base.append(P[:]); along.append(d[:]); across.append(side[:]); sizes.append(s)
+            # Light: higher and more outward is brighter and warmer; inside, cooler.
+            rel = (P.z - z) / height
+            sun = np.clip(0.55 + 0.55 * rel + 0.25 * out_.z + nr.normal(0, 0.06), 0.45, 1.25)
+            pal = BLOSSOM_PINKS if blossom else (AUTUMN if kind == "autumn" else LEAF_GREENS)
+            c = pal[nr.integers(0, len(pal))] * sun
+            if not blossom and nr.random() < 0.08:
+                c = c * np.array([1.15, 1.08, 0.7])        # a few sunlit yellow-green sprigs
+            cols.append(c)
+    if blossom:
+        # A blossoming tree keeps a few young green leaves among the flowers.
+        for j in range(len(base) // 6):
+            i = nr.integers(0, len(base))
+            base.append(base[i]); along.append(along[(i + 1) % len(along)]); across.append(across[i]); sizes.append(sizes[i] * 0.8)
+            cols.append(LEAF_GREENS[nr.integers(0, len(LEAF_GREENS))] * 1.1)
+    if blossom:
+        n_flower = len(base) - len(base) // 7
+        cards_mesh(name + "_blossom", base[:n_flower], along[:n_flower], across[:n_flower], sizes[:n_flower], cols[:n_flower], layer, mat_leafcard("blossom", 0.3))
+        cards_mesh(name + "_leaves", base[n_flower:], along[n_flower:], across[n_flower:], sizes[n_flower:], cols[n_flower:], layer, mat_leafcard("leaf"))
+    else:
+        cards_mesh(name + "_leaves", base, along, across, sizes, cols, layer, mat_leafcard("leaf"))
+
+
+def grove(fn, x0, x1, y0, y1, count, layer, seed, size=(10, 22), blossom=0.2, name="grove", clump=0.6, avoid=(), min_z=None):
+    """Distant trees, clumped into woods: each a trunk, a dense core of a few soft lobes
+    (smooth, darker inside) and a fringe of leaf cards around it that breaks the outline
+    into twigs and leaves. One mesh per part: hundreds of trees cheaply."""
+    rng = np.random.default_rng(seed)
+    import bmesh
+    bm = bmesh.new(); bmesh.ops.create_icosphere(bm, subdivisions=2, radius=1.0)
+    sv = np.array([v.co[:] for v in bm.verts], np.float32)
+    st = np.array([[v.index for v in f.verts] for f in bm.faces], np.int32)
+    bm.free()
+    centres = rng.uniform((x0, y0), (x1, y1), (max(1, int(count * (1 - clump) / 6) + 3), 2))
+    V, T, C = [], [], []
+    TV, TT, TC = [], [], []
+    cb, ca, cx_, cs, cc = [], [], [], [], []
+    cbb, cab, cxb, csb, ccb = [], [], [], [], []
+    base_n = 0; tn = 0
+    for k in range(count):
+        if rng.random() < clump:
+            c = centres[rng.integers(len(centres))]
+            x, y = c[0] + rng.normal(0, (x1 - x0) * 0.03), c[1] + rng.normal(0, (y1 - y0) * 0.03)
+        else:
+            x, y = rng.uniform(x0, x1), rng.uniform(y0, y1)
+        z = fn(x, y)
+        s = rng.uniform(*size)
+        bl = rng.random() < blossom
+        if any(math.hypot(x - ax, y - ay) < ar for ax, ay, ar in avoid) or (min_z is not None and z < min_z):
+            continue
+        pal = BLOSSOM_PINKS if bl else LEAF_GREENS
+        top = pal[rng.integers(0, len(pal))] * rng.uniform(0.85, 1.1)
+        # Trunk: a tapered prism, slightly leaning.
+        tw = s * 0.045
+        lean = rng.normal(0, s * 0.03, 2)
+        ring = np.array([[math.cos(a), math.sin(a)] for a in np.linspace(0, 2 * np.pi, 6, endpoint=False)], np.float32)
+        lo = np.column_stack([ring * tw * 1.3, np.zeros(6)]); hi = np.column_stack([ring * tw * 0.6 + lean, np.full(6, s * 0.6)])
+        TV.append(np.concatenate([lo, hi]) + (x, y, z))
+        TT.append(np.array([[i, (i + 1) % 6, 6 + (i + 1) % 6] for i in range(6)] + [[i, 6 + (i + 1) % 6, 6 + i] for i in range(6)], np.int32) + tn)
+        tn += 12
+        lobes = rng.integers(3, 6)
+        for lobe in range(lobes):
+            r = s * rng.uniform(0.2, 0.3)
+            off = np.array((rng.normal(0, s * 0.14) + lean[0], rng.normal(0, s * 0.14) + lean[1], s * (0.55 + rng.uniform(0, 0.3))), np.float32)
+            v = sv * r * (1 + 0.12 * rng.standard_normal(sv.shape).astype(np.float32))
+            v[:, 2] *= 0.9
+            shade = np.clip(0.35 + 0.45 * (sv[:, 2:3] * 0.5 + 0.5), 0.3, 0.85)       # a darker core
+            V.append(v + off + (x, y, z)); T.append(st + base_n); C.append(top * shade); base_n += len(sv)
+            # The fringe: cards from the lobe's surface outwards.
+            nc = 9
+            dirs = rng.normal(0, 1, (nc, 3)).astype(np.float32); dirs[:, 2] = np.abs(dirs[:, 2]) * 0.8 + 0.2
+            dirs /= np.linalg.norm(dirs, axis=1, keepdims=True)
+            pos = off + (x, y, z) + dirs * r * 0.55
+            side = np.cross(dirs, rng.normal(0, 1, (nc, 3))); side /= np.linalg.norm(side, axis=1, keepdims=True) + 1e-6
+            light = np.clip(0.75 + 0.4 * dirs[:, 2:3] + rng.normal(0, 0.05, (nc, 1)), 0.5, 1.2)
+            if bl:
+                cbb.append(pos); cab.append(dirs); cxb.append(side); csb.append(np.full(nc, r * 0.95)); ccb.append(top * light)
+            else:
+                cb.append(pos); ca.append(dirs); cx_.append(side); cs.append(np.full(nc, r * 0.95)); cc.append(top * light)
+    big_mesh(name + "_trunks", np.concatenate(TV), np.concatenate(TT), layer, mat_bark(), colours=None, smooth=True)
+    ob = big_mesh(name, np.concatenate(V), np.concatenate(T), layer, mat_vegetation(name + "mat", translucency=0.2), colours=np.concatenate(C), smooth=True)
+    if cb:
+        cards_mesh(name + "_fringe", np.concatenate(cb), np.concatenate(ca), np.concatenate(cx_), np.concatenate(cs), np.concatenate(cc), layer, mat_leafcard("leaf"))
+    if cbb:
+        cards_mesh(name + "_bloomfringe", np.concatenate(cbb), np.concatenate(cab), np.concatenate(cxb), np.concatenate(csb), np.concatenate(ccb), layer,
+                   mat_leafcard("blossom", 0.3))
+    return ob
+
+
+def mat_goldwood():
+    """Golden boughs: bark furrows under a warm metallic gold."""
+    key = ("goldwood",)
+    if key in _mats:
+        return _mats[key]
+    m, nt, out, bsdf = _principled("goldwood")
+    L = nt.links.new
+    tc = nt.nodes.new("ShaderNodeTexCoord")
+    vor = nt.nodes.new("ShaderNodeTexVoronoi"); vor.feature = "DISTANCE_TO_EDGE"; vor.inputs["Scale"].default_value = 1.4
+    L(tc.outputs["Object"], vor.inputs["Vector"])
+    nz = nt.nodes.new("ShaderNodeTexNoise"); nz.inputs["Scale"].default_value = 0.8; nz.inputs["Detail"].default_value = 8
+    L(tc.outputs["Object"], nz.inputs["Vector"])
+    ramp = nt.nodes.new("ShaderNodeValToRGB")
+    ramp.color_ramp.elements[0].position = 0.2; ramp.color_ramp.elements[0].color = (0.45, 0.28, 0.1, 1)
+    ramp.color_ramp.elements[1].position = 0.75; ramp.color_ramp.elements[1].color = (0.95, 0.72, 0.32, 1)
+    L(nz.outputs["Fac"], ramp.inputs["Fac"])
+    L(ramp.outputs["Color"], bsdf.inputs["Base Color"])
+    bsdf.inputs["Metallic"].default_value = 0.55
+    bsdf.inputs["Roughness"].default_value = 0.38
+    bump = nt.nodes.new("ShaderNodeBump"); bump.inputs["Strength"].default_value = 0.5
+    L(vor.outputs["Distance"], bump.inputs["Height"]); L(bump.outputs["Normal"], bsdf.inputs["Normal"])
+    L(bsdf.outputs[0], out.inputs["Surface"])
+    _mats[key] = m
+    return m
+
+
+def woven_nest(cx, cy, z, radius, height, layer, seed, twigs=220):
+    """A great nest woven of golden boughs: curved twigs laid around a ring, each rising and
+    dipping as it crosses the others, thicker at the base, finer and looser at the rim, a
+    few sticking out; lined inside with golden grass."""
+    rng = random.Random(seed)
+    chains = []
+    for k in range(twigs):
+        tier = rng.random() ** 0.8                       # 0 base .. 1 rim
+        a0 = rng.uniform(0, 2 * math.pi)
+        sweep = rng.uniform(0.5, 1.4) * (1 if rng.random() < 0.5 else -1)
+        r0 = radius * (0.72 + 0.3 * tier + rng.uniform(-0.05, 0.05))
+        z0 = z + height * tier * rng.uniform(0.85, 1.05)
+        thick = (1.5 - 0.9 * tier) * rng.uniform(0.6, 1.2)
+        n = 10
+        pts, rads = [], []
+        weave = rng.uniform(0, 2 * math.pi)
+        for i in range(n + 1):
+            t = i / n
+            a = a0 + sweep * t
+            rr = r0 + radius * 0.06 * math.sin(t * 3.0 + weave)
+            pts.append(Vector((cx + rr * math.cos(a), cy + rr * math.sin(a), z0 + height * 0.12 * math.sin(t * 7.0 + weave))))
+            rads.append(thick * (1.0 - 0.6 * t) + 0.12)
+        # Some twigs end sticking out of the rim.
+        if tier > 0.7 and rng.random() < 0.35:
+            d = Vector((math.cos(a0 + sweep), math.sin(a0 + sweep), rng.uniform(0.2, 0.9))).normalized()
+            end = pts[-1]
+            for i in range(1, 4):
+                pts.append(end + d * radius * 0.06 * i); rads.append(max(0.1, rads[-1] * 0.8))
+        chains.append((pts, rads))
+    tube_chains(chains, layer, mat_goldwood(), "nest_boughs")
+    # The lining: soft golden grass inside the ring.
+    def bowl(x, y):
+        q = min(1.0, math.hypot(x - cx, y - cy) / (radius * 0.8))
+        return z + height * (0.25 + 0.6 * q * q)
+    grass(bowl, cx - radius * 0.8, cx + radius * 0.8, cy - radius * 0.8, cy + radius * 0.8, 9000, layer, seed + 1, height=(1.0, 2.6), width=0.12,
+          base=(0.5, 0.36, 0.12), tip=(0.95, 0.8, 0.42), name="nestgrass")

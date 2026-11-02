@@ -1303,49 +1303,6 @@ def market_stall(location, width, depth, layer, cloth_colour, rotation_z=0.0):
     prism_roof(at(0, 0, 2.4), width * 1.15, depth * 1.3, 0.6, layer, mat_cloth(cloth_colour), rotation_z=rotation_z + math.pi / 2, name="canopy")
 
 
-def dragon(location, scale, layer, rotation_z=0.0, eye_strength=40.0):
-    """A sleeping dragon curled on its hoard: body, coiled tail, folded wings, horns."""
-    x, y, z = location
-    s = scale
-    skin = mat_stone("dragonskin", (0.012, 0.009, 0.009), rough=0.5, bump=1.2, scale=4)
-    mb = bpy.data.metaballs.new("dragon")
-    mb.resolution = 0.25 * s
-    mb.render_resolution = 0.12 * s
-    def ball(px, py, pz, r, size=None):
-        e = mb.elements.new()
-        e.type = "ELLIPSOID" if size else "BALL"
-        e.co = (px, py, pz)
-        e.radius = r
-        if size:
-            e.size_x, e.size_y, e.size_z = size
-    ball(0, 0, 1.4 * s, 2.4 * s, (1.6, 1.0, 0.75))
-    ball(-2.4 * s, -0.6 * s, 1.6 * s, 1.4 * s, (1.0, 0.9, 0.9))
-    ball(-3.6 * s, -1.6 * s, 2.4 * s, 0.9 * s, (0.9, 0.8, 0.8))   # neck
-    ball(-4.4 * s, -2.6 * s, 2.0 * s, 0.9 * s, (1.4, 0.8, 0.7))   # head
-    ob = bpy.data.objects.new("dragon", mb)
-    bpy.context.scene.collection.objects.link(ob)
-    ob.location = Vector(location)
-    ob.rotation_euler = (0, 0, rotation_z)
-    mb.materials.append(skin)
-    put(ob, layer)
-    rot = Matrix.Rotation(rotation_z, 4, "Z")
-    def at(dx, dy, dz):
-        p = rot @ Vector((dx * s, dy * s, dz * s))
-        return (x + p.x, y + p.y, z + p.z)
-    tail = [at(3.0 + 2.5 * math.cos(t * 3.2), -1.5 + 2.5 * math.sin(t * 3.2) - t * 1.0, 0.8 - 0.4 * t) for t in [k / 20 for k in range(21)]]
-    tube(tail, 0.9 * s, layer, skin, name="tail", taper=lambda u: 1.0 - 0.92 * u)
-    for side in (-1, 1):
-        wing = [at(0.5, side * 1.0, 2.6), at(1.8, side * 2.4, 4.2), at(3.4, side * 1.6, 3.0), at(2.0, side * 0.6, 2.2)]
-        mesh_object("wing", [tuple(v) for v in wing], [(0, 1, 2, 3)], layer, mat_stone("membrane", (0.012, 0.004, 0.005), bump=0.2))
-        tube([at(0.5, side * 1.0, 2.6), at(1.8, side * 2.4, 4.2), at(3.4, side * 1.6, 3.0)], 0.15 * s, layer, skin, name="wingbone")
-        tube([at(-4.6, -2.4 + side * 0.4, 2.6), at(-4.2, -1.6 + side * 0.9, 3.6), at(-3.4, -1.2 + side * 1.0, 4.0)], 0.18 * s, layer,
-             mat_stone("horn", (0.015, 0.013, 0.015), bump=0.3), name="horn", taper=lambda u: 1 - 0.9 * u)
-        e = cone(at(-5.2, -3.1, 2.25 + 0.0), 0.08 * s, 0.03 * s, layer, mat_emission((1.0, 0.25, 0.05), eye_strength, "dragoneye"), sides=6, name="eye")
-        e.location = at(-5.25, -3.0 + side * 0.35, 2.3)
-        e.rotation_euler = (math.pi / 2, 0, rotation_z)
-    return ob
-
-
 def spiral_stair(centre, radius, height, turns, layer, material, steps_per_turn=16, start_angle=0.0):
     x, y, z = centre
     n = int(turns * steps_per_turn)
