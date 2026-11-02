@@ -1189,6 +1189,12 @@ def mat_leafcard(kind="leaf", translucency=0.4):
     tr = nt.nodes.new("ShaderNodeBsdfTranslucent"); L(mul.outputs["Result"], tr.inputs["Color"])
     leaf = nt.nodes.new("ShaderNodeMixShader"); leaf.inputs["Fac"].default_value = translucency
     L(bsdf.outputs[0], leaf.inputs[1]); L(tr.outputs[0], leaf.inputs[2])
+    if kind == "blossom":
+        # Blossom is luminous: a little of its own colour glows (petals full of light), so
+        # its shaded side stays pale pink instead of turning purple under the blue sky.
+        glow = nt.nodes.new("ShaderNodeEmission"); L(mul.outputs["Result"], glow.inputs["Color"]); glow.inputs["Strength"].default_value = 0.35
+        lit = nt.nodes.new("ShaderNodeAddShader"); L(leaf.outputs[0], lit.inputs[0]); L(glow.outputs[0], lit.inputs[1])
+        leaf = lit
     clear = nt.nodes.new("ShaderNodeBsdfTransparent")
     cut = nt.nodes.new("ShaderNodeMixShader")
     L(tex.outputs["Alpha"], cut.inputs["Fac"]); L(clear.outputs[0], cut.inputs[1]); L(leaf.outputs[0], cut.inputs[2])
@@ -1281,7 +1287,7 @@ def mat_bark():
 
 
 LEAF_GREENS = np.array([[0.16, 0.34, 0.07], [0.23, 0.44, 0.09], [0.32, 0.52, 0.12], [0.13, 0.29, 0.08], [0.4, 0.55, 0.14]], np.float32)
-BLOSSOM_PINKS = np.array([[1.0, 0.45, 0.62], [1.0, 0.56, 0.7], [0.98, 0.4, 0.58], [1.0, 0.7, 0.8]], np.float32)   # linear: pink in sRGB
+BLOSSOM_PINKS = np.array([[1.0, 0.58, 0.72], [1.0, 0.68, 0.8], [0.99, 0.52, 0.68], [1.0, 0.8, 0.88]], np.float32)   # linear: pink in sRGB
 AUTUMN = np.array([[0.85, 0.55, 0.15], [0.9, 0.7, 0.2], [0.6, 0.55, 0.15]], np.float32)
 
 
