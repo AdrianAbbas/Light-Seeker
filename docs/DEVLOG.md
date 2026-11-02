@@ -121,7 +121,7 @@ usage limit or a compaction) continues from the first unticked line. Push to `ma
 - [x] U6a. Art pipeline: smooth shading and subdivision, natural trees (branching, leaf cards with alpha, varied sizes), grass and flower scattering, displaced broken rock, better materials, atmospheric depth; CC0 log
 - [x] U6b. Every location, sub-location and the map re-rendered; sizes about the same; `docs/snapshots/` before/after
 - [x] U6c. The developer: "they all look SO FAKE" (a luminous fantasy illustration as the reference): a study of how the genre uses light; contre-jour lighting from the painted sun and the illustration light pass (`light.py`); every scene and the map re-rendered again
-- [ ] U7. Whole suite green, DEVLOG handoff (what to look at in GarageBand); final push without `[skip ci]`, CI green
+- [x] U7. Whole suite green, DEVLOG handoff (what to look at in GarageBand); final push without `[skip ci]`, CI green
 
 ---
 
@@ -1342,7 +1342,15 @@ in a 30 fps frame" (49 ms while eight shards shared four cores); alone it measur
 passes (the editor group: 83 passed, 0 failed). No sound test regressed (the instrument and
 instruments groups, recorded stand-ins, strength, levels, locations, travel). New: the
 `glissando` checks (in the `instrument` group, so also on macOS) and the `window` checks (in
-the `editor` group). CI: see the next line once the final push has run.
+the `editor` group).
+
+**CI, `edcbffc`: green.** The first final push (`3e70cc3`) failed on macOS: clang rejected the
+hover buttons' inherited base constructor (gcc had accepted it); an explicit constructor fixed
+it (checked with clang here first). Its Linux job had one wall-clock failure ("Eco costs less
+than Standard", 21.5 vs 21.0 % of a core, shards sharing the runner; untouched code), which
+passed on the re-run. `edcbffc`: Linux with the recordings and the captured spaces **1868
+passed, 0 failed**; macOS build, smoke + instrument (with the new glissando checks) on arm64
+and x86_64 77 passed each, auval and the AU harness for both plug-ins, the package uploaded.
 
 ### Handoff: what to look at in GarageBand
 
