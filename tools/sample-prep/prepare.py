@@ -1154,6 +1154,15 @@ def main():
             shutil.copy(os.path.join(args.out, f"{sid}.json"), fx)
         with open(os.path.join(fx, "index.json"), "w") as f:
             json.dump({"version": 1, "instruments": fx_sets}, f, indent=1)
+    # Sets no instrument plays ("ship": false): prepared and reported, then left out (not
+    # loaded by the plug-in, not bundled).
+    import shutil
+    spare = {s["id"] for s in manifest["sets"] if s.get("ship", True) is False}
+    for sid in [i for i in index if i in spare]:
+        shutil.rmtree(os.path.join(args.out, sid), ignore_errors=True)
+        os.remove(os.path.join(args.out, f"{sid}.json"))
+        report["sets"][sid]["shipped"] = False
+    index = [i for i in index if i not in spare]
     with open(os.path.join(args.out, "index.json"), "w") as f:
         json.dump({"version": 1, "instruments": index}, f, indent=1)
     total = sum(os.path.getsize(os.path.join(dp, fn)) for dp, _, fns in os.walk(args.out) for fn in fns
@@ -1180,7 +1189,7 @@ def main():
         if "takesPerNote" in e:
             print(f"   takes per note: {e['takesPerNote']}")
     for sid, s in report["sets"].items():
-        print(f"\n{sid}: {s['zones']} notes, {s['seconds']} s of audio, {s['loops']} loops")
+        print(f"\n{sid}: {s['zones']} notes, {s['seconds']} s of audio, {s['loops']} loops" + ("" if s.get("shipped", True) else " (not shipped: no instrument plays it)"))
     for pid, pt in report["patches"].items():
         print(f"{pid}: gain {pt['gainDb']:+.1f} dB (both articulations), sounding " + ", ".join(f"{k} {v} s" for k, v in pt["sounding"].items()))
     for sid, lv in report["levelling"].items():

@@ -14,6 +14,10 @@ jobs:
     env:
       # The optional Developer ID path runs only when these secrets exist.
       HAS_DEVELOPER_ID: ${{ secrets.MACOS_CERTIFICATE != '' }}
+      # With the Samples token the captured spaces and the recordings must be there (the
+      # smoke test checks); without it the build falls back to the stand-ins.
+      LS_REQUIRE_CAPTURES: ${{ secrets.SAMPLES_TOKEN != '' }}
+      LS_REQUIRE_SAMPLES: ${{ secrets.SAMPLES_TOKEN != '' }}
       CCACHE_BASEDIR: ${{ github.workspace }}
       CCACHE_SLOPPINESS: time_macros,include_file_mtime,include_file_ctime
     steps:
@@ -120,6 +124,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     env:
+      LS_REQUIRE_CAPTURES: ${{ secrets.SAMPLES_TOKEN != '' }}
+      LS_REQUIRE_SAMPLES: ${{ secrets.SAMPLES_TOKEN != '' }}
       CCACHE_BASEDIR: ${{ github.workspace }}
       CCACHE_SLOPPINESS: time_macros,include_file_mtime,include_file_ctime
     steps:
@@ -179,6 +185,12 @@ jobs:
         env:
           LIGHTSEEKER_SAMPLES: ${{ runner.temp }}/samples
         run: build/LightSeekerTests_artefacts/Release/LightSeekerTests --listen-instruments build/test-logs/instruments
+      # The instruments the recordings update changed: one melody and chord progression each, dry and in its place.
+      - name: Changed instruments listening renders (dry and in place, WAV)
+        if: always()
+        env:
+          LIGHTSEEKER_SAMPLES: ${{ runner.temp }}/samples
+        run: build/LightSeekerTests_artefacts/Release/LightSeekerTests --listen-changed build/test-logs/changed-instruments
       - name: Upload test logs
         if: always()
         uses: actions/upload-artifact@v4

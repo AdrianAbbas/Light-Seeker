@@ -920,3 +920,193 @@ edition"; the short version:
   note would delay what you play.
 - The closest pair of instruments overall (not siblings) is Airy Flute / Breathy Wind Flute;
   they differ mainly in breath. Worth a listen.
+
+## Recordings update: voice, banjo, piano, col legno, Minilogue; the captures out of the repository (2026-11-02)
+
+New recordings arrived in `AdrianAbbas/Samples` after the instrument edition: the
+developer's voice, a re-recorded banjo, two djembes, and (during this session) an 88-key
+piano with its own `notes.txt` section. All of them are prepared in CI as before (the
+`SAMPLES_TOKEN` secret, `scripts/ci-fetch-samples.sh`, never committed here).
+
+### What the Samples repository holds (checked, not assumed)
+
+- **No folders.** The brief mentioned `01-voice/notes.txt`; there is no `01-voice/` folder
+  and no second `notes.txt`: every recording is still in the root (now mostly 24-bit
+  44.1 kHz WAVs) and the one `notes.txt` has no voice section. Its new sections: the banjo
+  (re-recorded through the interface; the old MacBook-microphone banjo files are gone), the
+  djembes (template text, takes "3 per dynamic") and `[02-piano]` (88 keys A0-C8, fixed
+  gain, short soft/medium/full sweeps and a long sweep, one take per key). The tool now
+  finds a recording in any folder anyway (by its path or its name), so a later move into
+  `01-voice/` etc. needs no manifest change.
+- **The voice is named an octave below what was sung.** Every voice file was measured
+  (YIN, then an octave check on the spectrum: no energy at half the candidate or at 1.5
+  times it, every harmonic of the candidate present). The brief's example ("the '-E2'
+  drones are actually on G1") does not match the audio: nothing is near G1 (49 Hz).
+
+| File (name says) | Sounds | Notes |
+|---|---|---|
+| ooh / aah / ee / oh / mmm sweeps, chest "E2-A#3" | **E3 G3 A3 C#4 E4 G4 A#4** | the third note is A, not A#; most notes 10-45 cents flat |
+| ooh / aah falsetto "C#4-E4" | **C#5 (C5 +45 for aah), E5** | |
+| choir stacks "E2" (ooh, aah) | **E3** | 5 takes each |
+| choir stacks "A2" (ooh, aah) | **A3** (ooh), **G#3 +40 = A3 -60** (aah) | ooh had a 6th, weaker take: not used |
+| choir stack "E3" (ooh), (aah) | **D#4 +70 = E4 -30** (ooh), **E4** (aah) | |
+| ooh choir "falsetto E4" | **E5** | |
+| mmm choir "A2" | **A2** (the only voice file named right) | `_1`: two sliding hums near E3, not used |
+| "low drone G1" (ooo, mmm) | **G2** | |
+| "low drone A2" (aah) | **A3 -30** | |
+| banjo sweeps | D3 F3 G#3 B3 D4 F4 G#4 B4 D5 F5 G#5, as named | 10-46 cents flat (open G tuned low) |
+| banjo 5th string | G4 x 9 (3 soft, 3 medium, 3 hard), -11 to -16 cents | |
+| piano (4 sweeps) | A0-C8 chromatic, as described | within 15 cents (the top octave a little sharp) |
+
+Every note is mapped where it sounds and tuned by its detected pitch (the held pitch of its
+loop for sustained notes); the CI log lists each renamed note.
+
+### Sample prep (`tools/sample-prep`, `prepare.py` + `manifest.json`)
+
+New in the tool (see its README): recordings in folders; WAVs at any rate (resampled);
+`pitchFrom: audio` for the voice (notes sliced by the gaps between them, since a voice swells
+and breathes inside a note; pitch on each note's steady middle; one label per stack or
+drone file, a take more than a semitone off the others not used); `pitchFrom: track` for the
+piano's chromatic sweeps (each onset looked for near the next key; re-onsets inside a ringing
+bass note and repeated keys dropped: one take per key, as the notes say); layers that share a
+name (two "ee full" takes: round-robins); `into` (the falsetto plays in both velocity layers);
+`pick` (the banjo's 5th-string file holds its three dynamics in order); `gainGroup` (all the
+voice sets keep their relative levels); unpitched `texture` sets (the breaths), also copied
+into `fx/` for the effect's bundle; `ship: false` (prepared and reported, not loaded or
+bundled). The CI log now prints `Prepared: N notes (set)` for every set and the total.
+
+Prepared and shipped (534 notes, 44 MB of FLAC, 123.6 MB in memory, loaded in about a
+second): guitar 45, kalimba 51, violin sustain 11, pizzicato 42, col legno 11, **banjo 42**
+(11 notes x 3 dynamics + G4 x 3 per dynamic), **piano long notes 88**, **voice** ooh 18, oh 7,
+aah 18, ee 21, mmm 14 (soft and full chest sweeps, the falsetto in both layers, a second "ee
+full" take), **choir stacks** ooh 20, aah 15, mmm 5, **drones** 4, **breaths** 11, Minilogue
+pulse (long) 37, soft pad short 37 and long 37. Prepared but not shipped (no instrument
+plays them): the piano's short-note sweeps (261 notes) and the harsh square, cyberpunk,
+static-y bass and pulse (short) patches.
+
+### Which instruments use which recordings now
+
+| Instrument (place) | Recordings | Stand-in without them |
+|---|---|---|
+| **Orchestral Chord Pad** (Throne of Light) | voice: the soft ooh/aah choir (vowel between them, four singers, the soft takes and stacks) on the **Voices** macro | the formant choir |
+| **Angelic Choir** (Sanctum) | voice: soft takes and falsetto ("ooh"), ooh stacks (four singers); above E5 the recordings go on pitched up (formants rising with them: younger, not lower) and fade over an octave into the formant choir; light shimmer, bright air | the formant choir |
+| **Celesta** (Diamond Vault) | piano: the long notes, high-passed under the bars (the hammered body) | the modelled bars alone |
+| **Leaf Halls, Sunlit Meadow** | guitar (unchanged) | modelled lute / guitar |
+| **Butterfly Glade** | kalimba (unchanged) | the tine |
+| **Radiant Choir** (Choir Loft) | voice: full chest and falsetto ("aah"), aah stacks (five singers), swelling in; the formant choir above E5; synthesised basses and sopranos | the formant choir |
+| **Cloud Pad** (Cloud Bridge) | Minilogue soft pad (long) and, quietly inside it, the pulsating patch (long) | the analog pad |
+| **Shimmering Pluck** (Sky Harbour) | **banjo** (3 dynamics, the 5th string's three hits as round-robins), high-passed (no drum boom, no low strings), its ring shortened, the Minilogue soft pad's short hits as a synth body, chorus and a rising shimmer: a shimmer, not a twang | the analog pluck it had |
+| **Bouncy Pizzicato** (Mushroom Ring) | violin pizzicato and now its **col legno** (the bow's wood: a woody tick on each note) | modelled pluck |
+| **Warm Strings** (Golden Nest) | violin open-string sustain (unchanged) | modelled violins |
+| **Epic Choir and Brass** (Summit of Winds) | voice: full chest "aah" with the aah stacks (seven singers), an upper octave from the falsetto/soft takes (three singers), the **G2/A3 drones** an octave under the brass; the choir and brass swell in together | the formant choir |
+| Windswept Isle's **Atmosphere** (both plug-ins) | the slow breaths, pitched up 2-3 semitones, only their air (1.8-7 kHz), very soft, one of the place's three sounds | a synthesised gust |
+
+**Vowel and Ensemble** (two new instrument parameters, added last so older sessions load
+unchanged; on the panel between Character and Level, dimmed on non-voice instruments):
+Vowel moves two vowels either way along mmm-ooh-oh-aah-ee (equal-power crossfades between
+neighbouring vowel sweeps; the formant stand-ins follow it too); Ensemble goes from one
+voice (0 %) through the instrument's own choir (50 %) to eight singers (100 %): each
+singer a different take of the 5-take stacks where a stack lies within a fifth of the note
+(else the sweeps again), its own detune (up to 12 cents), slow drift, timing offset (up to
+45 ms) and place in the stereo field; level held (+3 dB at most for eight). Every weight is
+ramped per sample (30 ms), and a vowel turned to while a note sounds joins in its loop:
+no clicks (tested). Instruments now have up to eight layers (the Epic choir has seven).
+
+**Not used** (in the manifest's `unused` list with the reasons): the **djembes**: LIGHT
+SEEKER has no percussion, and a hand drum in an atmosphere or under a pastoral instrument
+would read as rhythm, not as the light world's air; skipped. The banjo's strumming, palm
+muting and drum-head knocks, the hummed melody, the grungy "eeeh", the ghostly falsetto
+(eerie, unpitched), all whispers and the "shh/hhh/fff/sss" (creepy in this world), the
+"mmm" drone (the "ooo" drone of the same pitch is used), the effect captures and phrases
+(the captures make the IRs), and the Minilogue's harsh square, cyberpunk and static-y bass
+(not bright or majestic).
+
+### The captures: out of the repository, made in CI
+
+`assets/irs/` (the three IRs derived from the pedal captures, and their measurement JSONs)
+is no longer in the repository (the deletion landed in `3e767d1`, one commit earlier than
+its message says; history not rewritten, as asked). `tools/captures/ci-build-irs.sh` lays
+the captures out as run_all.py expects (symlinks; the Samples checkout untouched), runs
+`run_all.py` and `export_irs.py` (about 50 s; the result is bit-identical to the files that
+were committed) while the Samples checkout exists in `ci-fetch-samples.sh`, and CMake
+compiles them into both plug-ins when `LS_IRS_DIR` names them (`LS_HAVE_CAPTURED_IRS`).
+Without them the Vault's three captured kinds are generated fallback halls of the same
+character (long bright shimmer hall; bright hall with far echoes; lush hall), and the four
+capture-tuned effect checks on the Nave of Light and the Rose Garden (strength at 100 % and
+50 %, recognisability, trims; and the AU harness pair) are reported, not gated, in such a
+build. With the token, CI now **requires** both the captures and the recordings
+(`LS_REQUIRE_CAPTURES`, `LS_REQUIRE_SAMPLES` in the smoke test), so a broken pipeline
+cannot hide behind the fallbacks. Other capture-derived files: none left (`docs/` has the
+measurements as prose, the code a few measured numbers such as RT60s in comments and the
+calibrated trims; no audio or IR data).
+
+### Tests
+
+- **recorded** (new group, 93 checks, with the recordings): every changed instrument plays
+  from MIDI across its range (a note every 4 semitones, e.g. the Angelic Choir E3-E6 through
+  the pitch-shifted top); the played pitch class strongest on every note; **in tune within
+  25 cents on every note** (harmonics' peaks); sustained ones hold a chord 8 s with **no
+  click at the loop points** (a second-difference spike detector) and steady level;
+  **level-matched with their siblings** (within 3 dB; the `instruments` group keeps the
+  ±2 dB target); Vowel changes the colour at the same level, Ensemble widens (L/R
+  correlation 1.00 -> about 0.6) without getting much louder; turning both under a held
+  chord, no click; the breath atmosphere plays the recordings; without them every changed
+  instrument's stand-in plays in tune and the breath is a gust.
+- **instrument / instruments** (342): the instrument now has nine parameters; distinct from
+  siblings: two new close pairs on the first run, Grand Organ / Radiant Choir (2.27) and
+  Heroic Horns / Epic Choir and Brass (2.25), almost all of it in the envelope (third-octave
+  colours of a choir chord and an organ chord nearly coincide). Fixed by what a choir does:
+  the Radiant Choir swells in (0.95 s) and dies away on its recorded tail, the Epic choir
+  and its brass swell in together (the Eyrie's horns strike), the Epic choir gets its upper
+  octave and more air. Trims recalibrated (with and without the recordings).
+- **The whole suite** (Linux, eight shards): with the recordings and the captured spaces
+  (the CI configuration) **1807 passed, 0 failed**; without either (a build with no token)
+  1760 passed, 0 failed after one real fix: the fallback hall reported the captured hall's
+  length (its tail was cut). CPU (report only): four notes in each place 8.2 % on average,
+  the worst 14.9 % (Epic Choir and Brass: up to 7 x 8 sample reads per note).
+- **Listening render** (CI: `LightSeeker-linux-test-logs` → `changed-instruments/`,
+  `LightSeekerTests --listen-changed dir`): the same melody (E4 G4 C5 B4 A4 G4 F4 E4) and
+  chord progression (C, Am, F, G, C) on each of the eight changed instruments, dry, then in
+  its place: 16 files. Here: loudest 400 ms between -15.3 and -18.7 dBFS, peaks -7.1 to
+  -1.4 dBFS.
+
+### Notes that sound weak or out of tune (to re-record)
+
+All of these play in tune (the sampler corrects them by their measured pitch), but the
+further a note is off, the more the correction colours it and the more the ensemble's
+takes disagree. Worth re-recording, worst first:
+
+- **Choir stacks**: ooh "E3" (sung around E4 -30: two takes +78 and +88 cents from D#4, i.e.
+  the stack wavers between D#4 and E4), aah "A2" (sung near A3 -60: takes from +63 to +79
+  cents over G#3), ooh "falsetto E4" take 3 (-56 cents), aah "E3" takes 4-5 (-40, -43),
+  mmm "A2" take 2 (-38). ooh "A2" had a sixth, weak take (not used); mmm "A2_1" slides (not
+  used).
+- **Sweeps** 35-45 cents off: ooh soft C#4 (-42), ooh full G3 (-41), A3 (-41), C#4 (-35),
+  aah falsetto C5 (+45) and E5 (-41), ee full A3 (-43). Loops that match poorly (crossfaded,
+  no click, but the vibrato's phase turns): oh soft A#4, aah full G4, aah falsetto C5, ee
+  full (2nd take) E3 and A3.
+- **mmm**: the "full" hums are 5-6 dB *quieter* than the "soft" ones (kept as named; each is
+  levelled to the others in the morph, so only the colour differs).
+- **Drones**: the aah "A2" drone is A3 -39 cents (both takes): re-sing on pitch if it should
+  sit under the brass exactly.
+- **Banjo**: D3 is 46 cents flat in the soft and medium sweeps (the 4th string), G#4 hard
+  -35; the soft and medium sweeps have a higher noise floor (-68 and -70 dBFS) than the hard
+  sweep and the 5th-string file (-85): hiss, partly taken off by the gentle noise reduction.
+  The dynamics were not in loudness order on most notes (the soft takes often louder than
+  the medium), so the layers were set 9/4/0 dB apart per note, as for the guitar.
+- **Piano** (long notes): the top notes G#6, G#7, A7, A#7, C8 are 10-15 dB quieter than the
+  rest, A7 +35 cents. (The short soft sweep's top notes are up to 30 dB down, but that
+  sweep is not used.)
+- **Minilogue pulse** (long): its pulsing makes every loop a loose match (crossfaded).
+
+### Known issues and decisions to revisit
+
+- **Nothing was heard.** As before, everything was designed by measurement here; listen
+  first to the three choirs (are the vowels and the ensemble convincing? is the Angelic
+  Choir's pitch-shifted top angelic or chipmunk-like above C6?), the Shimmering Pluck (does
+  the banjo still read as a banjo?) and the Celesta's piano body.
+- The piano is used only under the Celesta: no place calls for a piano as such. Its short
+  sweeps are prepared (and checked) but not shipped; a piano instrument would be a new
+  place's job.
+- Memory: the recordings now take 123.6 MB (82.7 before) in every process that loads the
+  instrument.

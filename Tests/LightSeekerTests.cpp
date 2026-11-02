@@ -10,6 +10,7 @@
 //   LightSeekerTests --strength [f.csv]   the strength table (Direction Update 2), report only
 //   LightSeekerTests --calibrate-instruments Source/Synth/InstrumentTrims.h   the instruments' level trims
 //   LightSeekerTests --listen-instruments dir   every instrument dry and in its place, and a travel (WAV)
+//   LightSeekerTests --listen-changed dir   the instruments the recordings update changed: one melody and chord progression, dry and in place
 #include "PluginEditor.h"
 #include "PluginProcessor.h"
 #include "UI/Scenes.h"
@@ -70,6 +71,14 @@ double toDb(double x) { return 20.0 * std::log10(std::max(x, 1.0e-12)); }
 std::string fmt(double v, int decimals = 1) { return juce::String(v, decimals).toStdString(); }
 std::string placeName(int i) { return dc::locationNames[static_cast<std::size_t>(i)]; }
 std::string placeName(int i, int sub) { return placeName(i) + " / " + dc::subLocationName(i, sub); }
+// The two places built on the captured spaces (the Nave of Light's Radiant Shimmer Hall,
+// the Rose Garden's Chorus Hall). A build without the captures (no SAMPLES_TOKEN: the IRs
+// are derived from private recordings and made in CI) plays generated stand-ins there,
+// so their sound-design gates (strength, recognisability, trims) are reported, not
+// gated, in such a build. CI builds have the captures (LS_REQUIRE_CAPTURES checks it).
+bool onCapturedFallback(const std::string& place) {
+    return !dc::Vault::capturedSpacesBuiltIn() && (place == "Golden Cathedral / Nave of Light" || place == "Royal Gardens / Rose Garden");
+}
 // Every place in the world: (location, sub-location), sub-location 0 = the scene.
 std::vector<std::pair<int, int>> allPlaces() {
     std::vector<std::pair<int, int>> places;
@@ -421,6 +430,15 @@ void testParameters(Suite& s) {
 
 void testSmoke(Suite& s) {
     s.section("smoke: default place, harness figures, state");
+    // CI with the SAMPLES_TOKEN secret must really have built in the captured spaces and
+    // prepared the recordings (a silent fallback there would hide a broken pipeline).
+    const auto required = [](const char* name) { const char* v = std::getenv(name); return v != nullptr && juce::String(v).trim() == "true"; };
+    std::cout << "  captured spaces: " << (dc::Vault::capturedSpacesBuiltIn() ? "the captures (compiled in)" : "generated fallbacks (no captures in this build)") << "\n";
+    if (required("LS_REQUIRE_CAPTURES")) s.check(dc::Vault::capturedSpacesBuiltIn(), "the captured spaces are built in (CI with the Samples token)");
+    if (required("LS_REQUIRE_SAMPLES")) {
+        lswb::samples::Bank::get().load();
+        s.check(lswb::samples::Bank::get().waitUntilLoaded(20000), "the recordings are prepared and load (CI with the Samples token)", lswb::samples::Bank::get().message().toStdString());
+    }
     // The default (the Celestial Citadel) is audible and changes the sound.
     Host h;
     h.render(3.0, sine(440.0, 0.25f));
@@ -446,8 +464,12 @@ void testSmoke(Suite& s) {
     const double residualB = hv.residualDb(hv.end() - hv.at(1.0), hv.end());
     s.metric("harness sequence: residual at " + placeName(HARNESS_LOCATION_A, 0), residualA, " dB");
     s.metric("harness sequence: residual at " + placeName(HARNESS_LOCATION_B, 0), residualB, " dB");
-    s.check(std::abs(residualB - residualA) > 6.0, "the harness's two locations differ from the input by clearly different amounts (the harness needs > 3 dB)",
-            fmt(residualA) + " vs " + fmt(residualB));
+    // (The pair was chosen with the captured spaces: on the fallback spaces, report only.)
+    if (onCapturedFallback(placeName(HARNESS_LOCATION_A, 0)) || onCapturedFallback(placeName(HARNESS_LOCATION_B, 0)))
+        std::cout << "  [report] the harness's pair on the fallback spaces: " << fmt(residualA) << " vs " << fmt(residualB) << " dB\n";
+    else
+        s.check(std::abs(residualB - residualA) > 6.0, "the harness's two locations differ from the input by clearly different amounts (the harness needs > 3 dB)",
+                fmt(residualA) + " vs " + fmt(residualB));
     // The harness's Intensity check: from the Celestial Citadel (3 s) to Intensity 0, 3 s, the
     // last 1 s measured. CI measured -39.6 dB here before the matcher fix.
     Host hi;
@@ -1037,7 +1059,7 @@ void testMusicality(Suite& s) {
             s.check(h.finite() && h.peak(0, h.end()) < 0.98, name + ": finite, below 0 dBFS", fmt(h.peak(0, h.end()), 3));
             s.check(std::abs(level) < 4.0, name + ": level-matched (within 4 dB)", fmt(level) + " dB");
             const double floor = floorFor[instrument];
-            if (recognisableReportOnly.count(placeName(l, k)) > 0) {
+            if (recognisableReportOnly.count(placeName(l, k)) > 0 || onCapturedFallback(placeName(l, k))) {
                 if (env <= floor) std::cout << "  [report] " << name << ": envelope " << fmt(env, 2) << " vs the 75 %-wet hall's " << fmt(floor, 2) << "\n";
             } else s.check(env > floor, name + ": the instrument stays recognisable (envelope correlation above a 75 %-wet hall's, " + fmt(floor, 2) + ")", fmt(env, 2));
             s.check(boom < 9.0, name + ": no low-end boom (63 Hz band < +9 dB)", fmt(boom) + " dB");
@@ -1221,9 +1243,9 @@ void testStrength(Suite& s) {
                   << fmt(half.wetDb) << " dB, score " << fmt(half.score) << "\n";
         if (!strengthGated(l, k)) { std::cout << "  (report only: sound design not finished) " << name << "\n"; continue; }
         const double full = referenceScore, halfGate = halfOfReference * referenceScore;
-        if (strengthReportOnly.count(name) > 0) std::cout << "  [report] " << name << ": " << fmt(st.score) << " vs the reference hall's " << fmt(full) << "\n";
+        if (strengthReportOnly.count(name) > 0 || onCapturedFallback(name)) std::cout << "  [report] " << name << ": " << fmt(st.score) << " vs the reference hall's " << fmt(full) << "\n";
         else s.check(st.score >= full, name + ": obvious at the defaults (at least the reference hall's " + fmt(full) + ")", fmt(st.score));
-        if (halfReportOnly.count(name) > 0) std::cout << "  [report] " << name << " at 50 %: " << fmt(half.score) << " vs " << fmt(halfGate) << "\n";
+        if (halfReportOnly.count(name) > 0 || onCapturedFallback(name)) std::cout << "  [report] " << name << " at 50 %: " << fmt(half.score) << " vs " << fmt(halfGate) << "\n";
         else s.check(half.score >= halfGate, name + ": clearly audible at Intensity 50 % (at least " + fmt(halfGate) + ")", fmt(half.score));
     }
     std::sort(ranking.begin(), ranking.end());
@@ -1336,6 +1358,10 @@ void testLevels(Suite& s) {
     double worst = 0;
     for (const auto& [l, k] : allPlaces()) {
         const double raw = rawLevel(l, k), trim = dc::placeTrimDb(l, k);
+        if (onCapturedFallback(placeName(l, k))) {
+            std::cout << "  [report] " << placeName(l, k) << " (fallback space, no captures in this build): raw " << fmt(raw) << " dB, trim " << fmt(trim) << " dB\n";
+            continue;
+        }
         worst = std::max(worst, std::abs(raw + trim));
         s.check(std::abs(raw + trim) < 1.0, placeName(l, k) + ": stored trim matches the measured level (re-run --calibrate if not)",
                 "raw " + fmt(raw) + " dB, trim " + fmt(trim) + " dB");
@@ -2742,6 +2768,7 @@ int main(int argc, char** argv) {
         else if (arg == "--synth-debug") return synthDebug();
         else if (arg == "--calibrate-instruments" && i + 1 < argc) return calibrateInstruments(argv[i + 1]);
         else if (arg == "--listen-instruments" && i + 1 < argc) return listenInstruments(argv[i + 1]);
+        else if (arg == "--listen-changed" && i + 1 < argc) return listenChanged(argv[i + 1]);
         else if (arg == "--instrument-snapshot" && i + 1 < argc) return instrumentSnapshot(argv[i + 1]);
         else if (arg == "--strength") return strengthReport(i + 1 < argc ? juce::String(argv[i + 1]) : juce::String());
         else if (arg == "--art" && i + 1 < argc) return renderArt(argv[i + 1], i + 2 < argc ? juce::String(argv[i + 2]).getIntValue() : 960);
@@ -2776,6 +2803,7 @@ int main(int argc, char** argv) {
     if (run("workflow")) testWorkflow(s);
     if (run("instrument")) testInstrument(s);
     if (run("instruments")) { testInstruments(s); testInstrumentPresets(s); }
+    if (run("recorded")) testRecordedInstruments(s);
     if (only.contains("qa")) testQa(s);   // long (130 journeys): run explicitly
     if (only.contains("cpu")) testCpu(s);   // report only: run explicitly
     std::cout << "\n" << s.passed << " passed, " << s.failed << " failed" << std::endl;

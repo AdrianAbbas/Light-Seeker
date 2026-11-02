@@ -242,7 +242,7 @@ void testInstrument(Suite& s) {
         s.check(inst.acceptsMidi() && !inst.producesMidi(), "the instrument takes MIDI");
         s.check(fx.parameters.getParameter(dc::ids::instLock) == nullptr && inst.parameters.getParameter(dc::ids::instLock) != nullptr,
                 "the instrument's parameters exist only in the instrument");
-        s.check(inst.getParameters().size() == fx.getParameters().size() + 7, "the instrument adds exactly its seven parameters");
+        s.check(inst.getParameters().size() == fx.getParameters().size() + 9, "the instrument adds exactly its nine parameters (Vowel and Ensemble since the recordings update)");
         juce::AudioProcessor::BusesLayout stereo;
         stereo.outputBuses.add(juce::AudioChannelSet::stereo());
         juce::AudioProcessor::BusesLayout withInput = stereo;
@@ -581,7 +581,23 @@ void testInstrumentRange(Suite& s, int first, int last, bool gateLevels) {
             ls::inst::instrumentPlace(j, lj, kj);
             const double d = printDistance(prints[std::size_t(i)], prints[std::size_t(j)]);
             if (d < closest) { closest = d; closestPair = instrumentName(i) + " / " + instrumentName(j); }
-            if (li == lj) s.check(d > 3.0, instrumentName(i) + " is distinct from its sibling " + instrumentName(j), "distance " + fmt(d, 2));
+            if (li == lj) {
+                // The colour bands (attack, sustain, release: 3 x 20) and the envelope apart.
+                const auto& pa = prints[std::size_t(i)];
+                const auto& pb = prints[std::size_t(j)];
+                double colour = 0, envelope = 0;
+                const std::size_t nb = 60, n = std::min(pa.size(), pb.size());
+                for (std::size_t k = 0; k < n; ++k) (k < nb ? colour : envelope) += (pa[k] - pb[k]) * (pa[k] - pb[k]);
+                if (d <= 3.0 && std::getenv("LS_PRINT_DUMP") != nullptr) {
+                    for (const auto* pp : { &pa, &pb }) {
+                        std::cout << "    sustain colour:";
+                        for (std::size_t k = 20; k < 40; ++k) std::cout << " " << int(std::lround((*pp)[k]));
+                        std::cout << "\n";
+                    }
+                }
+                s.check(d > 3.0, instrumentName(i) + " is distinct from its sibling " + instrumentName(j),
+                        "distance " + fmt(d, 2) + " (colour " + fmt(std::sqrt(colour / double(n)), 2) + ", envelope " + fmt(std::sqrt(envelope / double(n)), 2) + ")");
+            }
         }
     }
     s.metric("closest pair (" + closestPair + ")", closest);
@@ -888,4 +904,290 @@ int instrumentSnapshot(const juce::String& path) {
     const bool ok = out.openedOk() && png.writeImageToStream(image, out);
     std::cout << (ok ? "snapshot written to " : "could not write ") << file.getFullPathName() << "\n";
     return ok ? 0 : 1;
+}
+
+//==============================================================================
+// The recordings update: the instruments that now play the developer's new recordings
+// (the voice, the banjo, the piano, the col legno, the Minilogue's other patches).
+//   recorded   each plays from MIDI and is in tune across its range (cents, each note),
+//              its sustained notes loop without a click, its Vowel and Ensemble macros
+//              act (voices), it stays level-matched with and distinct from its siblings,
+//              its stand-in plays without the recordings; the breath in the atmosphere
+//   --listen-changed dir   the same melody and chord progression on every changed
+//              instrument, dry and in its place (WAV)
+struct ChangedInstrument { const char* name; int low, high; bool sustained; const char* recordings; };
+constexpr ChangedInstrument changedInstruments[] = {
+    { "Orchestral Chord Pad", 48, 84, true, "voice (soft takes) as the Voices" },
+    { "Angelic Choir", 52, 88, true, "voice (soft takes and falsetto, ooh), stacks; formant choir above E5" },
+    { "Celesta", 60, 96, false, "piano (long notes) under the bars" },
+    { "Radiant Choir", 48, 84, true, "voice (full chest and falsetto, aah), stacks" },
+    { "Cloud Pad", 48, 84, true, "Minilogue soft pad (long), pulse (long)" },
+    { "Shimmering Pluck", 50, 86, false, "banjo, Minilogue soft pad (short)" },
+    { "Bouncy Pizzicato", 55, 88, false, "violin pizzicato, col legno" },
+    { "Epic Choir and Brass", 43, 79, true, "voice (full chest, aah, and falsetto above), stacks, drones" },
+};
+
+int instrumentByName(const char* name) {
+    for (int i = 0; i < ls::inst::instrumentCount; ++i)
+        if (juce::String(ls::inst::patch(i).name) == name) return i;
+    return -1;
+}
+
+// A note's pitch error (cents): the harmonics near the expected ones (each within 60
+// cents), each at its parabolic peak, weighted by level, over a second of the sustain.
+double centsOff(const std::vector<float>& x, double sr, int note) {
+    constexpr int order = 16, size = 1 << order;
+    juce::dsp::FFT fft(order);
+    std::vector<float> data(size * 2, 0.0f);
+    const std::size_t n = std::min<std::size_t>(x.size(), size);
+    for (std::size_t i = 0; i < n; ++i) data[i] = x[i] * float(0.5 - 0.5 * std::cos(2.0 * juce::MathConstants<double>::pi * double(i) / double(n)));
+    fft.performFrequencyOnlyForwardTransform(data.data());
+    const double f0 = 440.0 * std::pow(2.0, (note - 69) / 12.0);
+    double sum = 0, weight = 0;
+    for (int k = 1; k <= 4; ++k) {
+        const double target = f0 * k;
+        if (target > 0.4 * sr) break;
+        const int lo = int(target * std::pow(2.0, -0.6 / 12.0) * size / sr), hi = int(target * std::pow(2.0, 0.6 / 12.0) * size / sr) + 1;
+        int best = lo;
+        for (int b = lo; b <= hi; ++b) if (data[std::size_t(b)] > data[std::size_t(best)]) best = b;
+        if (best <= lo || best >= hi) continue;   // no peak inside the window
+        const double a = std::log(data[std::size_t(best - 1)] + 1e-12), b0 = std::log(data[std::size_t(best)] + 1e-12), c = std::log(data[std::size_t(best + 1)] + 1e-12);
+        const double shift = 0.5 * (a - c) / (a - 2 * b0 + c);
+        const double hz = (best + shift) * sr / size / k;
+        const double w = double(data[std::size_t(best)]) / k;
+        sum += w * 1200.0 * std::log2(hz / f0);
+        weight += w;
+    }
+    return weight > 0 ? sum / weight : 999.0;
+}
+
+// Clicks: samples whose second difference stands far above the signal's own around them
+// (a discontinuity, e.g. a loop that jumps): |d2| over 12 times its 20 ms RMS (and above
+// -70 dBFS). Returns how many, from `from` on.
+int clicks(const InstrumentHost& h, std::size_t from) {
+    int count = 0;
+    const auto w = static_cast<std::size_t>(0.02 * h.sr);
+    for (const auto* ch : { &h.outL, &h.outR }) {
+        const auto& x = *ch;
+        std::vector<double> d2(x.size(), 0.0);
+        for (std::size_t i = 2; i < x.size(); ++i) d2[i] = double(x[i]) - 2.0 * x[i - 1] + x[i - 2];
+        std::vector<double> sq(x.size() + 1, 0.0);
+        for (std::size_t i = 0; i < x.size(); ++i) sq[i + 1] = sq[i] + d2[i] * d2[i];
+        for (std::size_t i = std::max(from, w); i + w < x.size(); ++i) {
+            const double local = std::sqrt((sq[i + w] - sq[i - w] - d2[i] * d2[i]) / double(2 * w - 1));
+            if (std::abs(d2[i]) > 12.0 * local && std::abs(d2[i]) > 3.0e-4) { ++count; i += w; }
+        }
+    }
+    return count;
+}
+
+double correlationLR(const InstrumentHost& h, std::size_t from, std::size_t to) {
+    double lr = 0, ll = 0, rr = 0;
+    for (std::size_t i = from; i < std::min(to, h.outL.size()); ++i) {
+        lr += double(h.outL[i]) * h.outR[i];
+        ll += double(h.outL[i]) * h.outL[i];
+        rr += double(h.outR[i]) * h.outR[i];
+    }
+    return lr / std::sqrt(std::max(ll * rr, 1.0e-30));
+}
+
+// The colour of a stretch (third-octave levels, normalised): as in instrumentPrint.
+std::vector<double> colourOf(const InstrumentHost& h, double from, double to) {
+    InstrumentRender r;
+    r.chordL.assign(h.outL.begin(), h.outL.end());
+    r.chordR.assign(h.outR.begin(), h.outR.end());
+    r.sr = h.sr;
+    std::vector<double> print = instrumentPrint(r);
+    juce::ignoreUnused(from, to);
+    return print;
+}
+
+void testRecordedInstruments(Suite& s) {
+    s.section("recorded: the instruments that play the new recordings (voice, banjo, piano, col legno, Minilogue)");
+    const bool sampled = samplesLoaded();
+    std::cout << "  recordings: " << lswb::samples::Bank::get().message() << "\n";
+    for (const auto* id : { "voice-ooh", "voice-aah", "voice-oh", "voice-ee", "voice-mm", "choir-ooh", "choir-aah", "choir-mm", "voice-drone",
+                            "banjo", "piano-long", "breath", "violin-collegno", "mlg-softpad-short", "mlg-pulse-long" })
+        if (sampled) s.check(lswb::samples::Bank::get().instrument(id) != nullptr, std::string("the recordings include ") + id);
+    if (!sampled) std::cout << "  [report] no recordings: only the stand-ins are checked\n";
+    for (const auto& c : changedInstruments) {
+        const int i = instrumentByName(c.name);
+        s.check(i >= 0, std::string(c.name) + " exists");
+        if (i < 0) continue;
+        const auto name = instrumentName(i);
+        const auto& p = ls::inst::patch(i);
+        if (sampled) s.check(ls::inst::patchSampled(p), name + ": plays its recordings (" + c.recordings + ")");
+        // In tune across its range: a note every 4 semitones from low to high (and the top).
+        std::string worst;
+        double worstCents = 0;
+        int silent = 0, wrongClass = 0, notes = 0;
+        for (int note = c.low; note <= c.high; note += note + 4 > c.high && note != c.high ? c.high - note : 4) {
+            InstrumentHost h;
+            h.instrument(i);
+            h.dry();
+            h.render(0.05);
+            h.noteOn(note, 0.8f);
+            h.render(1.4);
+            h.noteOff(note);
+            h.render(0.1);
+            ++notes;
+            const auto x = h.mono(h.at(0.05 + (c.sustained ? 0.45 : 0.06)), h.at(0.05 + 1.4));
+            const double level = toDb(h.loudest(0, h.end()));
+            if (level < -45.0) { ++silent; continue; }
+            int strongest = 0;
+            if (pitchClassMargin(chroma(x, h.sr), note, strongest) > 3.0) ++wrongClass;
+            const double cents = centsOff(x, h.sr, note);
+            if (std::abs(cents) > std::abs(worstCents)) {
+                worstCents = cents;
+                worst = juce::MidiMessage::getMidiNoteName(note, true, true, 4).toStdString();
+            }
+            if (note == c.high) break;
+        }
+        s.check(silent == 0, name + ": plays from MIDI across its range (" + std::to_string(notes) + " notes)", std::to_string(silent) + " silent");
+        s.check(wrongClass == 0, name + ": the played pitch class strongest on every note", std::to_string(wrongClass) + " wrong");
+        s.check(std::abs(worstCents) <= 25.0, name + ": in tune across its range", "worst " + worst + " " + fmt(worstCents) + " cents");
+        // Sustained: held notes loop without a click (a note and a chord held 8 s).
+        if (c.sustained) {
+            InstrumentHost h;
+            h.instrument(i);
+            h.dry();
+            h.render(0.05);
+            const int mid = (c.low + c.high) / 2;
+            h.noteOn(mid - 7, 0.8f); h.noteOn(mid, 0.8f); h.noteOn(mid + 4, 0.8f);
+            h.render(8.0);
+            const int n = clicks(h, h.at(0.6));
+            s.check(n == 0, name + ": held notes loop without a click (8 s)", std::to_string(n) + " clicks");
+            const double early = h.rms(h.at(1.0), h.at(2.0)), late = h.rms(h.at(6.0), h.at(8.0));
+            s.check(toDb(late) > toDb(early) - 6.0 && toDb(late) < toDb(early) + 3.0, name + ": a held chord stays steady while it loops",
+                    fmt(toDb(late) - toDb(early)) + " dB from 1-2 s to 6-8 s");
+        }
+        // Level-matched with its siblings (their held chords' loudest 400 ms, dry).
+        int l = 0, k = 0;
+        ls::inst::instrumentPlace(i, l, k);
+        const auto mine = renderInstrument(i);
+        const double level = loudestDb(mine.chordL, mine.chordR, mine.sr, 0.0, 1.5);
+        double far = 0;
+        for (int j = 0; j <= dc::subLocationCount(l); ++j) {
+            const int other = ls::inst::instrumentIndex(l, j);
+            if (other == i) continue;
+            const auto r = renderInstrument(other);
+            far = std::max(far, std::abs(level - loudestDb(r.chordL, r.chordR, r.sr, 0.0, 1.5)));
+        }
+        s.check(far <= 3.0, name + ": level-matched with its siblings", "furthest " + fmt(far) + " dB");
+    }
+    if (sampled) {
+        // The voices' macros: Vowel changes the colour, Ensemble the width; the level stays.
+        for (const char* voiceName : { "Radiant Choir", "Angelic Choir" }) {
+            const int i = instrumentByName(voiceName);
+            const auto name = instrumentName(i);
+            const auto hold = [&](float vowel, float ensemble) {
+                InstrumentHost h;
+                h.instrument(i);
+                h.dry();
+                h.set(dc::ids::instVowel, vowel);
+                h.set(dc::ids::instEnsemble, ensemble);
+                h.render(0.05);
+                h.noteOn(60, 0.8f); h.noteOn(64, 0.8f); h.noteOn(67, 0.8f);
+                h.render(2.5);
+                return h;
+            };
+            const auto closed = hold(0.0f, 0.5f), open = hold(1.0f, 0.5f), one = hold(0.5f, 0.0f), full = hold(0.5f, 1.0f);
+            const auto a = colourOf(closed, 0, 0), b = colourOf(open, 0, 0);
+            double d = 0;
+            for (std::size_t k = 20; k < 40; ++k) d += (a[k] - b[k]) * (a[k] - b[k]);
+            d = std::sqrt(d / 20.0);
+            s.check(d > 1.5, name + ": the Vowel macro changes the vowel (closed to open)", "colour distance " + fmt(d, 2) + " dB");
+            const double lc = toDb(closed.loudest(closed.at(0.5), closed.end())), lo = toDb(open.loudest(open.at(0.5), open.end()));
+            s.check(std::abs(lc - lo) <= 4.0, name + ": ... at about the same level", fmt(lo - lc) + " dB");
+            const double c1 = correlationLR(one, one.at(0.8), one.end()), c8 = correlationLR(full, full.at(0.8), full.end());
+            s.check(c1 - c8 > 0.15, name + ": the Ensemble macro widens one singer into a choir", "L/R correlation " + fmt(c1, 2) + " -> " + fmt(c8, 2));
+            const double l1 = toDb(one.loudest(one.at(0.5), one.end())), l8 = toDb(full.loudest(full.at(0.5), full.end()));
+            s.check(l8 - l1 > -1.0 && l8 - l1 < 6.0, name + ": ... a little fuller, not much louder", fmt(l8 - l1) + " dB");
+            // Turning both macros while a chord is held: no click.
+            InstrumentHost h;
+            h.instrument(i);
+            h.dry();
+            h.render(0.05);
+            h.noteOn(60, 0.8f); h.noteOn(67, 0.8f);
+            for (int step = 0; step <= 40; ++step) {
+                h.set(dc::ids::instVowel, float(step) / 40.0f);
+                h.set(dc::ids::instEnsemble, 1.0f - float(step) / 40.0f);
+                h.render(0.08);
+            }
+            s.check(clicks(h, h.at(0.6)) == 0 && h.finite(), name + ": turning Vowel and Ensemble under a held chord, no click");
+        }
+        s.check(dc::Atmosphere::breathRecorded(), "the Windswept Isle's atmosphere breathes the recorded breaths");
+    }
+    {   // The stand-ins: without the recordings every changed instrument still plays in tune.
+        lswb::samples::Bank::bypassForTests(true);
+        for (const auto& c : changedInstruments) {
+            const int i = instrumentByName(c.name);
+            if (i < 0) continue;
+            int bad = 0;
+            for (const int note : { c.low + 5, (c.low + c.high) / 2, c.high - 5 }) {
+                InstrumentHost h;
+                h.instrument(i);
+                h.dry();
+                h.render(0.05);
+                h.noteOn(note, 0.8f);
+                h.render(1.2);
+                int strongest = 0;
+                const auto x = h.mono(h.at(0.05 + (c.sustained ? 0.45 : 0.06)), h.at(1.25));
+                if (toDb(h.loudest(0, h.end())) < -45.0 || pitchClassMargin(chroma(x, h.sr), note, strongest) > 3.0) ++bad;
+            }
+            s.check(bad == 0, instrumentName(i) + ": its stand-in plays in tune without the recordings", std::to_string(bad) + " of 3 notes wrong");
+        }
+        s.check(!dc::Atmosphere::breathRecorded(), "without the recordings the breath is a synthesised gust");
+        lswb::samples::Bank::bypassForTests(false);
+    }
+}
+
+// The same short melody and chord progression (I vi IV V in C) on each changed instrument.
+void playMelodyAndChords(InstrumentHost& h) {
+    const int melody[] { 64, 67, 72, 71, 69, 67, 65, 64 };
+    for (int n : melody) {
+        h.noteOn(n, 0.75f);
+        h.render(0.4);
+        h.noteOff(n);
+        h.render(0.05);
+    }
+    const int chords[4][4] { { 48, 60, 64, 67 }, { 45, 57, 60, 64 }, { 41, 57, 60, 65 }, { 43, 55, 59, 62 } };
+    for (const auto& chord : chords) {
+        for (int n : chord) h.noteOn(n, 0.72f);
+        h.render(1.3);
+        for (int n : chord) h.noteOff(n);
+        h.render(0.08);
+    }
+    h.noteOn(48, 0.72f); h.noteOn(60, 0.72f); h.noteOn(64, 0.72f); h.noteOn(67, 0.72f);
+    h.render(2.0);
+    for (int n : { 48, 60, 64, 67 }) h.noteOff(n);
+    h.render(2.5);
+}
+
+int listenChanged(const juce::String& directory) {
+    const bool sampled = samplesLoaded();
+    const auto dir = juce::File::getCurrentWorkingDirectory().getChildFile(directory);
+    dir.createDirectory();
+    int written = 0, expected = 0;
+    for (const auto& c : changedInstruments) {
+        const int i = instrumentByName(c.name);
+        if (i < 0) continue;
+        int l = 0, k = 0;
+        ls::inst::instrumentPlace(i, l, k);
+        for (const bool dry : { true, false }) {
+            ++expected;
+            InstrumentHost h;
+            h.go(l, k);
+            if (dry) h.dry();
+            h.render(0.2);
+            playMelodyAndChords(h);
+            const auto file = (juce::String(ls::inst::patch(i).name).toLowerCase().replaceCharacter(' ', '-') + (dry ? "-1-dry" : "-2-in-")
+                               + (dry ? juce::String() : juce::String(dc::subLocationName(l, k)).toLowerCase().replaceCharacter(' ', '-'))
+                               + (sampled ? "" : "-stand-in") + ".wav").removeCharacters("'");
+            written += writeWav(dir.getChildFile(file), h.outL, h.outR, 48000.0) ? 1 : 0;
+            std::cout << file << ": loudest " << fmt(toDb(h.loudest(0, h.end()))) << " dBFS, peak " << fmt(toDb(h.peak(0, h.end()))) << " dBFS\n";
+        }
+    }
+    std::cout << written << " files in " << dir.getFullPathName() << (sampled ? " (with the recordings)" : " (stand-ins: no recordings)") << "\n";
+    return written == expected ? 0 : 1;
 }

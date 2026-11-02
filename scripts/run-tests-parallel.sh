@@ -14,12 +14,13 @@ mkdir -p "$logs"
 "$tests" --only qa > "$logs/5-qa.txt" 2>&1 &
 "$tests" --only strength > "$logs/6-strength.txt" 2>&1 &
 "$tests" --only instrument,instruments > "$logs/7-instruments.txt" 2>&1 &
+"$tests" --only recorded > "$logs/8-recorded.txt" 2>&1 &
 wait
 "$tests" --only cpu > "$logs/4-cpu.txt" 2>&1
 
 passed=0
 failed=0
-for log in "$logs"/[1-7]-*.txt; do
+for log in "$logs"/[1-8]-*.txt; do
     line=$(grep -E '^[0-9]+ passed, [0-9]+ failed' "$log" | tail -1)
     if [[ -z "$line" ]]; then
         echo "$log: did not finish"

@@ -290,7 +290,9 @@ std::shared_ptr<const IrSet> irSetFor(double sr) {
 bool Vault::capturedSpacesBuiltIn() noexcept { return LS_HAVE_CAPTURED_IRS != 0; }
 
 double Vault::kindSeconds(int k) noexcept {
-    if (k >= firstCaptured && k < kinds) return capturedSeconds[k - firstCaptured];
+    if (k >= firstCaptured && k < kinds)
+        return LS_HAVE_CAPTURED_IRS ? capturedSeconds[k - firstCaptured]
+                                    : fallbackRecipes[k - firstCaptured].seconds + fallbackRecipes[k - firstCaptured].preMs * 0.001;
     return k > 0 && k < kinds ? recipes[k].seconds + recipes[k].preMs * 0.001 : 0.0;
 }
 const char* Vault::kindName(int k) noexcept {
