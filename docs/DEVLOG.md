@@ -109,7 +109,7 @@ usage limit or a compaction) continues from the first unticked line. Push to `ma
 - [x] R2. Captures: `assets/irs` removed from the repository, generated in CI from the Samples captures (`tools/captures`), compiled in at build time, fallback spaces without them; other capture-derived files checked; push `[skip ci]`
 - [x] R3a. Voice sampler engine: vowel morph (Vowel macro), Ensemble macro from the 5-take stacks (detune, timing, spread), looped sustains; the two macros on the panel; push `[skip ci]`
 - [x] R3b. Instruments: Angelic Choir, Radiant Choir, Epic Choir and Brass (+ drones), Orchestral Chord Pad's Voices; Shimmering Pluck on the banjo; col legno on Bouncy Pizzicato; Minilogue soft pad short hits and pulse; the piano under the Celesta; breath air in the Windswept Isle atmosphere; stand-ins level-matched; push `[skip ci]`
-- [ ] R4. Tests (MIDI, in tune across the range, loop clicks, levels, siblings), listening render of the changed instruments, DEVLOG (which recordings each instrument uses, weak notes); push without `[skip ci]`, CI green
+- [x] R4. Tests (MIDI, in tune across the range, loop clicks, levels, siblings), listening render of the changed instruments, DEVLOG (which recordings each instrument uses, weak notes); push without `[skip ci]`, CI green
 
 ---
 
@@ -1062,7 +1062,14 @@ calibrated trims; no audio or IR data).
 - **The whole suite** (Linux, eight shards): with the recordings and the captured spaces
   (the CI configuration) **1807 passed, 0 failed**; without either (a build with no token)
   1760 passed, 0 failed after one real fix: the fallback hall reported the captured hall's
-  length (its tail was cut). CPU (report only): four notes in each place 8.2 % on average,
+  length (its tail was cut). (On one re-run the editor's "Eco costs less than Standard"
+  timing check failed while eight shards shared four cores; alone it passes, and in CI.)
+- **CI, `777a07a`: green.** The recordings fetched and prepared (`Prepared: N notes` for
+  each of the 20 shipped sets, 534 in all), the captured spaces made from the captures in
+  30 s and compiled in, Linux 1807 passed / 0 failed (the same as here), the 16 changed
+  instrument renders in the test-logs artifact; macOS: build, smoke + instrument groups on
+  arm64 and x86_64 (with the captures and recordings required), auval and the AU harness for
+  both plug-ins on all three hosting routes, the package uploaded. CPU (report only): four notes in each place 8.2 % on average,
   the worst 14.9 % (Epic Choir and Brass: up to 7 x 8 sample reads per note).
 - **Listening render** (CI: `LightSeeker-linux-test-logs` → `changed-instruments/`,
   `LightSeekerTests --listen-changed dir`): the same melody (E4 G4 C5 B4 A4 G4 F4 E4) and
