@@ -10,6 +10,14 @@ namespace dc::dsp {
 inline constexpr double pi = 3.14159265358979323846;
 inline constexpr float twoPi = 6.283185307179586f;
 
+// Final touches: every shimmer, octave-shimmer and sparkle stage (both plug-ins) is
+// scaled by the Shimmer control (0..1.5) times a base, so that Shimmer 100 % (the
+// default) is a little below the original design: the shimmer and sparkle layers
+// (signatures) 15 % lower, the shimmer cascades fed back into the reverbs 25 % lower
+// (they build up in the tail), the instrument's shimmer reverb 20 %. 0 % is none.
+inline constexpr float shimmerLayerBase = 0.85f, shimmerLoopBase = 0.75f, shimmerBusBase = 0.8f;
+inline constexpr float shimmerMax = 1.5f;
+inline float shimmerControl(float control) noexcept { return std::clamp(std::isfinite(control) ? control : 1.0f, 0.0f, shimmerMax); }
 inline float clamp01(float x) noexcept { return std::clamp(x, 0.0f, 1.0f); }
 inline float lerp(float a, float b, float t) noexcept { return a + t * (b - a); }
 inline float dbToGain(float db) noexcept { return std::pow(10.0f, db * 0.05f); }

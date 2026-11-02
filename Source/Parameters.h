@@ -52,6 +52,9 @@ inline constexpr const char* instLock = "instLock";
 // sessions saved before them load unchanged).
 inline constexpr const char* instVowel = "instVowel";
 inline constexpr const char* instEnsemble = "instEnsemble";
+// Final touches: the Shimmer control (both plug-ins; added last, so sessions saved
+// before it open at its default, 100 %).
+inline constexpr const char* shimmer = "shimmer";
 inline juce::String advanced(std::size_t index) { return juce::String("adv_") + moduleSpecs[index].id; }
 }
 
@@ -187,6 +190,10 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
         layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { ids::instEnsemble, 1 }, "Instrument Ensemble",
                                                                juce::NormalisableRange<float>(0.0f, 1.0f), 0.5f, macroText));
     }
+    // Final touches: Shimmer scales every shimmer, octave-shimmer and sparkle stage
+    // (0-150 %; 100 % = the default, a little below the original design).
+    layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { ids::shimmer, 1 }, "Shimmer",
+                                                           juce::NormalisableRange<float>(0.0f, 1.5f), 1.0f, percent));
     return layout;
 }
 }

@@ -180,6 +180,15 @@ void Engine::startTravel(double seconds) noexcept {
 
 void Engine::setControls(const Controls& c) noexcept {
     context.bpm = c.bpm;
+    // Shimmer: every module smooths its own shimmer amounts, so moving it never clicks.
+    const float shimmer = dsp::shimmerControl(c.shimmer);
+    // The Moonwell keeps its reverb's shimmer as designed at 100 % (its glassy signature
+    // shimmer is 15 % lower like every other): with less, it drifts towards its neighbour
+    // Starlit Canopy (the distinctness gate; see docs/DEVLOG.md, final touches).
+    const bool moonwell = c.location == ElvenSanctuary && clampSubLocation(c.location, c.sub) == 0;
+    for (auto& sig : signatures) sig.setShimmer(shimmer * dsp::shimmerLayerBase);
+    for (auto& room : rooms) room.setShimmer(shimmer * (moonwell ? 1.0f : dsp::shimmerLoopBase));
+    for (auto& v : vaults) v.setShimmer(shimmer * dsp::shimmerLoopBase);
     const int location = std::clamp(c.location, 0, static_cast<int>(LocationCount) - 1);
     const Place wanted { location, clampSubLocation(location, c.sub) };
     const Frame target = targetFrame(c);

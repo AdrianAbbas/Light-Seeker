@@ -12,7 +12,7 @@ mkdir -p "$logs"
 "$tests" --only rates,extremes,realtime,place,journeys,atmosphere,navigation > "$logs/2-robustness.txt" 2>&1 &
 "$tests" --only locations,travel,modules,musicality > "$logs/3-locations.txt" 2>&1 &
 "$tests" --only qa > "$logs/5-qa.txt" 2>&1 &
-"$tests" --only strength > "$logs/6-strength.txt" 2>&1 &
+"$tests" --only strength,shimmer > "$logs/6-strength.txt" 2>&1 &
 "$tests" --only instrument,instruments > "$logs/7-instruments.txt" 2>&1 &
 "$tests" --only recorded > "$logs/8-recorded.txt" 2>&1 &
 wait

@@ -108,6 +108,9 @@ public:
     static constexpr int maxTaps = 6, maxModes = 6, maxCombs = 3, smearStages = 4, diffuserStages = 3;
     void prepare(double sampleRate);
     void reset();
+    // The Shimmer control times its base (Common.h) on the shimmer and sparkle layers
+    // (octave/sparkle pitch layers, the spiral, the prism, the hue shimmer); smoothed.
+    void setShimmer(float scale) noexcept { shimmerGain.set(scale); }
     void process(float* l, float* r, int n, const Frame&, const Context&) noexcept;
     static const char* kindName(int kind) noexcept;
     // After a journey to another kind: stop taking input (as the amount falls) and ring
@@ -133,6 +136,8 @@ private:
     float tone = 0, toneShift = 1;
     const sig::Recipe* recipe = nullptr;
     dsp::Smoothed amount;
+    dsp::Smoothed shimmerGain { dsp::shimmerLayerBase, dsp::shimmerLayerBase, 1.0f };
+    bool shimmerPitch = false;   // the pitch layer is a shimmer or sparkle (not a choir)
     // Serial stages.
     std::array<dsp::Svf, 2> toneSvf, growlLow, growlSub;
     std::array<dsp::Biquad, 2> toneEq, bite;
@@ -202,6 +207,8 @@ public:
     void setKind(int kind) noexcept;
     int kindNow() const noexcept { return kind; }
     void process(const float* inL, const float* inR, float* wetL, float* wetR, int n, const Frame&) noexcept;
+    // The Shimmer control times its base (Common.h) on the octave cascade.
+    void setShimmer(float scale) noexcept { shimmerScale = scale; }
     bool ringing() const noexcept { return tail > 1.0e-4f; }
     float level() const noexcept { return tail; }
     // Seconds of IR per kind (tests and the CPU report).
@@ -216,6 +223,7 @@ private:
     std::shared_ptr<const void> cache;   // keeps the shared IR set alive
     const std::vector<std::array<const conv::IrSpectra*, 2>>* irs = nullptr;
     dsp::Smoothed shimmer, toneHz, duck;
+    float shimmerScale = dsp::shimmerLoopBase;
     std::array<dsp::GranularShifter, 2> shifters;
     std::array<float, 2> shimmerLp {}, toneState1 {}, toneState2 {};
     std::array<std::array<float, maxChunk>, 2> feed {}, back {};
@@ -366,6 +374,8 @@ class Crypt {
 public:
     void prepare(double sampleRate);
     void reset();
+    // The Shimmer control times its base (Common.h) on the octave-up loop shimmer.
+    void setShimmer(float scale) noexcept { shimmerScale = scale; }
     void process(float* l, float* r, int n, const Frame&, const Context&) noexcept;
     bool ringing() const noexcept { return held > 1.0e-3f; }   // a tail still sounds
     float level() const noexcept { return held; }
@@ -386,6 +396,7 @@ private:
     std::array<dsp::Biquad, 2> inputTone;
     std::array<float, 2> lowCut{};
     dsp::GranularShifter shimmerShifter;
+    float shimmerScale = dsp::shimmerLoopBase;
     dsp::Smoothed mix, width, shimmer, eternal, inputGain, dampingHz, preDelaySamples, modulation, bodyDb, reflectionScale;
     std::array<dsp::DelayLine, 2> rising;   // reverse-swell buffers of the wet signal
     double risePhase = 0;

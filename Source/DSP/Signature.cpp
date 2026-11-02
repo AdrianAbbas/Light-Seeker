@@ -204,6 +204,7 @@ float Signature::Lfo::next(int shape, float hz, double rate, Random& random) noe
 void Signature::prepare(double sampleRate) {
     sr = sampleRate;
     amount.setTime(0.04, sr);
+    shimmerGain.setTime(0.05, sr);
     for (auto& d : wobbleLine) d.prepare(static_cast<std::size_t>(0.03 * sr));
     for (auto& ch : combLines) for (auto& d : ch) d.prepare(static_cast<std::size_t>(0.07 * sr));
     for (auto& ch : shifters) for (auto& s : ch) s.prepare(sr, 0.045);
@@ -279,6 +280,10 @@ void Signature::configure(int newKind, float newTone) noexcept {
     tone = newTone;
     const auto& rc = sig::recipes[static_cast<std::size_t>(std::clamp(kind, 0, kinds - 1))];
     recipe = &rc;
+    // Shimmer and sparkle (scaled by the Shimmer control): pitch layers above the note
+    // (an octave, a twelfth, a fifth) that are not a sung choir.
+    shimmerPitch = rc.pitches > 0 && rc.formant == sig::FormantNone;
+    for (int k = 0; k < rc.pitches; ++k) shimmerPitch = shimmerPitch && rc.pitchRatio[k] >= 1.4f;
     // Resonances move in semitones (no glide between pitches), filters tilt smoothly.
     toneShift = static_cast<float>(std::pow(2.0, std::round(tone * 12.0f) / 12.0));
     const double tilt = std::pow(2.0, static_cast<double>(tone));
@@ -345,6 +350,7 @@ void Signature::process(float* l, float* r, int n, const Frame& p, const Context
 
     for (int i = 0; i < n; ++i) {
         const float a = amount.next();
+        const float sg = shimmerGain.next();
         // Departing (ringing out after a journey): the serial blend and the layers' input
         // fade with the amount, the layers' output stays, so their tails ring on.
         const float feed = departing ? (heldOut > 1.0e-5f ? std::min(1.0f, a / heldOut) : 0.0f) : 1.0f;
@@ -475,6 +481,7 @@ void Signature::process(float* l, float* r, int n, const Frame& p, const Context
                 if (rc.pitchMode == sig::PitchTransient) voice *= gateEnv;
                 if (rc.pitchMode == sig::PitchGlitter) voice *= glitterGain[C] * (ch == 0 ? 1.0f - glitterPan : 1.0f + glitterPan);
                 if (rc.bloomMs > 0) voice *= std::min(1.5f, envBloom / std::max(1.0e-5f, envFast));
+                if (shimmerPitch) voice *= sg;
                 add += voice * rc.pitchGain;
                 pitchVoice[C] = voice * rc.pitchGain;
             }
@@ -525,8 +532,8 @@ void Signature::process(float* l, float* r, int n, const Frame& p, const Context
                 sr2 += v * (0.5f + 0.5f * pan);
             }
             sl = spiralHpf[0].highPass(sl); sr2 = spiralHpf[1].highPass(sr2);
-            layers[0] += rc.spiralGain * 1.6f * sl;
-            layers[1] += rc.spiralGain * 1.6f * sr2;
+            layers[0] += rc.spiralGain * 1.6f * sg * sl;
+            layers[1] += rc.spiralGain * 1.6f * sg * sr2;
         }
         if (rc.prismGain > 0) {
             // One octave-up shimmer split into three colour bands, each band at its own
@@ -542,8 +549,8 @@ void Signature::process(float* l, float* r, int n, const Frame& p, const Context
             for (int k = 0; k < 3; ++k) {
                 const float pan = std::sin(twoPi * static_cast<float>(prismPhase + k / 3.0));
                 const float angle = (pan + 1.0f) * 0.25f * static_cast<float>(pi);
-                layers[0] += rc.prismGain * 1.3f * bands[k] * std::cos(angle);
-                layers[1] += rc.prismGain * 1.3f * bands[k] * std::sin(angle);
+                layers[0] += rc.prismGain * 1.3f * sg * bands[k] * std::cos(angle);
+                layers[1] += rc.prismGain * 1.3f * sg * bands[k] * std::sin(angle);
             }
         }
         if (rc.hueGain > 0) {
@@ -567,7 +574,7 @@ void Signature::process(float* l, float* r, int n, const Frame& p, const Context
                 float b1 = 0, h1 = 0, b2 = 0, h2 = 0;
                 hueFilters[C][0].process(up, b1, h1);
                 hueFilters[C][1].process(up, b2, h2);
-                layers[ch] += rc.hueGain * 1.8f * (b1 + 0.7f * b2);
+                layers[ch] += rc.hueGain * 1.8f * sg * (b1 + 0.7f * b2);
             }
         }
         if (rc.reverseMs > 0) {

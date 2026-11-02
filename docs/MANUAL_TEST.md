@@ -221,3 +221,20 @@ installed and validated" (two auval PASS lines).
 6. **Art**: every place and the map have been re-rendered: natural branching trees with
    leafy crowns, broken rock, smooth columns and domes with softly bevelled edges, more
    atmospheric depth. Compare with `docs/snapshots/before-after/`.
+
+## Final touches: the map's air and the Shimmer control
+
+1. **The map**: the sun now stands in the sky above a great snowy range, with wooded
+   foothills in front and cloud banks between the peaks (warm tops, lavender undersides);
+   the land grows paler and cooler towards the horizon, mist lies along the horizon, in the
+   valleys and over the river. Over it, cloud shadows drift slowly across the fields, haze
+   drifts along the horizon, light motes rise in the sun and doves pass. Every landmark is
+   where it was and clickable; every label readable. Compare with
+   `docs/snapshots/before-after/map.jpg`. Eco stops the animation.
+2. **Shimmer** (Levels group, between Mix and Output; in both plug-ins): in Cloud Steps,
+   Prism Hall, Stained Glass Chapel, Throne of Light and Firefly Hollow, sweep it from 0 %
+   to 150 % while playing: the shimmer and sparkle fade out and grow, the loudness stays,
+   no clicks. 100 % (the default; double-click resets) is a little gentler than before.
+   Places without shimmer (Marble Colonnade, Butterfly Glade, Sunlit Meadow) do not change
+   at all. Automate it in GarageBand, save, reopen: it comes back; an older project opens
+   at 100 %.

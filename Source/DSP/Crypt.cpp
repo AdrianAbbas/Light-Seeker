@@ -90,7 +90,7 @@ void Crypt::process(float* l, float* r, int n, const Frame& p, const Context&) n
     for (int i = 0; i < lines; ++i) targetLength[static_cast<std::size_t>(i)] = std::round(static_cast<float>(baseSeconds[i] * scale * sr));
     mix.set(clamp01(p[ReverbMix]));
     width.set(clamp01(p[ReverbWidth]));
-    shimmer.set(clamp01(p[Shimmer]));
+    shimmer.set(clamp01(p[Shimmer]) * shimmerScale);
     eternal.set(p[Eternal] >= 0.5f ? 1.0f : 0.0f);
     inputGain.set(p[Eternal] >= 0.5f ? 0.0f : 1.0f);   // Eternal holds the tail: no new input
     dampingHz.set(std::clamp((17000.0f - 15500.0f * std::pow(clamp01(p[Damping]), 0.7f)) * chamber.dampingScale, 300.0f, static_cast<float>(sr * 0.45)));

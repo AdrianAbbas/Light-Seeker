@@ -51,6 +51,7 @@ WORLDBUILDER's sound engine (brass, bowed strings, voices, plucked strings, bell
 | **Vowel, Ensemble** | The voice instruments (the choirs, the chord pad's Voices). Vowel morphs between the sung vowels (mmm, ooh, oh, aah, ee: two either way from the instrument's own at 50 %). Ensemble brings the singers in one by one: one voice at 0 %, the instrument's own choir at 50 %, eight singers (each its own take, detune, timing and place in the stereo field) at 100 %. Dimmed on the other instruments. |
 | **Level** | The instrument's level (all instruments are level-matched as designed). |
 | **Intensity** | How much of the place's space: 0 % is the instrument dry. |
+| **Shimmer** | (In the Levels group, as in the effect.) Every shimmer, octave shimmer and sparkle, the places' and the instrument's own: 0-150 %, 100 % the default. |
 | **Bend, Mod, Sustain** | Pitch bend (a whole tone), modulation (vibrato; tremolo on struck and plucked instruments), the sustain pedal. Your MIDI keyboard's wheels and pedal move them. |
 | **Keyboard** | Plays (click and drag); the keys light up with the notes the host plays. |
 
@@ -128,6 +129,7 @@ The map and the controls below are the same in both:
 | **Input** | How hard the place is driven (warmth, resonances); loudness stays matched. |
 | **Intensity** | How much of the place: 0 % is the dry signal exactly, 50 % already clearly audible, 100 % as designed. |
 | **Mix** | Dry/wet. |
+| **Shimmer** | Every shimmer, octave shimmer and sparkle in the sound (the places' shimmering reverbs and signatures; in the instrument also its own shimmer): 0 % none, 100 % the default (a little below the original design), 150 % more. Click-free while you move it, automatable, saved with presets and projects. |
 | **Output** | Output level. |
 | **Travel** (time + sync) | How long a journey takes: Instant to 10 s, or 1/4 note to 4 bars at the song's tempo. Tails ring on when you leave a place. |
 | **Atmosphere** | Level of the place's sparse background sounds (soft wind, distant bells, birdsong, fountain shimmer, chimes, harp glints, leaves, a brook); 0 % = off (default). They step back when you play. |

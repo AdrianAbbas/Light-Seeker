@@ -249,6 +249,8 @@ LightSeekerView::LightSeekerView(LightSeekerProcessor& p)
     setUpFader(input, dc::ids::input, "Input");
     setUpFader(intensity, dc::ids::intensity, "Intensity");
     setUpFader(mix, dc::ids::mix, "Mix");
+    setUpFader(shimmer, dc::ids::shimmer, "Shimmer");
+    shimmer.slider.setTooltip("Every shimmer, octave shimmer and sparkle in the sound (0 to 150 %; 100 % as designed).");
     setUpFader(output, dc::ids::output, "Output");
 
     travelLabel.setText("Time", juce::dontSendNotification);
@@ -1466,10 +1468,12 @@ void LightSeekerView::resized() {
     for (int m = 0; m < dc::macroCount; ++m)
         place(macros[static_cast<std::size_t>(m)], { 14 + m * 54, row, 54, rowHeight });
     const int mainX = 246;
-    place(input, { mainX, row, 62, rowHeight });
-    place(intensity, { mainX + 62, row, 62, rowHeight });
-    place(mix, { mainX + 124, row, 62, rowHeight });
-    place(output, { mainX + 186, row, 62, rowHeight });
+    // Levels: Input, Intensity, Mix, Shimmer (final touches), Output.
+    place(input, { mainX, row, 48, rowHeight });
+    place(intensity, { mainX + 48, row, 58, rowHeight });
+    place(mix, { mainX + 106, row, 48, rowHeight });
+    place(shimmer, { mainX + 154, row, 58, rowHeight });
+    place(output, { mainX + 212, row, 48, rowHeight });
     travelLabel.setBounds(520, row + 2, 60, 22);
     travelTime.setBounds(574, row + 2, 190, 22);
     travelSync.setBounds(522, row + 36, 150, 24);
@@ -1479,7 +1483,7 @@ void LightSeekerView::resized() {
     macroHeading.setBounds(0, 0, 0, 0);
     controlsToggle.setBounds(w - 38, controlsShown ? top - 30 : h - 32, 30, 26);
     for (auto* c : std::initializer_list<juce::Component*> { &input.slider, &input.label, &intensity.slider, &intensity.label, &mix.slider, &mix.label,
-                                                             &output.slider, &output.label, &travelLabel, &travelTime, &travelSync, &bypass, &advancedToggle, &journeyToggle,
+                                                             &shimmer.slider, &shimmer.label, &output.slider, &output.label, &travelLabel, &travelTime, &travelSync, &bypass, &advancedToggle, &journeyToggle,
                                                              &macroHeading, &atmosphere, &atmosphereLabel, &presetButton, &prevPreset, &nextPreset, &slotA, &slotB,
                                                              &copySlot, &undoButton, &redoButton, &settingsButton })
         c->setVisible(controlsShown);

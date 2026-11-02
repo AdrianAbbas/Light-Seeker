@@ -39,6 +39,7 @@ LightSeekerProcessor::LightSeekerProcessor(bool instrumentEdition)
     atmosDensity = parameters.getRawParameterValue(dc::ids::atmosDensity);
     atmosSeed = parameters.getRawParameterValue(dc::ids::atmosSeed);
     quality = parameters.getRawParameterValue(dc::ids::quality);
+    shimmer = parameters.getRawParameterValue(dc::ids::shimmer);
     if (instrumentMode) {
         instTone = parameters.getRawParameterValue(dc::ids::instTone);
         instAttack = parameters.getRawParameterValue(dc::ids::instAttack);
@@ -449,6 +450,7 @@ void LightSeekerProcessor::renderInstrument(juce::AudioBuffer<float>& buffer, in
     m.ensemble = finiteOr(instEnsemble->load(), 0.5f);
     m.levelDb = finiteOr(instLevel->load(), 0.0f);
     m.octave = juce::jlimit(-2, 2, static_cast<int>(std::lround(finiteOr(instOctave->load(), 0.0f))));
+    m.shimmer = juce::jlimit(0.0f, dc::dsp::shimmerMax, finiteOr(shimmer->load(), 1.0f));
     synth->setMacros(m);
 
     // The on-screen keyboard, wheels and pedal join at the start of the block.
@@ -568,6 +570,7 @@ void LightSeekerProcessor::process(juce::AudioBuffer<float>& buffer, bool forced
     }
     steered.store(steering, std::memory_order_relaxed);
     controls.intensity = amount;
+    controls.shimmer = juce::jlimit(0.0f, dc::dsp::shimmerMax, finiteOr(shimmer->load(), 1.0f));
     for (std::size_t m = 0; m < macros.size(); ++m) controls.macros[m] = juce::jlimit(0.0f, 1.0f, finiteOr(macros[m]->load(), 0.5f));
     for (std::size_t i = 0; i < advanced.size(); ++i) controls.advanced[i] = finiteOr(advanced[i]->load(), 0);
     const auto sync = static_cast<std::size_t>(juce::jlimit(0, static_cast<int>(dc::travelSyncBeats.size()) - 1,

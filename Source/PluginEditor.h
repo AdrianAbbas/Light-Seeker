@@ -341,7 +341,7 @@ private:
     juce::Label placeCrumb;
     std::unique_ptr<juce::ParameterAttachment> locationAttachment, subLocationAttachment;
     std::array<Fader, dc::macroCount> macros;
-    Fader input, intensity, mix, output;
+    Fader input, intensity, mix, shimmer, output;   // shimmer: final touches
     juce::Slider travelTime { juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight };
     juce::Slider atmosphere { juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight };
     juce::Label atmosphereLabel;

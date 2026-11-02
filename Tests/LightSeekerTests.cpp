@@ -1,6 +1,6 @@
 // Offline tests through the real processBlock. Exit code 0 only if every check passes.
 //   LightSeekerTests                      run everything except the report-only cpu group
-//   LightSeekerTests --only a,b           run only some groups (smoke, locations, travel...)
+//   LightSeekerTests --only a,b           run only some groups (smoke, locations, travel, shimmer...)
 //   LightSeekerTests --snapshot f.png     also write an image of the editor
 //   LightSeekerTests --painted-snapshots dir   review images of the painted map and places (200 %)
 //   LightSeekerTests --hotfix-snapshots dir    review images of the Journey badge, note and panels
@@ -2756,6 +2756,7 @@ int paintedSnapshots(const juce::String& directory) {
 #include "InstrumentTests.h"
 #include "WindowTests.h"
 
+#include "ShimmerTests.h"
 int main(int argc, char** argv) {
     juce::ScopedJuceInitialiser_GUI gui;
     juce::String snapshot;
@@ -2795,6 +2796,7 @@ int main(int argc, char** argv) {
     if (run("musicality")) testMusicality(s);
     if (run("strength")) testStrength(s);
     if (run("modules")) { testModules(s); testNewModules(s); }
+    if (run("shimmer")) testShimmer(s);
     if (run("rates")) testRates(s);
     if (run("extremes")) testExtremes(s);
     if (run("realtime")) testRealtime(s);

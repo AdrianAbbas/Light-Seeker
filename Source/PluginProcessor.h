@@ -66,6 +66,7 @@ private:
     std::atomic<float>* midiTravel = nullptr;
     std::atomic<float>* midiOctave = nullptr;
     std::atomic<float>* atmosLevel = nullptr;
+    std::atomic<float>* shimmer = nullptr;   // final touches: the Shimmer control
     std::atomic<float>* atmosDensity = nullptr;
     std::atomic<float>* atmosSeed = nullptr;
     std::atomic<float>* quality = nullptr;

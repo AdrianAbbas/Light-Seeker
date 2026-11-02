@@ -16,6 +16,7 @@ struct Controls {
     // octaves of the whole range), for Step parameters an override (0 = the place's
     // own value, k = choice k - 1).
     Frame advanced {};
+    float shimmer = 1;   // the Shimmer control (0..1.5; 1 = default)
     double travelSeconds = 1.5;
     double bpm = 120;
 };

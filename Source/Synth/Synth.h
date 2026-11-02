@@ -127,6 +127,7 @@ struct Macros {
     float vowel = 0.5f, ensemble = 0.5f;   // the voice instruments (as designed at 0.5)
     int octave = 0;
     float levelDb = 0;
+    float shimmer = 1.0f;   // the Shimmer control (0..1.5), on the bus shimmer
 };
 
 class Synth {

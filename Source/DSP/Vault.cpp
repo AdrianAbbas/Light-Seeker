@@ -349,7 +349,7 @@ void Vault::process(const float* inL, const float* inR, float* wetL, float* wetR
         tail = 0;
         return;
     }
-    shimmer.set(clamp01(p[VaultShimmer]));
+    shimmer.set(clamp01(p[VaultShimmer]) * shimmerScale);
     duck.set(clamp01(p[VaultDuck]));
     toneHz.set(std::clamp(p[VaultTone], 300.0f, 20000.0f));
     if (toneHz.value < 0) toneHz.snap(toneHz.target);

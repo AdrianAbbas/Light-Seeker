@@ -1,4 +1,5 @@
 #include "Synth.h"
+#include "../DSP/Common.h"
 #include <algorithm>
 #include <cmath>
 
@@ -646,7 +647,7 @@ void Synth::reset() noexcept {
     const auto& p = patch(current);
     bus->shelfGain.snap(dbToGain(p.air));
     bus->chorusMix.snap(p.chorus);
-    bus->shimmerSend.snap(p.shimmer);
+    bus->shimmerSend.snap(p.shimmer * dc::dsp::shimmerBusBase * dc::dsp::shimmerControl(macros.shimmer));
     bus->trim.snap(dbToGain(macros.levelDb));
     bus->tremolo.snap(0);
 }
@@ -1303,7 +1304,7 @@ void Synth::updateChunk() noexcept {
     // The bus follows the instrument.
     bus->shelfGain.next(dbToGain(p.air + (macros.tone - 0.5f) * 8.0f));
     const float chorusTarget = p.characterMode == Character::Chorus ? p.chorus * characterGain : p.chorus;
-    const float shimmerTarget = p.characterMode == Character::Shimmer ? p.shimmer * characterGain : p.shimmer;
+    const float shimmerTarget = (p.characterMode == Character::Shimmer ? p.shimmer * characterGain : p.shimmer) * dc::dsp::shimmerBusBase * dc::dsp::shimmerControl(macros.shimmer);
     bus->chorusMix.next(chorusTarget);
     bus->shimmerSend.next(shimmerTarget);
     bus->trim.next(dbToGain(macros.levelDb));
