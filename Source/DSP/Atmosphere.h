@@ -1,7 +1,9 @@
 #pragma once
 // ATMOSPHERE (light, Milestone 4): an optional layer of sparse, synthesised sounds that
 // belong to a place: soft wind, distant bells, birdsong-like chirps, fountain shimmer,
-// chimes, gentle harp glints, leaves, a brook. Original synthesis only (no samples). Off by default
+// chimes, gentle harp glints, leaves, a brook; and on the Windswept Isle a breath of air (the
+// developer's recorded slow breaths, pitched up a little, high-passed and very soft: air,
+// never a person; a synthesised gust without the recordings). Off by default
 // (Level 0); its own Level, Density and Seed. Events sit on an eighth-note grid of the
 // musical position and are chosen by a hash of (seed, slot, place), so the layer is
 // deterministic and follows the tempo. It ducks under the instrument and never rises
@@ -11,7 +13,7 @@
 
 namespace dc {
 enum class AtmosSound : int {
-    SoftWind, DistantBell, Birdsong, FountainShimmer, Chimes, HarpGlint, Leaves, Brook, Count
+    SoftWind, DistantBell, Birdsong, FountainShimmer, Chimes, HarpGlint, Leaves, Brook, Breath, Count
 };
 const char* atmosSoundName(AtmosSound) noexcept;
 // The sounds of a place (up to three; their order is their weight, first = most often).
@@ -28,6 +30,8 @@ public:
     void process(float* l, float* r, int n, double beats, double beatsPerSample, int location, int sub,
                  float level, float density, int seed, const float* dryL, const float* dryR) noexcept;
     int activeVoices() const noexcept;
+    // Whether the Breath sound plays the recordings (tests).
+    static bool breathRecorded() noexcept;
     int eventsStarted() const noexcept { return started; }   // since reset (tests)
 
 private:
@@ -38,6 +42,9 @@ private:
         int count = 0, next = 0;
         dsp::Svf filter, filter2;
         dsp::Random random;
+        const std::int16_t* data = nullptr;   // Breath: the recorded take (nullptr: synthesised)
+        int dataLength = 0;
+        double readPos = 0, readStep = 1;
         bool active = false;
     };
     void start(AtmosSound, std::uint32_t hash, float level) noexcept;

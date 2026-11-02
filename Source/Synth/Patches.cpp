@@ -2,8 +2,11 @@
 // a family. Uplifting, radiant, majestic; each distinct from its siblings; good dry and in
 // its own space. The developer's recordings (AdrianAbbas/Samples) play where they fit:
 // the classical guitar (Sunlit Meadow, Leaf Halls), the kalimba (Butterfly Glade), the
-// violin's pizzicato (Mushroom Ring) and sustain (Golden Nest), the Minilogue's soft pad
-// (Cloud Bridge). Each of those has a synthesised stand-in for builds without them.
+// violin's pizzicato with its col legno (Mushroom Ring) and sustain (Golden Nest), the
+// Minilogue's soft pad (Cloud Bridge, and its short hits in Sky Harbour) and pulse (Cloud
+// Bridge); since the recordings update also his voice (Angelic Choir, Radiant Choir, Epic
+// Choir and Brass, the Orchestral Chord Pad's Voices), the banjo (Shimmering Pluck) and
+// the piano (under the Celesta). Each has a synthesised stand-in for builds without them.
 // trimDb comes from `LightSeekerTests --calibrate-instruments` (a held chord's loudness).
 #include "Synth.h"
 #include "InstrumentTrims.h"
@@ -109,6 +112,30 @@ Layer sample(const char* id, float level = 0.0f) {
     return l;
 }
 
+// The developer's voice (Engine::Voice): a vowel (0 mmm .. 4 ee), how many singers at
+// the Ensemble macro's middle, and a velocity cap (0.45: the soft takes only).
+Layer voice(float vowel, float singers, float velocityCap, float level = 0.0f) {
+    auto l = layer(Engine::Voice, level);
+    l.needs = Needs::Samples;
+    l.p = { vowel, singers, velocityCap, 10.0f, 1.0f, 45.0f };
+    l.attack = 0.06f;
+    l.release = 0.9f;
+    l.velocityGain = 0.4f;
+    l.velocityTone = 0.25f;
+    l.keyPan = 0.1f;
+    return l;
+}
+
+// A synthesised layer that plays only with the recordings (it blends with them, e.g.
+// above the voice's highest recorded note).
+Layer withRecordings(Layer l) {
+    l.needs = Needs::Samples;
+    return l;
+}
+
+Layer fadeOutAbove(Layer l, float key, float span) { l.fadeKey = key; l.fadeSpan = span; l.fadeIn = false; return l; }
+Layer fadeInAbove(Layer l, float key, float span) { l.fadeKey = key; l.fadeSpan = span; l.fadeIn = true; return l; }
+
 Layer standIn(Layer l) {
     l.needs = Needs::NoSamples;
     return l;
@@ -187,15 +214,21 @@ std::array<Patch, instrumentCount> build() {
         b.release = 1.6f;
         b.sustain = 1.0f;
         b.p[3] = 7.0f;
-        auto c = character(choir(0.8f, 0.4f, -3.0f));
+        auto c = standIn(character(choir(0.8f, 0.4f, -3.0f)));
         c.attack = 0.9f;
         c.release = 1.8f;
         auto d = shift(strings(Cello, 2, 0.4f, -7.0f), -12.0f);
         d.attack = 0.6f;
         d.release = 1.3f;
         d.lowKey = 24;
+        // The Voices: the developer's soft choir, between "ooh" and "aah" (the soft takes, four singers).
+        auto e = character(voice(2.0f, 4.0f, 0.45f, -4.0f));
+        e.attack = 0.9f;
+        e.release = 1.8f;
+        e.highpass = 110.0f;
+        e.lowpass = 9000.0f;
         Builder p("Orchestral Chord Pad", "Radiant brass and strings", "Voices");
-        p.add(a).add(b).add(c).add(d).air(2.0f).chorus(0.15f).trim(0.0f);
+        p.add(a).add(b).add(c).add(d).add(e).air(2.0f).chorus(0.15f).trim(0.0f);
         put(p);
     }
     {   // Spire Summit: a soaring solo horn.
@@ -228,17 +261,31 @@ std::array<Patch, instrumentCount> build() {
         p.add(a).air(3.0f).chorus(0.2f).struck().trim(0.0f);
         put(p);
     }
-    {   // Sanctum: an angelic choir, soft "oo", a descant above.
-        auto a = choir(0.6f, 0.35f);
+    {   // Sanctum: an angelic choir. The developer's voice: the soft takes and the falsetto
+        // ("ooh"), four singers, bright and airy with a light shimmer. His falsetto ends at
+        // E5: above it the recordings go on pitched up (their formants rise with them, so
+        // the voice grows younger, not lower) and fade over an octave into the formant
+        // choir, which carries the top. Without the recordings the formant choir alone.
+        auto v = fadeOutAbove(voice(1.0f, 4.0f, 0.45f), 76.0f, 12.0f);
+        v.attack = 0.3f;
+        v.release = 0.6f;   // the recorded tail plays on release (twice this to fall away)
+        v.highpass = 170.0f;
+        v.lowpass = 15000.0f;
+        auto a = standIn(choir(0.6f, 0.35f));
         a.p[1] = 0.12f;
         a.attack = 0.45f;
         a.release = 1.0f;
         a.vibrato = 0.1f;
+        auto top = withRecordings(fadeInAbove(choir(0.5f, 0.45f, -1.0f), 74.0f, 12.0f));
+        top.p[1] = 0.14f;
+        top.attack = 0.4f;
+        top.release = 1.2f;
+        top.vibrato = 0.08f;
         auto b = character(shift(choir(1.0f, 0.3f, -9.0f), 12.0f, 4.0f));
         b.attack = 0.6f;
         b.release = 1.2f;
         Builder p("Angelic Choir", "Bells and voices", "Descant");
-        p.add(a).add(b).air(2.5f).chorus(0.18f).trim(0.0f);
+        p.add(v).add(a).add(top).add(b).air(3.5f).chorus(0.14f).shimmer(0.07f).trim(0.0f);
         put(p);
     }
     {   // Bell Garden: tuned bells with wind chimes above them.
@@ -334,8 +381,14 @@ std::array<Patch, instrumentCount> build() {
         b.release = 0.4f;
         auto c = character(shift(bell(ModesCelesta, 0.65f, 1.6f, -12.0f), 12.0f, 0.0f, 0.2f));
         c.release = 0.45f;
+        // The developer's piano (its long notes) under the bars: the hammered body of a
+        // celesta's keyboard action, high-passed so the bars stay on top.
+        auto d = sample("piano-long", -7.0f);
+        d.highpass = 280.0f;
+        d.p[1] = 2.2f;
+        d.release = 0.45f;
         Builder p("Celesta", "Crystal", "Sparkle");
-        p.add(a).add(b).add(c).air(2.5f).struck().trim(0.0f);
+        p.add(a).add(b).add(c).add(d).air(2.5f).struck().trim(0.0f);
         put(p);
     }
 
@@ -399,19 +452,30 @@ std::array<Patch, instrumentCount> build() {
         p.add(a).add(b).air(2.0f).trim(0.0f);
         put(p);
     }
-    {   // Choir Loft: a radiant choir, bright "ah", basses below, sopranos above.
-        auto a = choir(2.2f, 0.7f);
+    {   // Choir Loft: a radiant choir, bright "ah", basses below, sopranos above. The
+        // developer's voice: the full chest takes and the falsetto, the "aah" stacks as the
+        // choir (five singers), warm and majestic; the formant choir carries on above his
+        // falsetto and stands in without the recordings.
+        auto v = fadeOutAbove(voice(3.0f, 5.0f, 0.0f), 78.0f, 10.0f);
+        v.attack = 0.95f;   // a choir swelling in (the organ beside it speaks at once)
+        v.release = 0.8f;   // and its recorded tail dies away (the organ stops)
+        v.highpass = 75.0f;
+        v.lowpass = 9000.0f;   // warm
+        auto top = withRecordings(fadeInAbove(choir(2.6f, 0.6f, -2.0f), 76.0f, 10.0f));
+        top.attack = 0.15f;
+        top.vibrato = 0.12f;
+        auto a = standIn(choir(2.2f, 0.7f));
         a.p[1] = 0.07f;
         a.p[2] = 11.0f;
         a.attack = 0.15f;
         a.release = 0.7f;
         a.vibrato = 0.14f;
-        auto b = shift(choir(2.0f, 0.55f, -7.0f), -12.0f, 0.0f, -0.25f);
+        auto b = shift(choir(2.0f, 0.55f, -4.0f), -12.0f, 0.0f, -0.25f);   // the basses
         b.attack = 0.18f;
         auto c = character(shift(choir(3.0f, 0.65f, -10.0f), 12.0f, 3.0f, 0.25f));
         c.attack = 0.2f;
         Builder p("Radiant Choir", "Sacred, golden", "Sopranos");
-        p.add(a).add(b).add(c).air(3.0f).chorus(0.12f).trim(0.0f);
+        p.add(v).add(top).add(a).add(b).add(c).air(3.5f).chorus(0.12f).trim(0.0f);
         put(p);
     }
     {   // Stained Glass Chapel: celesta and harp together.
@@ -442,8 +506,15 @@ std::array<Patch, instrumentCount> build() {
         c.attack = 0.9f;
         c.release = 1.8f;
         c.bright = 0.3f;
+        // The Minilogue's pulsating patch, held, quietly inside the cloud (a slow inner motion).
+        auto d = sample("mlg-pulse-long", -14.0f);
+        d.attack = 0.6f;
+        d.release = 1.6f;
+        d.highpass = 250.0f;
+        d.lowpass = 7000.0f;
+        d.velocityGain = 0.3f;
         Builder p("Cloud Pad", "Airy", "Haze");
-        p.add(a).add(b).add(c).air(1.5f).chorus(0.4f).trim(0.0f);
+        p.add(a).add(b).add(c).add(d).air(1.5f).chorus(0.4f).trim(0.0f);
         put(p);
     }
     {   // Windswept Isle: a breathy wind flute.
@@ -459,8 +530,25 @@ std::array<Patch, instrumentCount> build() {
         p.add(a).add(b).air(1.0f).poly(10).trim(0.0f);
         put(p);
     }
-    {   // Sky Harbour: a shimmering pluck.
+    {   // Sky Harbour: a shimmering pluck. The developer's banjo (open G, three dynamics,
+        // the 5th string's three hits per dynamic as round-robins), made to shimmer rather
+        // than twang: its drum's boom and the low strings high-passed away, the ring
+        // shortened, the Minilogue's soft pad (short hits) as a synth body under it, an FM
+        // sparkle above, chorus and a rising shimmer around it. Its stand-in is the
+        // analog pluck it had before.
+        auto bj = sample("banjo");
+        bj.highpass = 300.0f;
+        bj.lowpass = 15000.0f;
+        bj.p[1] = 2.0f;
+        bj.release = 0.5f;
+        bj.velocityGain = 0.45f;
+        auto pad = sample("mlg-softpad-short", -10.0f);
+        pad.highpass = 180.0f;
+        pad.lowpass = 9000.0f;
+        pad.p[1] = 1.4f;
+        pad.release = 0.5f;
         auto a = layer(Engine::Analog);
+        a.needs = Needs::NoSamples;
         a.p = { 500.0f, 4.5f, 0.22f, 9.0f, 0.15f, 0.9f };
         a.attack = 0.002f;
         a.decay = 1.1f;
@@ -475,7 +563,7 @@ std::array<Patch, instrumentCount> build() {
         b.sustain = 0.0f;
         b.release = 0.4f;
         Builder p("Shimmering Pluck", "Airy", "Shimmer");
-        p.add(a).add(b).air(3.0f).chorus(0.3f).shimmer(0.3f).mode(Character::Shimmer).struck().trim(0.0f);
+        p.add(bj).add(pad).add(a).add(b).air(3.5f).chorus(0.35f).shimmer(0.35f).mode(Character::Shimmer).struck().trim(0.0f);
         put(p);
     }
 
@@ -526,8 +614,14 @@ std::array<Patch, instrumentCount> build() {
         b.release = 0.25f;
         auto c = character(shift(pluck(BodyNone, 0.2f, 0.55f, 0.5f, 0.6f, -10.0f), 12.0f, 0.0f, 0.3f));
         c.release = 0.25f;
+        // The violin's col legno (the bow's wood on the string): a woody tick on each note.
+        auto d = sample("violin-collegno", -9.0f);
+        d.highpass = 400.0f;
+        d.p[1] = 0.25f;
+        d.release = 0.1f;
+        d.velocityGain = 0.6f;
         Builder p("Bouncy Pizzicato", "Twinkly", "Bounce");
-        p.add(a).add(b).add(c).air(2.5f).struck().trim(0.0f);
+        p.add(a).add(b).add(c).add(d).air(2.5f).struck().trim(0.0f);
         put(p);
     }
     {   // Firefly Hollow: a twinkling glockenspiel.
@@ -583,20 +677,39 @@ std::array<Patch, instrumentCount> build() {
         p.add(a).add(b).add(c).add(d).air(0.5f).chorus(0.12f).trim(0.0f);
         put(p);
     }
-    {   // Summit of Winds: epic choir and brass together.
-        auto a = choir(2.0f, 0.6f);
+    {   // Summit of Winds: epic choir and brass together. The developer's voice: the full
+        // chest takes, seven singers from the "aah" stacks, and his low drones (G2, A3) an
+        // octave under the brass. The formant choir stands in without the recordings.
+        auto v = voice(3.0f, 7.0f, 0.0f);
+        v.attack = 0.7f;    // the choir swells in under the brass's attack
+        v.release = 0.8f;
+        v.highpass = 70.0f;
+        v.lowpass = 16000.0f;
+        // The choir in two octaves: the upper voices an octave up (his falsetto "ooh" and
+        // the soft takes, three singers).
+        auto up = shift(voice(1.5f, 3.0f, 0.45f, -7.0f), 12.0f, 3.0f, 0.2f);
+        up.attack = 0.4f;
+        up.release = 0.6f;
+        up.highpass = 200.0f;
+        auto drone = shift(sample("voice-drone", -9.0f), -12.0f);
+        drone.attack = 0.35f;
+        drone.release = 1.0f;
+        drone.lowKey = 28;
+        drone.p[2] = 1.0f;
+        drone.lowpass = 4000.0f;
+        auto a = standIn(choir(2.0f, 0.6f));
         a.attack = 0.25f;
-        auto b = shift(choir(2.5f, 0.6f, -9.0f), 12.0f, 3.0f, 0.2f);
+        auto b = standIn(shift(choir(2.5f, 0.6f, -9.0f), 12.0f, 3.0f, 0.2f));
         b.attack = 0.3f;
-        auto c = brass(800.0f, 0.5f, -6.0f);
-        c.attack = 0.15f;
+        auto c = brass(800.0f, 0.5f, -9.0f);
+        c.attack = 0.35f;   // the brass swells with the choir (the Eyrie's horns strike)
         c.p[3] = 7.0f;
         c.release = 0.6f;
         auto d = character(shift(brass(650.0f, 0.4f, -9.0f), -12.0f));
-        d.attack = 0.15f;
+        d.attack = 0.35f;
         d.lowKey = 24;
         Builder p("Epic Choir and Brass", "Epic, heroic", "Brass");
-        p.add(a).add(b).add(c).add(d).air(2.5f).chorus(0.1f).trim(0.0f);
+        p.add(v).add(up).add(drone).add(a).add(b).add(c).add(d).air(4.5f).chorus(0.1f).trim(0.0f);
         put(p);
     }
     for (std::size_t i = 0; i < all.size(); ++i) {

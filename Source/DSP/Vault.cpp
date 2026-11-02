@@ -108,9 +108,9 @@ const IrRecipe recipes[Vault::kinds] = {
 // The captured spaces' stand-ins, for builds without the captures: generated spaces in
 // their spirit (a long bright shimmering hall; a bright hall with far echoes; a lush hall).
 const IrRecipe fallbackRecipes[3] = {
-    { .seconds = 9.5f, .preMs = 20, .bloomMs = 250, .rtLow = 3, .rtMid = 7.5f, .rtHigh = 6.5f, .lowCut = 120, .highCut = 17000, .width = 1, .early = 3, .earlyMs = 60, .earlyGain = 0.08f, .earlyLp = 12000, .glints = 20, .glintHz = 5000, .glintGain = 0.16f },
+    { .seconds = 10.5f, .preMs = 20, .bloomMs = 200, .rtLow = 4, .rtMid = 9.5f, .rtHigh = 8, .lowCut = 110, .highCut = 18000, .width = 1, .early = 3, .earlyMs = 60, .earlyGain = 0.1f, .earlyLp = 14000, .glints = 30, .glintHz = 5000, .glintGain = 0.22f },
     { .seconds = 6, .preMs = 15, .bloomMs = 60, .rtLow = 1, .rtMid = 3.4f, .rtHigh = 2.2f, .lowCut = 140, .highCut = 15000, .width = 1, .echoes = 3, .echoMs = { 380, 760, 1140 }, .echoGain = { 0.3f, 0.2f, 0.12f }, .echoBlurMs = 18, .echoLp = 8000, .tailGain = 0.8f },
-    { .seconds = 5, .preMs = 12, .bloomMs = 120, .rtLow = 5, .rtMid = 4.8f, .rtHigh = 2.4f, .lowCut = 60, .highCut = 12000, .bodyHz = 400, .bodyDb = 1, .width = 1, .early = 4, .earlyMs = 40, .earlyGain = 0.1f, .earlyLp = 9000 },
+    { .seconds = 3.6f, .preMs = 14, .bloomMs = 40, .rtLow = 2.6f, .rtMid = 2.8f, .rtHigh = 1.8f, .lowCut = 80, .highCut = 12000, .bodyHz = 400, .bodyDb = 1, .width = 1, .early = 5, .earlyMs = 35, .earlyGain = 0.16f, .earlyLp = 10000, .tailGain = 0.75f },
 };
 
 double lengthScale(double sampleRate) { return sampleRate > 50000.0 ? 0.6 : 1.0; }   // memory at 88.2/96 kHz

@@ -80,6 +80,7 @@ struct SampleVoice {
     double pos = 0, tailPos = -1;
     float rateRatio = 1, inc = 1, midi = 60, bend = 0, vibrato = 0, vibratoHz = 5, vibratoDelay = 0.3f, vibratoPhase = 0, age = 0;
     float amp = 1, attackStep = 1, fade = 1, fadeMul = 1, releaseMul = 1, tailMix = 0, tailStep = 0, gain = 1, rate = 48000;
+    int wait = 0;              // samples of silence before it speaks (an ensemble singer's timing)
     bool on = false, releasing = false;
     static float read(const int16_t* d, double p) {
         const auto i = int(p);
@@ -110,8 +111,29 @@ struct SampleVoice {
         releasing = false;
         age = 0;
         vibratoPhase = 0;
+        wait = 0;
         update();
         return on = true;
+    }
+    // Joins a note already sounding (a vowel the Vowel macro turns to): in its sustain
+    // loop, faded in, so it never restarts the attack.
+    bool startInLoop(const lswb::samples::Instrument& inst, float note, float velocity, float pick, float sampleRate, float fadeSeconds) {
+        if (!start(inst, note, velocity, pick, fadeSeconds, sampleRate, 0.0f, 0.0f, 0.0f)) return false;
+        if (zone->loops()) pos = double(zone->loopStart);
+        return true;
+    }
+    // Levels the take to a loudness (the ensemble's singers to the lead, the vowels to each other).
+    void levelTo(float targetDb) { if (zone != nullptr) gain = dbToGain(std::clamp(targetDb - zone->loudnessDb, -12.0f, 12.0f)); }
+    // Moves on without reading (a vowel at zero weight keeps its place).
+    void skip(int n) {
+        if (!on) return;
+        if (wait > 0) { wait = std::max(0, wait - n); return; }
+        const auto& z = *zone;
+        pos += double(inc) * double(n);
+        if (z.loops() && !releasing) while (pos >= double(z.loopEnd)) pos -= double(z.loopEnd - z.loopStart);
+        fade *= std::pow(fadeMul * releaseMul, float(n));
+        if (amp < 1.0f) amp = std::min(1.0f, amp + attackStep * float(n));
+        if (pos >= double(z.length - 2) || fade < 1.0e-4f) on = false;
     }
     void release(float seconds) {
         if (!on || releasing) return;
@@ -140,6 +162,7 @@ struct SampleVoice {
     }
     float tick() {
         if (!on) return 0.0f;
+        if (wait > 0) { --wait; return 0.0f; }
         const auto& z = *zone;
         float y = read(z.data, pos);
         if (tailPos >= 0.0) {
@@ -158,6 +181,264 @@ struct SampleVoice {
         fade *= fadeMul * releaseMul;
         if (pos >= double(z.length - 2) || fade < 1.0e-4f) on = false;
         return y * amp * fade * gain;
+    }
+};
+
+// The developer's voice as a choir (the recordings update). Up to eight singers; each
+// sings every vowel's sweep (mmm, ooh, oh, aah, ee: the Vowel macro crossfades between
+// neighbours, equal power) and, from the second singer on, the 5-take choir stacks where
+// one lies within a fifth of the note (each singer a different take: a real ensemble),
+// else the sweeps again. Every singer has its own detune, a slow drift, a timing offset
+// and a place in the stereo field; the Ensemble macro brings them in one by one (one
+// voice to a full choir), the level held near the lead's (power sum, a little growth).
+// Vowels and singers at zero weight keep their place without being read (cheap); a vowel
+// turned to while a note sounds joins in its sustain loop.
+struct VoiceStack {
+    static constexpr int singers = 8;
+    std::array<std::array<SampleVoice, vowelCount>, singers> sweep;
+    std::array<std::array<SampleVoice, stackCount>, singers> stack;
+    std::array<bool, singers> stackOk {};
+    std::array<std::array<bool, stackCount>, singers> stackNear {};
+    // Targets (from the macros) and what sounds now, ramped to them per sample over ~30 ms
+    // (a macro turned while notes sound never steps).
+    std::array<std::array<float, vowelCount + stackCount>, singers> weight {}, weightNow {}, weightStep {};
+    std::array<float, singers> singerGain {}, singerNow {}, singerStep {}, detune {}, driftPhase {}, driftHz {};
+    float normNow = 1, normStep = 0;
+    std::array<PanGains, singers> pan {};
+    std::array<float, vowelCount> vowelLevelDb {};
+    float note = 60, velocity = 0.8f, vowel = 3, size = 1, bend = 0, norm = 1, rate = 48000, leadDb = -20;
+    bool on = false, releasing = false;
+
+    static constexpr std::array<float, singers> detuneCents { 0.0f, 7.0f, -9.0f, 4.0f, -5.0f, 11.0f, -12.0f, 2.0f };
+    static constexpr std::array<float, singers> pans { 0.0f, -0.7f, 0.7f, -0.45f, 0.45f, -0.95f, 0.95f, -0.2f };
+    static constexpr std::array<float, singers> delays { 0.0f, 0.45f, 0.8f, 0.2f, 0.62f, 1.0f, 0.33f, 0.9f };   // of the timing spread
+
+    static const lswb::samples::Instrument* sweepSet(int v) { return lswb::samples::Bank::get().instrument(vowelSweeps[std::size_t(v)]); }
+    static const lswb::samples::Instrument* stackSet(int k) { return lswb::samples::Bank::get().instrument(vowelStacks[std::size_t(k)]); }
+    static bool available() {
+        for (int v = 0; v < vowelCount; ++v) if (sweepSet(v) != nullptr) return true;
+        return false;
+    }
+    // The vowels' weights (equal power between neighbours) at a position 0..4.
+    static std::array<float, vowelCount> vowelWeights(float position) {
+        std::array<float, vowelCount> w {};
+        position = std::clamp(position, 0.0f, float(vowelCount - 1));
+        for (int v = 0; v < vowelCount; ++v) w[std::size_t(v)] = std::sqrt(std::max(0.0f, 1.0f - std::abs(position - float(v))));
+        return w;
+    }
+    void reset() {
+        on = false;
+        for (auto& s : sweep) for (auto& v : s) v.on = false;
+        for (auto& s : stack) for (auto& v : s) v.on = false;
+    }
+    // The loudness a vowel's take is levelled to: the lead's layer median for that vowel
+    // set, so every vowel sounds as loud as the others.
+    float layerDb(const lswb::samples::Instrument& inst, const lswb::samples::Zone& z) const { return inst.medianDb(z.layer); }
+
+    void start(float midi, float vel, float velocityCap, float position, float singerCount, float detuneScale, float width, float spreadMs,
+               float attack, float sampleRate, uint64_t seed) {
+        rate = sampleRate;
+        note = midi;
+        velocity = velocityCap > 0.0f ? std::min(vel, velocityCap) : vel;
+        vowel = position;
+        size = singerCount;
+        releasing = false;
+        on = true;
+        // The reference level: the aah sweep's median for this velocity's layer (or the
+        // first vowel there is), so all vowels and singers sit at one loudness.
+        leadDb = -20;
+        for (int v : { 3, 1, 4, 2, 0 })
+            if (const auto* inst = sweepSet(v)) {
+                if (const auto* z = inst->find(int(std::lround(midi)), velocity, 0.0f)) { leadDb = inst->medianDb(z->layer); break; }
+            }
+        for (int k = 0; k < singers; ++k) {
+            detune[std::size_t(k)] = detuneCents[std::size_t(k)] * detuneScale;
+            pan[std::size_t(k)] = panGains(std::clamp(pans[std::size_t(k)] * width, -1.0f, 1.0f));
+            driftHz[std::size_t(k)] = 0.11f + 0.05f * float(k);
+            driftPhase[std::size_t(k)] = unipolar(mix64(seed + uint64_t(k) * 31));
+            const int wait = k == 0 ? 0 : int(delays[std::size_t(k)] * spreadMs * 0.001f * rate);
+            const float pick = k == 0 ? 0.0f : (float(k) + 0.5f) / float(singers);
+            for (int v = 0; v < vowelCount; ++v) sweep[std::size_t(k)][std::size_t(v)].on = false;
+            for (int t = 0; t < stackCount; ++t) {
+                auto& sv = stack[std::size_t(k)][std::size_t(t)];
+                sv.on = false;
+                stackNear[std::size_t(k)][std::size_t(t)] = false;
+                const auto* inst = stackSet(t);
+                if (k == 0 || inst == nullptr) continue;
+                const auto* z = inst->find(int(std::lround(midi)), velocity, 0.0f);
+                stackNear[std::size_t(k)][std::size_t(t)] = z != nullptr && std::abs(z->root - midi) <= 7.01f;
+            }
+            stackOk[std::size_t(k)] = false;
+            for (bool near : stackNear[std::size_t(k)]) stackOk[std::size_t(k)] = stackOk[std::size_t(k)] || near;
+            computeWeights(k);
+            for (int v = 0; v < vowelCount; ++v)
+                if (weight[std::size_t(k)][std::size_t(v)] > 0.0f) startSweep(k, v, attack, pick, wait, false);
+            for (int t = 0; t < stackCount; ++t)
+                if (weight[std::size_t(k)][std::size_t(vowelCount + t)] > 0.0f) startStack(k, t, attack, wait, false);
+        }
+        updateGains();
+        weightNow = weight;
+        singerNow = singerGain;
+        normNow = norm;
+        for (auto& w : weightStep) w = {};
+        singerStep = {};
+        normStep = 0;
+    }
+    void startSweep(int k, int v, float attack, float pick, int wait, bool inLoop) {
+        const auto* inst = sweepSet(v);
+        auto& sv = sweep[std::size_t(k)][std::size_t(v)];
+        if (inst == nullptr) return;
+        const bool ok = inLoop ? sv.startInLoop(*inst, note, velocity, pick, rate, 0.25f)
+                               : sv.start(*inst, note, velocity, pick, attack, rate, 0.0f, 0.0f, 0.0f);
+        if (!ok) return;
+        sv.vibrato = 0;
+        sv.levelTo(leadDb);
+        sv.wait = inLoop ? 0 : wait;
+    }
+    void startStack(int k, int t, float attack, int wait, bool inLoop) {
+        const auto* inst = stackSet(t);
+        auto& sv = stack[std::size_t(k)][std::size_t(t)];
+        if (inst == nullptr) return;
+        const float pick = (float(k - 1) + 0.5f) / 7.0f;   // a different take per singer
+        const bool ok = inLoop ? sv.startInLoop(*inst, note, velocity, pick, rate, 0.25f)
+                               : sv.start(*inst, note, velocity, pick, attack, rate, 0.0f, 0.0f, 0.0f);
+        if (!ok) return;
+        sv.vibrato = 0;
+        sv.levelTo(leadDb);
+        sv.wait = inLoop ? 0 : wait;
+    }
+    void computeWeights(int k) {
+        auto& w = weight[std::size_t(k)];
+        w = {};
+        const auto vw = vowelWeights(vowel);
+        if (k > 0 && stackOk[std::size_t(k)]) {
+            // The stacks' vowels: mmm, ooh (with half of oh), aah (with half of oh, and ee).
+            std::array<float, stackCount> sw { vw[0], std::sqrt(vw[1] * vw[1] + 0.5f * vw[2] * vw[2]),
+                                               std::sqrt(0.5f * vw[2] * vw[2] + vw[3] * vw[3] + vw[4] * vw[4]) };
+            float lost = 0;
+            for (int t = 0; t < stackCount; ++t)
+                if (!stackNear[std::size_t(k)][std::size_t(t)]) { lost += sw[std::size_t(t)] * sw[std::size_t(t)]; sw[std::size_t(t)] = 0; }
+            // A vowel with no stack near this note: its weight goes to the nearest one that has.
+            if (lost > 0.0f) {
+                const int order[stackCount][stackCount] = { { 0, 1, 2 }, { 1, 0, 2 }, { 2, 1, 0 } };
+                int from = vowel < 0.5f ? 0 : (vowel < 2.0f ? 1 : 2);
+                for (int t : order[from])
+                    if (stackNear[std::size_t(k)][std::size_t(t)]) { sw[std::size_t(t)] = std::sqrt(sw[std::size_t(t)] * sw[std::size_t(t)] + lost); break; }
+            }
+            for (int t = 0; t < stackCount; ++t) w[std::size_t(vowelCount + t)] = sw[std::size_t(t)];
+        } else {
+            for (int v = 0; v < vowelCount; ++v) w[std::size_t(v)] = sweepSet(v) != nullptr ? vw[std::size_t(v)] : 0.0f;
+        }
+        float power = 0;
+        for (float x : w) power += x * x;
+        if (power <= 1.0e-9f) {   // nothing recorded for the vowel: the nearest vowel that is
+            for (int d = 0; d < vowelCount && power <= 1.0e-9f; ++d)
+                for (int v : { int(std::lround(vowel)) - d, int(std::lround(vowel)) + d })
+                    if (v >= 0 && v < vowelCount && sweepSet(v) != nullptr) { w[std::size_t(v)] = 1; power = 1; break; }
+        }
+        const float n = power > 0.0f ? 1.0f / std::sqrt(power) : 0.0f;
+        for (auto& x : w) x *= n;
+    }
+    void updateGains() {
+        float power = 0;
+        for (int k = 0; k < singers; ++k) {
+            const float g = k == 0 ? 1.0f : std::clamp(size - float(k), 0.0f, 1.0f);
+            singerGain[std::size_t(k)] = g;
+            power += g * g;
+        }
+        // A bigger choir is a little louder (power ^ 0.3, not ^ 0.5): +3 dB for eight.
+        norm = std::pow(std::max(power, 1.0f), -0.35f);
+    }
+    // The macros, live (per chunk): new weights; a vowel or singer that now sounds and
+    // had not started joins in its loop.
+    void retarget(float position, float singerCount) {
+        const bool moved = std::abs(position - vowel) > 1.0e-4f || std::abs(singerCount - size) > 1.0e-4f;
+        vowel = position;
+        size = singerCount;
+        if (!moved || releasing) return;
+        for (int k = 0; k < singers; ++k) {
+            computeWeights(k);
+            const bool audible = k == 0 || size > float(k);
+            if (!audible) continue;
+            const float pick = k == 0 ? 0.0f : (float(k) + 0.5f) / float(singers);
+            for (int v = 0; v < vowelCount; ++v)
+                if (weight[std::size_t(k)][std::size_t(v)] > 0.0f && !sweep[std::size_t(k)][std::size_t(v)].on) startSweep(k, v, 0.0f, pick, 0, true);
+            for (int t = 0; t < stackCount; ++t)
+                if (weight[std::size_t(k)][std::size_t(vowelCount + t)] > 0.0f && !stack[std::size_t(k)][std::size_t(t)].on) startStack(k, t, 0.0f, 0, true);
+        }
+        updateGains();
+    }
+    void update(float bendSemis, int chunkSamples) {
+        bend = bendSemis;
+        for (int k = 0; k < singers; ++k) {
+            driftPhase[std::size_t(k)] += driftHz[std::size_t(k)] * float(chunkSamples) / rate;
+            driftPhase[std::size_t(k)] -= std::floor(driftPhase[std::size_t(k)]);
+            const float cents = detune[std::size_t(k)] + (k == 0 ? 0.0f : 3.0f * sinCycles(driftPhase[std::size_t(k)]));
+            // The ramps for this chunk (one-pole, ~30 ms, as a straight line within it).
+            const float a = chunkSamples > 0 ? 1.0f - std::exp(-float(chunkSamples) / (0.03f * rate)) : 1.0f;
+            const float per = chunkSamples > 0 ? 1.0f / float(chunkSamples) : 0.0f;
+            {
+                float& now = singerNow[std::size_t(k)];
+                const float next = std::abs(singerGain[std::size_t(k)] - now) < 1.0e-4f ? singerGain[std::size_t(k)] : now + a * (singerGain[std::size_t(k)] - now);
+                singerStep[std::size_t(k)] = (next - now) * per;
+                if (chunkSamples == 0) now = next;
+            }
+            const bool silent = singerNow[std::size_t(k)] <= 1.0e-5f && singerGain[std::size_t(k)] <= 0.0f;
+            for (int i = 0; i < vowelCount + stackCount; ++i) {
+                float& now = weightNow[std::size_t(k)][std::size_t(i)];
+                const float target = weight[std::size_t(k)][std::size_t(i)];
+                const float next = std::abs(target - now) < 1.0e-4f ? target : now + a * (target - now);
+                weightStep[std::size_t(k)][std::size_t(i)] = (next - now) * per;
+                if (chunkSamples == 0) now = next;
+                auto& sv = i < vowelCount ? sweep[std::size_t(k)][std::size_t(i)] : stack[std::size_t(k)][std::size_t(i - vowelCount)];
+                if (!sv.on) continue;
+                sv.bend = bend + cents * 0.01f;
+                sv.update();
+                // Not heard this chunk: it moves on without being read.
+                if (silent || (target <= 0.0f && now <= 1.0e-5f)) sv.skip(chunkSamples);
+            }
+        }
+        {
+            const float a = chunkSamples > 0 ? 1.0f - std::exp(-float(chunkSamples) / (0.03f * rate)) : 1.0f;
+            const float next = normNow + a * (norm - normNow);
+            normStep = chunkSamples > 0 ? (next - normNow) / float(chunkSamples) : 0.0f;
+            if (chunkSamples == 0) normNow = next;
+        }
+        bool any = false;
+        for (auto& s : sweep) for (auto& v : s) any = any || v.on;
+        for (auto& s : stack) for (auto& v : s) any = any || v.on;
+        on = any;
+    }
+    void release(float seconds) {
+        releasing = true;
+        for (auto& s : sweep) for (auto& v : s) v.release(seconds);
+        for (auto& s : stack) for (auto& v : s) v.release(seconds);
+    }
+    void tick(float& l, float& r) {
+        l = r = 0;
+        normNow += normStep;
+        for (int k = 0; k < singers; ++k) {
+            singerNow[std::size_t(k)] = std::max(0.0f, singerNow[std::size_t(k)] + singerStep[std::size_t(k)]);
+            const float g = singerNow[std::size_t(k)] * normNow;
+            float y = 0;
+            auto& w = weightNow[std::size_t(k)];
+            const auto& dw = weightStep[std::size_t(k)];
+            for (int i = 0; i < vowelCount + stackCount; ++i) w[std::size_t(i)] = std::max(0.0f, w[std::size_t(i)] + dw[std::size_t(i)]);
+            if (g <= 1.0e-6f) continue;
+            for (int v = 0; v < vowelCount; ++v) {
+                auto& sv = sweep[std::size_t(k)][std::size_t(v)];
+                if (sv.on && w[std::size_t(v)] > 1.0e-5f) y += w[std::size_t(v)] * sv.tick();
+            }
+            for (int t = 0; t < stackCount; ++t) {
+                auto& sv = stack[std::size_t(k)][std::size_t(t)];
+                if (sv.on && w[std::size_t(vowelCount + t)] > 1.0e-5f) y += w[std::size_t(vowelCount + t)] * sv.tick();
+            }
+            y *= g;
+            l += y * pan[std::size_t(k)].l;
+            r += y * pan[std::size_t(k)].r;
+        }
+        l *= 1.4142f;
+        r *= 1.4142f;
     }
 };
 
@@ -243,13 +524,14 @@ struct Synth::Voice {
         StringVoice strings;
         SampleVoice sample;
         OrganVoice organ;
+        VoiceStack voice;
         Body body;
-        Svf lowpass;
-        OnePole highpass;
+        Svf lowpass, lowpassR;
+        OnePole highpass, highpassR;
         PanGains pan { 0.7071f, 0.7071f };
         float gain = 1, cutoff = 18000, release = 0.3f, fade = 1, fadeMul = 1, vibrato = 0, hz = 440;
         bool character = false, stretchRelease = true;
-        float bent = 0;
+        float bent = 0, vowelBase = 3, singersBase = 1, choirVowelBase = 0;
     };
     bool on = false, keyDown = false, sustained = false, released = false, grace = false;
     int note = -1, patch = 0, delay = 0, layerMask = 0;
@@ -268,13 +550,32 @@ struct Synth::Bus {
 
 namespace {
 bool layerAvailable(const Layer& l) noexcept {
+    if (l.engine == Engine::Voice) return VoiceStack::available();
     return l.engine == Engine::Sample && l.sample != nullptr && lswb::samples::Bank::get().instrument(l.sample) != nullptr;
+}
+// Equal-power key crossfades (Layer::fadeKey).
+float keyFade(const Layer& l, float midi) noexcept {
+    if (l.fadeKey <= 0.0f) return 1.0f;
+    const float t = std::clamp((midi - l.fadeKey) / std::max(0.5f, l.fadeSpan), 0.0f, 1.0f);
+    return l.fadeIn ? std::sin(t * 1.5707963f) : std::cos(t * 1.5707963f);
+}
+bool recorded(Engine e) noexcept { return e == Engine::Sample || e == Engine::Voice; }
+// The macros' reach: Vowel moves two vowels either way, Ensemble from one singer to eight.
+float vowelPosition(float base, float macro) noexcept { return std::clamp(base + (macro - 0.5f) * 4.0f, 0.0f, 4.0f); }
+float singerCount(float base, float macro) noexcept {
+    return macro < 0.5f ? 1.0f + (base - 1.0f) * macro * 2.0f : base + (8.0f - base) * (macro - 0.5f) * 2.0f;
 }
 } // namespace
 
 bool patchUsesRecordings(const Patch& p) noexcept {
     for (int k = 0; k < p.layerCount; ++k)
-        if (p.layers[std::size_t(k)].engine == Engine::Sample) return true;
+        if (recorded(p.layers[std::size_t(k)].engine)) return true;
+    return false;
+}
+
+bool patchHasVoice(const Patch& p) noexcept {
+    for (int k = 0; k < p.layerCount; ++k)
+        if (p.layers[std::size_t(k)].engine == Engine::Voice || p.layers[std::size_t(k)].engine == Engine::Choir) return true;
     return false;
 }
 
@@ -282,7 +583,7 @@ bool patchSampled(const Patch& p) noexcept {
     bool any = false;
     for (int k = 0; k < p.layerCount; ++k) {
         const auto& l = p.layers[std::size_t(k)];
-        if (l.engine != Engine::Sample) continue;
+        if (!recorded(l.engine)) continue;
         if (!layerAvailable(l)) return false;
         any = true;
     }
@@ -329,6 +630,7 @@ void Synth::reset() noexcept {
             l.strings.reset();
             l.sample.on = false;
             l.organ.reset();
+            l.voice.reset();
         }
     }
     keys = {};
@@ -352,6 +654,8 @@ void Synth::setMacros(const Macros& m) noexcept {
     macros.attack = clamp01(m.attack);
     macros.release = clamp01(m.release);
     macros.character = clamp01(m.character);
+    macros.vowel = clamp01(m.vowel);
+    macros.ensemble = clamp01(m.ensemble);
     macros.octave = std::clamp(m.octave, -3, 3);
     macros.levelDb = std::isfinite(m.levelDb) ? std::clamp(m.levelDb, -48.0f, 12.0f) : 0.0f;
 }
@@ -524,9 +828,12 @@ void Synth::startLayers(Voice& voice) noexcept {
             case Engine::Choir: {
                 auto& c = lv.choir;
                 if (!c.active()) c.reset();
-                c.vowel = L.p[0];
+                // The Vowel macro moves the formant choir too (its 0..4: oo .. ee), the
+                // Ensemble macro its spread.
+                lv.choirVowelBase = L.p[0];
+                c.vowel = std::clamp(L.p[0] + (macros.vowel - 0.5f) * 3.2f, 0.0f, 4.0f);
                 c.breath = L.p[1];
-                c.detuneCents = L.p[2];
+                c.detuneCents = L.p[2] * (0.4f + 1.2f * macros.ensemble);
                 c.brightness = L.bright;
                 c.velocity = vel;
                 c.vibratoDepth = L.vibrato;
@@ -615,16 +922,30 @@ void Synth::startLayers(Voice& voice) noexcept {
                 lv.organ.bend = bendNow * p.bendRange;
                 lv.organ.start(hz, L.p, L.bright, attack, r, noiseAt);
                 break;
+            case Engine::Voice:
+                if (!VoiceStack::available()) continue;
+                lv.vowelBase = L.p[0];
+                lv.singersBase = std::clamp(L.p[1], 1.0f, 8.0f);
+                lv.voice.bend = bendNow * p.bendRange;
+                lv.voice.start(midi, vel, L.p[2], vowelPosition(lv.vowelBase, macros.vowel), singerCount(lv.singersBase, macros.ensemble),
+                               L.p[3] / 10.0f, L.p[4], L.p[5], attack, r, noiseAt);
+                lv.voice.update(bendNow * p.bendRange, 0);
+                if (!lv.voice.on) continue;
+                break;
             case Engine::None: continue;
         }
         // Level, tone, pan.
         const float velGain = (1.0f - L.velocityGain) + L.velocityGain * std::pow(vel, 1.4f);
-        lv.gain = dbToGain(L.level + voice.levelDb + trimDb) * velGain;
+        lv.gain = dbToGain(L.level + voice.levelDb + trimDb) * velGain * keyFade(L, midi - L.cents * 0.01f);
         lv.cutoff = L.lowpass * std::exp2(-L.velocityTone * (1.0f - vel));
         lv.lowpass.reset();
         lv.lowpass.set(std::min(lv.cutoff * toneScale, 0.45f * r), 0.6f, r);
         lv.highpass.reset();
         lv.highpass.setCutoff(L.highpass, r);
+        lv.lowpassR.reset();
+        lv.lowpassR.set(std::min(lv.cutoff * toneScale, 0.45f * r), 0.6f, r);
+        lv.highpassR.reset();
+        lv.highpassR.setCutoff(L.highpass, r);
         lv.pan = panGains(std::clamp(L.pan + L.keyPan * (midi - 60.0f) / 30.0f, -1.0f, 1.0f));
         lv.on = true;
     }
@@ -656,9 +977,11 @@ void Synth::startNote(int note, float velocity, bool sustained) noexcept {
             const auto& L = p.layers[std::size_t(k)];
             if (L.engine == Engine::None) continue;
             if (grace && L.run <= 0) continue;
-            if (L.needs == Needs::Samples && !layerAvailable(L)) continue;
+            // A recorded layer needs its recordings; a synthesised one marked Samples plays
+            // with the recordings (blending with them), never instead of them.
+            if (L.needs == Needs::Samples && !(recorded(L.engine) ? layerAvailable(L) : sampled)) continue;
             if (L.needs == Needs::NoSamples && sampled) continue;
-            if (L.engine == Engine::Sample && !layerAvailable(L)) continue;
+            if (recorded(L.engine) && !layerAvailable(L)) continue;
             v->layerMask |= 1 << k;
             v->layer[std::size_t(k)].on = false;
         }
@@ -703,6 +1026,7 @@ void Synth::releaseVoice(Voice& v) noexcept {
             case Engine::Strings: lv.strings.release(tau); break;
             case Engine::Sample: lv.sample.release(s); break;
             case Engine::Organ: lv.organ.release(tau); break;
+            case Engine::Voice: lv.voice.release(s); break;
             case Engine::None: break;
         }
     }
@@ -876,10 +1200,19 @@ void Synth::updateChunk() noexcept {
                     lv.organ.update();
                     alive = lv.organ.active();
                     break;
+                case Engine::Voice:
+                    lv.voice.retarget(vowelPosition(lv.vowelBase, macros.vowel), singerCount(lv.singersBase, macros.ensemble));
+                    lv.voice.update(bend, chunk);
+                    alive = lv.voice.on;
+                    break;
                 case Engine::None: alive = false; break;
             }
             if (!alive) { lv.on = false; continue; }
+            if (lv.engine == Engine::Choir) {
+                lv.choir.vowel = std::clamp(lv.choirVowelBase + (macros.vowel - 0.5f) * 3.2f, 0.0f, 4.0f);
+            }
             lv.lowpass.set(std::min(lv.cutoff * toneScale, 0.45f * r), 0.6f, r);
+            lv.lowpassR.set(std::min(lv.cutoff * toneScale, 0.45f * r), 0.6f, r);
             any = true;
         }
         if (!any || v.kill <= 0.0f) {
@@ -932,6 +1265,15 @@ void Synth::render(float* outL, float* outR, int n) noexcept {
                     case Engine::Strings: y = lv.body.process(lv.strings.tick(noise)); break;
                     case Engine::Sample: y = lv.sample.tick(); break;
                     case Engine::Organ: y = lv.organ.tick(noise); break;
+                    case Engine::Voice: {
+                        // The ensemble is stereo of its own: each side filtered, then the layer's pan.
+                        float a = 0, b = 0;
+                        lv.voice.tick(a, b);
+                        const float g = lv.gain * (lv.character ? characterGain : 1.0f) * 1.4142f;
+                        vl += lv.lowpass.tick(lv.highpass.hp(a)).lp * g * lv.pan.l;
+                        vr += lv.lowpassR.tick(lv.highpassR.hp(b)).lp * g * lv.pan.r;
+                        continue;
+                    }
                     case Engine::None: break;
                 }
                 y = lv.lowpass.tick(lv.highpass.hp(y)).lp * lv.gain * (lv.character ? characterGain : 1.0f);

@@ -1,5 +1,6 @@
 #include "Atmosphere.h"
 #include "../World/Journey.h"
+#include "../Synth/wb/SampleBank.h"
 
 namespace dc {
 using namespace dsp;
@@ -20,7 +21,7 @@ constexpr AtmosSet sets[LocationCount][placesPerLocation] = {
       { { S::SoftWind, S::Birdsong, S::DistantBell }, 3 }, {} },                                                                    // Blossom Meadow
     { { { S::DistantBell, S::HarpGlint, S::SoftWind }, 3 }, { { S::HarpGlint, S::DistantBell, S::Chimes }, 3 },
       { { S::Chimes, S::DistantBell, S::HarpGlint }, 3 }, {} },                                                                     // Golden Cathedral
-    { { { S::SoftWind, S::Birdsong, S::Chimes }, 3 }, { { S::SoftWind, S::Birdsong, S::Leaves }, 3 },
+    { { { S::SoftWind, S::Birdsong, S::Chimes }, 3 }, { { S::SoftWind, S::Breath, S::Birdsong }, 3 },
       { { S::SoftWind, S::DistantBell, S::Brook }, 3 }, {} },                                                                       // Floating Isles
     { { { S::Birdsong, S::FountainShimmer, S::Leaves }, 3 }, { { S::FountainShimmer, S::Birdsong, S::Brook }, 3 },
       { { S::Birdsong, S::SoftWind, S::FountainShimmer }, 3 }, {} },                                                                // Royal Gardens
@@ -29,11 +30,13 @@ constexpr AtmosSet sets[LocationCount][placesPerLocation] = {
     { { { S::SoftWind, S::DistantBell, S::Birdsong }, 3 }, { { S::SoftWind, S::Chimes, S::DistantBell }, 3 },
       { { S::SoftWind, S::DistantBell, S::Birdsong }, 3 }, {} },                                                                    // Dragon's Peak
 };
-constexpr const char* names[] = { "Soft wind", "Distant bell", "Birdsong", "Fountain shimmer", "Chimes", "Harp glint", "Leaves", "Brook" };
+constexpr const char* names[] = { "Soft wind", "Distant bell", "Birdsong", "Fountain shimmer", "Chimes", "Harp glint", "Leaves", "Brook", "Breath of air" };
 // A major pentatonic (C D E G A), the notes the bells, chimes and harp choose from.
 constexpr float pentatonic[] = { 1.0f, 1.1225f, 1.2599f, 1.4983f, 1.6818f };
 inline float unit(std::uint32_t h, int shift) noexcept { return static_cast<float>((h >> shift) & 0xffu) / 255.0f; }
 }
+
+bool Atmosphere::breathRecorded() noexcept { return lswb::samples::Bank::get().instrument("breath") != nullptr; }
 
 const char* atmosSoundName(AtmosSound s) noexcept { return names[std::clamp(static_cast<int>(s), 0, static_cast<int>(AtmosSound::Count) - 1)]; }
 
@@ -87,6 +90,24 @@ void Atmosphere::start(AtmosSound sound, std::uint32_t h, float) noexcept {
         case S::HarpGlint: v.length = 2.2; v.count = 3 + static_cast<int>(unit(h, 24) * 2.0f); v.state = 523.25f * note; break;
         case S::Leaves: v.length = 0.8 + 0.6 * unit(h, 24); bp(v.filter, 3800 * v.pitch, 0.6f); v.gain *= 0.8f; break;
         case S::Brook: v.length = 1.6; bp(v.filter, 900 * v.pitch, 0.9f); break;
+        case S::Breath: {
+            // A recorded breath (one of the takes, by the hash), read a little faster (a
+            // few semitones up: lighter, airier), high-passed to its air.
+            v.data = nullptr;
+            if (const auto* inst = lswb::samples::Bank::get().instrument("breath"))
+                if (const auto* z = inst->find(60, 0.5f, unit(h, 24))) {
+                    v.data = z->data;
+                    v.dataLength = z->length;
+                    v.readPos = 0;
+                    v.readStep = double(inst->rate) / sr * (1.15 + 0.2 * unit(h, 8));
+                    v.length = double(z->length) / (v.readStep * sr);
+                }
+            if (v.data == nullptr) v.length = 2.0 + unit(h, 24);   // the synthesised gust
+            bp(v.filter, 1800, 0.7f);
+            bp(v.filter2, 7000, 0.7f);
+            v.gain *= 0.55f;
+            break;
+        }
         default: v.active = false; break;
     }
 }
@@ -159,6 +180,22 @@ float Atmosphere::render(Voice& v) noexcept {
             break;
         }
         case S::Leaves: y = v.filter.bandPass(v.random.bipolar()) * bell * bell * 0.3f; break;
+        case S::Breath: {
+            float x = 0;
+            if (v.data != nullptr) {
+                const auto i = static_cast<int>(v.readPos);
+                if (i + 1 < v.dataLength) {
+                    const float f = static_cast<float>(v.readPos - i);
+                    x = (v.data[i] * (1.0f - f) + v.data[i + 1] * f) * (1.0f / 32768.0f) * 1.6f;
+                }
+                v.readPos += v.readStep;
+            } else {
+                x = v.random.bipolar() * 0.35f * bell * bell;   // a gust of air
+            }
+            // Only the air: above ~1.8 kHz, gently rolled off above 7 kHz.
+            y = v.filter2.low(v.filter.highPass(x));
+            break;
+        }
         case S::Brook: {
             v.filter.set(700.0 + 500.0 * std::sin(twoPi * 3.0f * t + v.pan), sr, 0.8f);
             y = v.filter.bandPass(v.random.bipolar()) * bell * 0.35f;

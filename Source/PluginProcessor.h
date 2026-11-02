@@ -74,6 +74,8 @@ private:
     std::atomic<float>* instAttack = nullptr;
     std::atomic<float>* instRelease = nullptr;
     std::atomic<float>* instCharacter = nullptr;
+    std::atomic<float>* instVowel = nullptr;
+    std::atomic<float>* instEnsemble = nullptr;
     std::atomic<float>* instLevel = nullptr;
     std::atomic<float>* instOctave = nullptr;
     std::atomic<float>* instLock = nullptr;

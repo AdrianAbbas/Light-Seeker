@@ -44,13 +44,16 @@ LightSeekerProcessor::LightSeekerProcessor(bool instrumentEdition)
         instAttack = parameters.getRawParameterValue(dc::ids::instAttack);
         instRelease = parameters.getRawParameterValue(dc::ids::instRelease);
         instCharacter = parameters.getRawParameterValue(dc::ids::instCharacter);
+        instVowel = parameters.getRawParameterValue(dc::ids::instVowel);
+        instEnsemble = parameters.getRawParameterValue(dc::ids::instEnsemble);
         instLevel = parameters.getRawParameterValue(dc::ids::instLevel);
         instOctave = parameters.getRawParameterValue(dc::ids::instOctave);
         instLock = parameters.getRawParameterValue(dc::ids::instLock);
         synth = std::make_unique<ls::inst::Synth>();
-        // The developer's recordings load on a background thread (once per process).
-        lswb::samples::Bank::get().load();
     }
+    // The developer's recordings load on a background thread (once per process): the
+    // instrument's, or in the effect only what its Atmosphere layer plays (the breaths).
+    lswb::samples::Bank::get().load();
     markPresetBaseline();   // a new instance is "Init", unmodified
 }
 
@@ -363,9 +366,9 @@ void LightSeekerProcessor::prepareToPlay(double sampleRate, int) {
     neutralRamp.prepare(0.03, rate);
     neutralRamp.value = intensity->load() <= neutralIntensity ? 1.0f : 0.0f;
     setLatencySamples(latency);
+    // The recordings: give the background load a moment so the first notes are sampled.
+    lswb::samples::Bank::get().waitUntilLoaded(instrumentMode ? 1500 : 300);
     if (instrumentMode) {
-        // The recordings: give the background load a moment so the first notes are sampled.
-        lswb::samples::Bank::get().waitUntilLoaded(1500);
         synth->prepare(rate);
         uiMidiScratch.ensureSize(2048);
     }
@@ -440,6 +443,8 @@ void LightSeekerProcessor::renderInstrument(juce::AudioBuffer<float>& buffer, in
     m.attack = finiteOr(instAttack->load(), 0.5f);
     m.release = finiteOr(instRelease->load(), 0.5f);
     m.character = finiteOr(instCharacter->load(), 0.5f);
+    m.vowel = finiteOr(instVowel->load(), 0.5f);
+    m.ensemble = finiteOr(instEnsemble->load(), 0.5f);
     m.levelDb = finiteOr(instLevel->load(), 0.0f);
     m.octave = juce::jlimit(-2, 2, static_cast<int>(std::lround(finiteOr(instOctave->load(), 0.0f))));
     synth->setMacros(m);

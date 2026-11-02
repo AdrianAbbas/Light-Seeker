@@ -48,6 +48,7 @@ WORLDBUILDER's sound engine (brass, bowed strings, voices, plucked strings, bell
 | **Octave** | Shifts the keyboard by up to two octaves. |
 | **Tone, Attack, Release** | Brightness, how the notes start (slower bows and breaths; softer mallets and fingers) and how long they ring after the key. 0 % = as designed. |
 | **Character** | Each instrument's own: the trumpets' piccolo, the strings' shimmer octave, the choir's descant, the organ's trumpet stop, how far the harp's glissando climbs, the crystal bells' shimmer... Its name changes with the instrument. |
+| **Vowel, Ensemble** | The voice instruments (the choirs, the chord pad's Voices). Vowel morphs between the sung vowels (mmm, ooh, oh, aah, ee: two either way from the instrument's own at 50 %). Ensemble brings the singers in one by one: one voice at 0 %, the instrument's own choir at 50 %, eight singers (each its own take, detune, timing and place in the stereo field) at 100 %. Dimmed on the other instruments. |
 | **Level** | The instrument's level (all instruments are level-matched as designed). |
 | **Intensity** | How much of the place's space: 0 % is the instrument dry. |
 | **Bend, Mod, Sustain** | Pitch bend (a whole tone), modulation (vibrato; tremolo on struck and plucked instruments), the sustain pedal. Your MIDI keyboard's wheels and pedal move them. |

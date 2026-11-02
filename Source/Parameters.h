@@ -48,6 +48,10 @@ inline constexpr const char* instCharacter = "instCharacter";
 inline constexpr const char* instLevel = "instLevel";
 inline constexpr const char* instOctave = "instOctave";
 inline constexpr const char* instLock = "instLock";
+// The recordings update: the voice instruments' Vowel and Ensemble macros (added last, so
+// sessions saved before them load unchanged).
+inline constexpr const char* instVowel = "instVowel";
+inline constexpr const char* instEnsemble = "instEnsemble";
 inline juce::String advanced(std::size_t index) { return juce::String("adv_") + moduleSpecs[index].id; }
 }
 
@@ -175,6 +179,13 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
         layout.add(std::make_unique<juce::AudioParameterInt>(juce::ParameterID { ids::instOctave, 1 }, "Instrument Octave", -2, 2, 0,
             juce::AudioParameterIntAttributes().withStringFromValueFunction([](int v, int) { return (v > 0 ? "+" : "") + juce::String(v); })));
         layout.add(std::make_unique<juce::AudioParameterBool>(juce::ParameterID { ids::instLock, 1 }, "Lock Instrument", false));
+        // The voice instruments (choirs): Vowel morphs between the sung vowels (mmm, ooh,
+        // oh, aah, ee; two either way from the instrument's own), Ensemble brings in the
+        // singers (one voice at 0, the instrument's own choir at 50 %, eight at 100 %).
+        layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { ids::instVowel, 1 }, "Instrument Vowel",
+                                                               juce::NormalisableRange<float>(0.0f, 1.0f), 0.5f, macroText));
+        layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { ids::instEnsemble, 1 }, "Instrument Ensemble",
+                                                               juce::NormalisableRange<float>(0.0f, 1.0f), 0.5f, macroText));
     }
     return layout;
 }

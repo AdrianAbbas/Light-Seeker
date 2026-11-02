@@ -184,7 +184,10 @@ installed and validated" (two auval PASS lines).
 7. **Controls.** Velocity, the sustain pedal, the pitch-bend wheel (a whole tone) and the mod
    wheel (vibrato; tremolo on bells and plucked instruments) from your keyboard and on the
    panel. Tone, Attack, Release and Character change the instrument as their names say (the
-   Character's name changes with the instrument). Octave shifts the keyboard.
+   Character's name changes with the instrument). Octave shifts the keyboard. On the choirs
+   (Angelic, Radiant, Epic) and the Orchestral Chord Pad: Vowel sweeps mmm, ooh, oh, aah, ee
+   (turn it while holding a chord: smooth, no click); Ensemble from one singer (0 %) to a
+   wide choir of eight (100 %). Both are dimmed on the other instruments.
 8. **Presets** (the preset menu): 31 instruments in their places, two dry or gentle ones,
    eight "carried elsewhere" (e.g. "Celesta in the Nave": the celesta in the Nave of Light's
    space, locked), and the journeys.

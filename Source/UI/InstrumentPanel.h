@@ -1,7 +1,7 @@
 #pragma once
 // The instrument edition's panel (Direction Update 1), under the world: the instrument
 // of the place (its name and family, choose another, Lock instrument), its macros (Tone,
-// Attack, Release and its own Character), Level, Octave and the place's Intensity, the
+// Attack, Release and its own Character; Vowel and Ensemble on the voices), Level, Octave and the place's Intensity, the
 // pitch-bend and mod wheels, the sustain pedal and an on-screen keyboard lit by the notes
 // the host plays. Light styled: pearl and ivory, gold value tracks.
 //
@@ -25,6 +25,8 @@ public:
     // Tests.
     juce::String instrumentName() const { return name.getText(); }
     juce::String characterLabel() const { return macroLabels[3].getText(); }
+    bool voiceMacrosEnabled() const { return macros[4].isEnabled() && macros[5].isEnabled(); }
+    juce::Slider& macroSlider(int k) { return macros[std::size_t(k)]; }
     juce::Button& lockButton() { return lock; }
     juce::Button& nextButton() { return next; }
     juce::Button& previousButton() { return previous; }
@@ -50,9 +52,9 @@ private:
     juce::TextButton previous, next, choose { "Instruments" };
     juce::ToggleButton lock { "Lock instrument" };
     std::unique_ptr<juce::ButtonParameterAttachment> lockAttachment;
-    std::array<juce::Slider, 6> macros;      // Tone, Attack, Release, Character, Level, Intensity
-    std::array<juce::Label, 6> macroLabels;
-    std::array<std::unique_ptr<juce::SliderParameterAttachment>, 6> macroAttachments;
+    std::array<juce::Slider, 8> macros;      // Tone, Attack, Release, Character, Vowel, Ensemble, Level, Intensity
+    std::array<juce::Label, 8> macroLabels;
+    std::array<std::unique_ptr<juce::SliderParameterAttachment>, 8> macroAttachments;
     juce::ComboBox octave;
     juce::Label octaveLabel;
     std::unique_ptr<juce::ComboBoxParameterAttachment> octaveAttachment;

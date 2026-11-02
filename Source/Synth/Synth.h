@@ -36,7 +36,18 @@ enum class Engine : uint8_t {
     Strings,   // StringVoice: model StringSize, p0 players, p1 spread (cents), p2 bow position, p3 bow noise
     Sample,    // the developer's recordings: sample (bank id), p0 start skip (s), p1 decay T60 (s, 0 none), p2 evenness
     Organ,     // pipe organ: p0..p5 the ranks 16', 8', 4', 2 2/3', 2', mixture; bright = chiff
+    Voice,     // the developer's voice (the recordings update): the vowel sweeps morphed by the
+               // Vowel macro, an ensemble of up to eight singers from the 5-take choir stacks
+               // (Ensemble macro). p0 vowel (0 mmm, 1 ooh, 2 oh, 3 aah, 4 ee), p1 singers
+               // (1..8), p2 velocity cap (0: none; 0.45 keeps to the soft takes), p3 detune
+               // (cents, the ensemble's spread), p4 width, p5 timing spread (ms)
 };
+
+// The voice's recorded sets (tools/sample-prep): one sweep per vowel, three choir stacks.
+inline constexpr int vowelCount = 5;
+inline constexpr std::array<const char*, vowelCount> vowelSweeps { "voice-mm", "voice-ooh", "voice-oh", "voice-aah", "voice-ee" };
+inline constexpr int stackCount = 3;
+inline constexpr std::array<const char*, stackCount> vowelStacks { "choir-mm", "choir-ooh", "choir-aah" };
 
 // Mode sets for Bell and Bowed.
 enum Modes : int { ModesChime, ModesGlass, ModesGlock, ModesCelesta, ModesBell, ModesGlassHarp, ModesHarmonic, ModesCrystal, ModesCount };
@@ -69,6 +80,11 @@ struct Layer {
     // between them, and the scale they climb (semitones below the note, nearest last).
     int run = 0;
     float runMs = 0;
+    // A crossfade by key (equal power over `fadeSpan` semitones from `fadeKey`): a layer
+    // that fades out above it (`fadeIn` false: the recordings at the top of their range)
+    // or in (true: the synthesis that carries on above them). 0: none.
+    float fadeKey = 0, fadeSpan = 12;
+    bool fadeIn = false;
 };
 
 // How the Character macro acts: the layers marked `character`, the shimmer, or the chorus.
@@ -78,7 +94,7 @@ struct Patch {
     const char* name = "";
     const char* family = "";
     const char* character = "Character";   // the macro's name on the panel
-    std::array<Layer, 4> layers {};
+    std::array<Layer, 8> layers {};
     int layerCount = 0;
     float trimDb = 0;            // level matching (InstrumentTrims.h, calibrated)
     float standInTrimDb = 0;     // the same without the recordings (their stand-ins play)
@@ -100,10 +116,13 @@ void instrumentPlace(int index, int& location, int& sub) noexcept;
 // Whether a patch's recordings (if it uses any) are loaded.
 bool patchSampled(const Patch&) noexcept;
 bool patchUsesRecordings(const Patch&) noexcept;
+// Whether the Vowel and Ensemble macros do anything on this instrument (a voice or choir).
+bool patchHasVoice(const Patch&) noexcept;
 
 // The instrument macros (0.5 = as designed) and the octave shift.
 struct Macros {
     float tone = 0.5f, attack = 0.5f, release = 0.5f, character = 0.5f;
+    float vowel = 0.5f, ensemble = 0.5f;   // the voice instruments (as designed at 0.5)
     int octave = 0;
     float levelDb = 0;
 };
@@ -111,7 +130,7 @@ struct Macros {
 class Synth {
 public:
     static constexpr int maxVoices = 48;
-    static constexpr int maxLayers = 4;
+    static constexpr int maxLayers = 8;
     Synth();
     ~Synth();
     void prepare(double sampleRate);
