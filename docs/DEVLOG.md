@@ -1342,7 +1342,7 @@ in a 30 fps frame" (49 ms while eight shards shared four cores); alone it measur
 passes (the editor group: 83 passed, 0 failed). No sound test regressed (the instrument and
 instruments groups, recorded stand-ins, strength, levels, locations, travel). New: the
 `glissando` checks (in the `instrument` group, so also on macOS) and the `window` checks (in
-the `editor` group).
+the `editor` group). CI: see the next line once the final push has run.
 
 ### Handoff: what to look at in GarageBand
 
