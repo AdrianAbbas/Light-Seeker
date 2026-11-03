@@ -9,6 +9,7 @@
 // the piano (under the Celesta). Each has a synthesised stand-in for builds without them.
 // trimDb comes from `LightSeekerTests --calibrate-instruments` (a held chord's loudness).
 #include "Synth.h"
+#include <string_view>
 #include "InstrumentTrims.h"
 #include "World/Locations.h"
 #include <algorithm>
@@ -146,6 +147,15 @@ Layer character(Layer l) {
     return l;
 }
 
+// Mix and Punch: a brass (or reed) layer that cuts through: the attack's bite, 2-4 kHz
+// presence, and more velocity response (soft notes softer, hard ones harder and brighter).
+Layer hit(Layer l, float bite, float presence) {
+    l.bite = bite;
+    l.presence = presence;
+    l.velocityGain = std::max(l.velocityGain, 0.9f);
+    return l;
+}
+
 Layer shift(Layer l, float semis, float cents = 0.0f, float pan = 0.0f) {
     l.transpose = semis;
     l.cents = cents;
@@ -180,14 +190,17 @@ std::array<Patch, instrumentCount> build() {
 
     // ---- Celestial Citadel: radiant brass and strings -----------------------------------
     {   // Gates of Dawn: bright fanfare trumpets (a section of two, a piccolo above).
-        auto a = brass(1650.0f, 0.88f);
+        // Mix and Punch: a quicker rise (6-8 ms), the bite of a hard-blown attack and 2-4 kHz
+        // presence, more velocity response: they cut through a mix and hit.
+        auto a = hit(brass(1650.0f, 0.88f), 0.8f, 0.35f);
         a.p[3] = 6.0f;
         a.pan = -0.2f;
-        a.attack = 0.012f;
+        a.attack = 0.006f;
         a.lowpass = 14000;
-        auto b = shift(brass(1600.0f, 0.82f, -4.0f), 0.0f, 9.0f, 0.3f);
-        b.attack = 0.016f;
-        auto c = character(shift(brass(1700.0f, 0.7f, -9.0f), 12.0f, -4.0f, 0.1f));
+        auto b = hit(shift(brass(1600.0f, 0.82f, -4.0f), 0.0f, 9.0f, 0.3f), 0.8f, 0.35f);
+        b.attack = 0.008f;
+        auto c = hit(character(shift(brass(1700.0f, 0.7f, -9.0f), 12.0f, -4.0f, 0.1f)), 0.6f, 0.25f);
+        c.attack = 0.01f;
         Builder p("Fanfare Trumpets", "Radiant brass and strings", "Piccolo");
         p.add(a).add(b).add(c).air(3.0f).poly(12).trim(0.0f);
         put(p);
@@ -232,19 +245,21 @@ std::array<Patch, instrumentCount> build() {
         put(p);
     }
     {   // Spire Summit: a soaring solo horn.
-        auto a = brass(480.0f, 0.22f);
+        // Mix and Punch: it speaks in 35-45 ms (was 90-110), with bite and presence (the
+        // low-pass opened to let the 3 kHz band through), still round and majestic.
+        auto a = hit(brass(480.0f, 0.22f), 0.6f, 0.3f);
         a.p[1] = 1.0f;
         a.p[2] = 0.05f;
-        a.attack = 0.09f;
+        a.attack = 0.035f;
         a.release = 0.6f;
         a.vibrato = 0.07f;
         a.vibratoDelay = 0.45f;
         a.vibratoHz = 5.0f;
-        a.lowpass = 3200;
-        auto b = character(shift(brass(470.0f, 0.2f, -7.0f), 0.0f, 7.0f, 0.35f));
-        b.attack = 0.11f;
+        a.lowpass = 4800;
+        auto b = hit(character(shift(brass(470.0f, 0.2f, -7.0f), 0.0f, 7.0f, 0.35f)), 0.5f, 0.25f);
+        b.attack = 0.045f;
         b.release = 0.6f;
-        b.lowpass = 3200;
+        b.lowpass = 4200;
         Builder p("Soaring Horn", "Radiant brass and strings", "Second horn");
         p.add(a).add(b).air(1.5f).poly(10).trim(0.0f);
         put(p);
@@ -444,9 +459,10 @@ std::array<Patch, instrumentCount> build() {
         a.release = 0.25f;
         a.velocityGain = 0.0f;
         a.velocityTone = 0.0f;
-        auto b = character(layer(Engine::Reed, -9.0f));
+        // The trumpet stop (Mix and Punch): it speaks first (25 ms), with bite and presence.
+        auto b = hit(character(layer(Engine::Reed, -9.0f)), 0.6f, 0.3f);
         b.p = { 3500.0f, 1400.0f, 0.02f, 4.0f, 0, 0 };
-        b.attack = 0.05f;
+        b.attack = 0.025f;
         b.release = 0.25f;
         b.velocityGain = 0.0f;
         b.velocityTone = 0.0f;
@@ -645,17 +661,18 @@ std::array<Patch, instrumentCount> build() {
 
     // ---- Dragon's Peak: epic, heroic ----------------------------------------------------
     {   // Eyrie: heroic horns (a section of three, an octave below as the character).
-        auto a = shift(brass(800.0f, 0.62f), 0.0f, -4.0f, -0.35f);
+        // Mix and Punch: a quicker rise (12-20 ms), bite and presence.
+        auto a = hit(shift(brass(800.0f, 0.62f), 0.0f, -4.0f, -0.35f), 0.7f, 0.3f);
         a.p[3] = 5.0f;
-        a.attack = 0.03f;
+        a.attack = 0.012f;
         a.release = 0.3f;
         a.lowpass = 9000.0f;
-        auto b = shift(brass(780.0f, 0.62f, -2.0f), 0.0f, 7.0f, 0.35f);
-        b.attack = 0.035f;
+        auto b = hit(shift(brass(780.0f, 0.62f, -2.0f), 0.0f, 7.0f, 0.35f), 0.7f, 0.3f);
+        b.attack = 0.015f;
         b.release = 0.3f;
         b.lowpass = 9000.0f;
-        auto c = character(shift(brass(600.0f, 0.45f, -6.0f), -12.0f));
-        c.attack = 0.04f;
+        auto c = hit(character(shift(brass(600.0f, 0.45f, -6.0f), -12.0f)), 0.4f, 0.0f);
+        c.attack = 0.02f;
         c.lowKey = 24;
         Builder p("Heroic Horns", "Epic, heroic", "Depth");
         p.add(a).add(b).add(c).air(2.0f).poly(12).trim(0.0f);
@@ -703,12 +720,14 @@ std::array<Patch, instrumentCount> build() {
         a.attack = 0.25f;
         auto b = standIn(shift(choir(2.5f, 0.6f, -9.0f), 12.0f, 3.0f, 0.2f));
         b.attack = 0.3f;
-        auto c = brass(800.0f, 0.5f, -9.0f);
-        c.attack = 0.35f;   // the brass swells with the choir (the Eyrie's horns strike)
+        // Mix and Punch: the brass strikes (50-70 ms, with bite and presence, 2 dB louder)
+        // and the choir swells in under it (it used to swell with the choir, 350 ms).
+        auto c = hit(brass(800.0f, 0.5f, -7.0f), 0.6f, 0.3f);
+        c.attack = 0.05f;
         c.p[3] = 7.0f;
         c.release = 0.6f;
-        auto d = character(shift(brass(650.0f, 0.4f, -9.0f), -12.0f));
-        d.attack = 0.35f;
+        auto d = hit(character(shift(brass(650.0f, 0.4f, -9.0f), -12.0f)), 0.4f, 0.0f);
+        d.attack = 0.07f;
         d.lowKey = 24;
         Builder p("Epic Choir and Brass", "Epic, heroic", "Brass");
         p.add(v).add(up).add(drone).add(a).add(b).add(c).add(d).air(4.5f).chorus(0.1f).trim(0.0f);
@@ -718,6 +737,50 @@ std::array<Patch, instrumentCount> build() {
         all[i].trimDb = instrumentTrims[i];
         all[i].standInTrimDb = standInTrims[i];
     }
+    // Mix and Punch. Punch (dB of gain on hit at Punch 50 %): high on the brass, medium on
+    // plucks and harps, low on bowed strings, struck bells and winds, none on pads and
+    // choirs. Reverb (how much of the place's reverbs the instrument takes): the
+    // instruments mostly played in a mix (brass, strings, plucks, harps, guitars) sit a
+    // little drier by default; MIX Reverb at 150 % brings back the place's whole space. The
+    // brass also puts its dry hit first: the reverbs start 20 ms later and dip under its
+    // attacks.
+    struct MixDefaults { const char* name; float punchDb, space, preDelayMs, duck; };
+    static constexpr MixDefaults defaults[] = {
+        { "Fanfare Trumpets", 8.0f, 0.7f, 20.0f, 0.3f },
+        { "Shimmering Strings", 1.5f, 0.75f, 0.0f, 0.0f },
+        { "Orchestral Chord Pad", 0.0f, 1.0f, 0.0f, 0.0f },
+        { "Soaring Horn", 6.0f, 0.75f, 20.0f, 0.25f },
+        { "Rising Harp Glissando", 3.5f, 0.75f, 0.0f, 0.0f },
+        { "Angelic Choir", 0.0f, 1.0f, 0.0f, 0.0f },
+        { "Wind Chimes and Bells", 2.0f, 1.0f, 0.0f, 0.0f },
+        { "Glass Harp", 1.0f, 1.0f, 0.0f, 0.0f },
+        { "Elven Lyre", 3.5f, 0.75f, 0.0f, 0.0f },
+        { "Airy Flute", 1.5f, 1.0f, 0.0f, 0.0f },
+        { "Crystal Bells", 2.0f, 1.0f, 0.0f, 0.0f },
+        { "Glass Harmonica Pad", 0.0f, 1.0f, 0.0f, 0.0f },
+        { "Celesta", 2.5f, 1.0f, 0.0f, 0.0f },
+        { "Warm Acoustic Guitar", 3.5f, 0.7f, 0.0f, 0.0f },
+        { "Bouncy Kalimba", 3.5f, 0.8f, 0.0f, 0.0f },
+        { "Pastoral Oboe", 1.5f, 1.0f, 0.0f, 0.0f },
+        { "Grand Organ", 2.5f, 1.0f, 10.0f, 0.0f },
+        { "Radiant Choir", 0.0f, 1.0f, 0.0f, 0.0f },
+        { "Celesta and Harp", 3.0f, 0.8f, 0.0f, 0.0f },
+        { "Cloud Pad", 0.0f, 1.0f, 0.0f, 0.0f },
+        { "Breathy Wind Flute", 1.0f, 1.0f, 0.0f, 0.0f },
+        { "Shimmering Pluck", 3.5f, 0.75f, 0.0f, 0.0f },
+        { "Concert Harp", 3.5f, 0.75f, 0.0f, 0.0f },
+        { "Music Box", 2.0f, 1.0f, 0.0f, 0.0f },
+        { "Harpsichord", 3.0f, 0.8f, 0.0f, 0.0f },
+        { "Bouncy Pizzicato", 3.5f, 0.75f, 0.0f, 0.0f },
+        { "Twinkling Glockenspiel", 2.0f, 1.0f, 0.0f, 0.0f },
+        { "Fairy Harp", 3.5f, 0.75f, 0.0f, 0.0f },
+        { "Heroic Horns", 8.0f, 0.7f, 20.0f, 0.3f },
+        { "Warm Strings", 1.5f, 0.75f, 0.0f, 0.0f },
+        { "Epic Choir and Brass", 4.0f, 0.85f, 15.0f, 0.2f },
+    };
+    for (auto& p : all)
+        for (const auto& d : defaults)
+            if (std::string_view(p.name) == d.name) { p.punchDb = d.punchDb; p.space = d.space; p.spacePreDelayMs = d.preDelayMs; p.spaceDuck = d.duck; }
     for (auto& p : all) {
         p.sustaining = !p.tremoloMod;
         for (int k = 0; k < p.layerCount; ++k)

@@ -139,6 +139,13 @@ usage limit or a compaction) continues from the first unticked line. Push to `ma
 - [x] S3. Preview note for instruments (a short phrase while held, sensible level, never while the host plays); push `[skip ci]`
 - [x] S4. Tests (`search` group: findable by name and 3+ tags, typos, Enter = by hand (state compare), keyboard), snapshots in `docs/snapshots/`, README/manual, DEVLOG handoff; final push without `[skip ci]`, CI green
 
+**Mix and Punch: sitting in a song** (see "Mix and Punch" below; Dungeon-Crawler had no MIX/Punch session to copy, designed here)
+
+- [ ] M1. MIX parameters (both plug-ins, added last): Reverb, Echoes, Modulation, Character, Atmosphere (0-150 %, 100 % = as designed; Shimmer moved there unchanged), Reverb Low Cut, Reverb Pre-delay, Reverb Duck (0 % = off); Atmosphere On; engine and synth scale each group, smoothed, level-matched; old sessions unchanged; push `[skip ci]`
+- [ ] M2. MIX section in the FX's main controls and on the instrument panel (collapsible, ivory/gold); Atmosphere On/Level/Density in the Advanced tab; push `[skip ci]`
+- [ ] M3. Punch (gain on hit, per voice, Punch + Punch Time, velocity-sensitive, click-free, limited) with per-instrument defaults; brass attack/bite/presence pass (Fanfare Trumpets, Soaring Horn, Heroic Horns, Epic Choir and Brass, Grand Organ's trumpet); default reverb re-check on mix instruments; push `[skip ci]`
+- [ ] M4. Tests (`mix` group), listening renders (mini-song before/after, brass Punch 0 vs default), DEVLOG handoff; final push without `[skip ci]`, CI green
+
 ---
 
 ## Lessons carried over from DUNGEON CRAWLER (read first)

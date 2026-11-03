@@ -14,7 +14,7 @@ juce::AudioProcessor::BusesProperties LightSeekerProcessor::busesFor(bool instru
 LightSeekerProcessor::LightSeekerProcessor(bool instrumentEdition)
     : AudioProcessor(busesFor(instrumentEdition)),
       instrumentMode(instrumentEdition),
-      parameters(*this, nullptr, "LIGHT_SEEKER", dc::createParameterLayout([this] { return locationIndex(); }, instrumentEdition)) {
+      parameters(*this, nullptr, "LIGHT_SEEKER", dc::createParameterLayout([this] { return locationIndex(); }, instrumentEdition, [this] { return punchDesignDb(); })) {
     location = parameters.getRawParameterValue(dc::ids::location);
     subLocation = parameters.getRawParameterValue(dc::ids::subLocation);
     intensity = parameters.getRawParameterValue(dc::ids::intensity);
@@ -40,7 +40,18 @@ LightSeekerProcessor::LightSeekerProcessor(bool instrumentEdition)
     atmosSeed = parameters.getRawParameterValue(dc::ids::atmosSeed);
     quality = parameters.getRawParameterValue(dc::ids::quality);
     shimmer = parameters.getRawParameterValue(dc::ids::shimmer);
+    mixReverb = parameters.getRawParameterValue(dc::ids::mixReverb);
+    mixEchoes = parameters.getRawParameterValue(dc::ids::mixEchoes);
+    mixModulation = parameters.getRawParameterValue(dc::ids::mixModulation);
+    mixCharacter = parameters.getRawParameterValue(dc::ids::mixCharacter);
+    mixAtmosphere = parameters.getRawParameterValue(dc::ids::mixAtmosphere);
+    mixLowCut = parameters.getRawParameterValue(dc::ids::mixLowCut);
+    mixPreDelay = parameters.getRawParameterValue(dc::ids::mixPreDelay);
+    mixDuck = parameters.getRawParameterValue(dc::ids::mixDuck);
+    atmosOn = parameters.getRawParameterValue(dc::ids::atmosOn);
     if (instrumentMode) {
+        punch = parameters.getRawParameterValue(dc::ids::punch);
+        punchTime = parameters.getRawParameterValue(dc::ids::punchTime);
         instTone = parameters.getRawParameterValue(dc::ids::instTone);
         instAttack = parameters.getRawParameterValue(dc::ids::instAttack);
         instRelease = parameters.getRawParameterValue(dc::ids::instRelease);
@@ -57,6 +68,10 @@ LightSeekerProcessor::LightSeekerProcessor(bool instrumentEdition)
     // instrument's, or in the effect only what its Atmosphere layer plays (the breaths).
     lswb::samples::Bank::get().load();
     markPresetBaseline();   // a new instance is "Init", unmodified
+}
+
+float LightSeekerProcessor::punchDesignDb() const noexcept {
+    return instrumentMode ? ls::inst::patch(shownInstrument.load(std::memory_order_relaxed)).punchDb : 0.0f;
 }
 
 void LightSeekerProcessor::setInstrumentLock(bool on) {
@@ -515,6 +530,9 @@ void LightSeekerProcessor::renderInstrument(juce::AudioBuffer<float>& buffer, in
     m.levelDb = finiteOr(instLevel->load(), 0.0f);
     m.octave = juce::jlimit(-2, 2, static_cast<int>(std::lround(finiteOr(instOctave->load(), 0.0f))));
     m.shimmer = juce::jlimit(0.0f, dc::dsp::shimmerMax, finiteOr(shimmer->load(), 1.0f));
+    m.modulation = juce::jlimit(0.0f, dc::mixMax, finiteOr(mixModulation->load(), 1.0f));
+    m.punch = juce::jlimit(0.0f, 1.0f, finiteOr(punch->load(), 0.5f));
+    m.punchSeconds = juce::jlimit(0.02f, 0.5f, finiteOr(punchTime->load(), 120.0f) * 0.001f);
     synth->setMacros(m);
 
     // The on-screen keyboard, wheels and pedal join at the start of the block.
@@ -637,6 +655,25 @@ void LightSeekerProcessor::process(juce::AudioBuffer<float>& buffer, bool forced
     steered.store(steering, std::memory_order_relaxed);
     controls.intensity = amount;
     controls.shimmer = juce::jlimit(0.0f, dc::dsp::shimmerMax, finiteOr(shimmer->load(), 1.0f));
+    // Mix: the MIX groups and the reverb helpers. The instrument adds its own: how much
+    // of the place's reverbs it takes, and the pre-delay and duck that put its dry hit first.
+    {
+        auto& mx = controls.mix;
+        mx.reverb = juce::jlimit(0.0f, dc::mixMax, finiteOr(mixReverb->load(), 1.0f));
+        mx.echoes = juce::jlimit(0.0f, dc::mixMax, finiteOr(mixEchoes->load(), 1.0f));
+        mx.modulation = juce::jlimit(0.0f, dc::mixMax, finiteOr(mixModulation->load(), 1.0f));
+        mx.character = juce::jlimit(0.0f, dc::mixMax, finiteOr(mixCharacter->load(), 1.0f));
+        const float cut = finiteOr(mixLowCut->load(), 0.0f);
+        mx.lowCutHz = cut > dc::lowCutOff ? juce::jlimit(80.0f, dc::lowCutMax, cut) : 0.0f;
+        mx.preDelayMs = juce::jlimit(dc::preDelayMin, dc::preDelayMax, finiteOr(mixPreDelay->load(), 0.0f));
+        mx.duck = juce::jlimit(0.0f, 1.0f, finiteOr(mixDuck->load(), 0.0f));
+        if (instrumentMode) {
+            const auto& patch = ls::inst::patch(synth->patchIndex());
+            mx.reverb = juce::jlimit(0.0f, dc::mixMax, mx.reverb * patch.space);
+            mx.preDelayMs = juce::jlimit(dc::preDelayMin, dc::preDelayMax, mx.preDelayMs + patch.spacePreDelayMs);
+            mx.duck = 1.0f - (1.0f - mx.duck) * (1.0f - juce::jlimit(0.0f, 1.0f, patch.spaceDuck));
+        }
+    }
     for (std::size_t m = 0; m < macros.size(); ++m) controls.macros[m] = juce::jlimit(0.0f, 1.0f, finiteOr(macros[m]->load(), 0.5f));
     for (std::size_t i = 0; i < advanced.size(); ++i) controls.advanced[i] = finiteOr(advanced[i]->load(), 0);
     const auto sync = static_cast<std::size_t>(juce::jlimit(0, static_cast<int>(dc::travelSyncBeats.size()) - 1,
@@ -653,7 +690,9 @@ void LightSeekerProcessor::process(juce::AudioBuffer<float>& buffer, bool forced
     const float bypassTarget = forcedBypass || bypass->load() >= 0.5f ? 1.0f : 0.0f;
     const float neutralTarget = amount <= neutralIntensity ? 1.0f : 0.0f;
 
-    const float atmosAmount = juce::jlimit(0.0f, 1.0f, finiteOr(atmosLevel->load(), 0));
+    // The Atmosphere: its level times the MIX Atmosphere control, while it is on.
+    const float atmosAmount = atmosOn->load() < 0.5f ? 0.0f : juce::jlimit(0.0f, 1.0f, finiteOr(atmosLevel->load(), 0));
+    const float atmosMix = juce::jlimit(0.0f, dc::mixMax, finiteOr(mixAtmosphere->load(), 1.0f));
     const float atmosDense = juce::jlimit(0.0f, 1.0f, finiteOr(atmosDensity->load(), 0.35f));
     const int atmosSeedValue = juce::jlimit(1, 999, static_cast<int>(std::lround(finiteOr(atmosSeed->load(), 1))));
     const double beatsPerSample = bpm / 60.0 / rate;
@@ -680,7 +719,7 @@ void LightSeekerProcessor::process(juce::AudioBuffer<float>& buffer, bool forced
         // The Atmosphere joins the wet signal (Mix, Intensity 0 and Bypass remove it too).
         if (atmosAmount > 0.0f || atmosphere.activeVoices() > 0)
             atmosphere.process(l, r, n, beats + beatsPerSample * start, beatsPerSample, world.destination(), world.destinationSub(),
-                               atmosAmount, atmosDense, atmosSeedValue, dryAligned[0].data(), dryAligned[1].data());
+                               atmosAmount, atmosDense, atmosSeedValue, dryAligned[0].data(), dryAligned[1].data(), atmosMix);
         for (int i = 0; i < n; ++i) {
             const auto k = static_cast<std::size_t>(i);
             const float m = wetMix.next(), og = outputGain.next(), bypassed = bypassRamp.next(bypassTarget);
@@ -702,6 +741,7 @@ void LightSeekerProcessor::process(juce::AudioBuffer<float>& buffer, bool forced
     inputLevel.store(juce::jmax(inPeak, inputLevel.load() * 0.85f), std::memory_order_relaxed);
     outputLevel.store(juce::jmax(outPeak, outputLevel.load() * 0.85f), std::memory_order_relaxed);
     travelProgress.store(world.travelProgress(), std::memory_order_relaxed);
+    duckShown.store(world.duckGainNow(), std::memory_order_relaxed);
     currentDestination.store(world.destination(), std::memory_order_relaxed);
     currentSubLocation.store(world.destinationSub(), std::memory_order_relaxed);
     processedEpoch.store(epoch, std::memory_order_release);

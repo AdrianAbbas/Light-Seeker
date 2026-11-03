@@ -112,6 +112,11 @@ struct SynthVoice {
     // Scoop / Glide (set by the part before start): the horn's scoop scaled (0: none) and
     // its time; a plain scoop from below (semitones) for the other models.
     float scoopScale = 1, scoopSeconds = 0.028f, plainScoop = 0, plainSeconds = 0.08f;
+    // LIGHT SEEKER, Mix and Punch (brass and reed): `bite` (0..1) brightens and drives the
+    // first ~100 ms of a note harder (with velocity), `presence` (0..1) adds a 2-4 kHz band
+    // (more of it on the attack). 0 = WORLDBUILDER's sound, unchanged.
+    float bite = 0, biteSeconds = 0.09f, presence = 0, presenceNow = 0;
+    Svf presenceBand;
     uint64_t noiseIndex = 0;
     Stream air;
     PanGains pan { 0.7071f, 0.7071f };
@@ -139,6 +144,7 @@ struct SynthVoice {
             if (!env.active()) {
                 for (auto& f : filter) f.reset();
                 formant.reset();
+                presenceBand.reset();
             }
         }
         // A horn's lips find the note from below; a slurred note only a little.
@@ -173,10 +179,19 @@ struct SynthVoice {
                 osc[1].setFrequency(f * std::exp2(d), rate);
                 // Brightness grows faster than level: soft, little above the fundamental;
                 // loud, harmonics far up. The cutoff follows the note.
-                const float blow = std::pow(clamp01(env.value * velocity), 1.4f);
+                float blow = std::pow(clamp01(env.value * velocity), 1.4f);
+                float biteNow = 0;
+                if (bite > 0.0f) {
+                    biteNow = bite * velocity * std::exp(-age / biteSeconds);
+                    blow = std::min(1.0f, blow + 0.5f * biteNow);
+                }
                 const float c = std::min(f * (1.3f + 16.0f * blow) * (cutoff / 1000.0f), 0.42f * rate);
                 for (auto& flt : filter) flt.set(c, 0.6f, rate);
-                drive = 1.0f + 3.5f * blow;
+                drive = 1.0f + 3.5f * blow + 2.0f * biteNow;
+                if (presence > 0.0f) {
+                    presenceBand.set(3000.0f, 0.9f, rate);
+                    presenceNow = presence * (1.0f + 1.5f * biteNow);
+                }
                 formant.set(formantHz, 1.4f, rate);
                 blat *= std::exp(-chunkSeconds / 0.03f);
                 break;
@@ -189,9 +204,14 @@ struct SynthVoice {
                 osc[2].setFrequency(f * std::exp2(d), rate);
                 osc[3].setFrequency(f * std::exp2(d), rate);
                 // More bellows pressure: louder and brighter.
-                const float c = std::min(cutoff * std::exp2(envOctaves * (env.value - 1.0f)) * (0.5f + 0.8f * velocity), 0.42f * rate);
+                const float biteNow = bite > 0.0f ? bite * velocity * std::exp(-age / biteSeconds) : 0.0f;
+                const float c = std::min(cutoff * std::exp2(envOctaves * (env.value - 1.0f)) * (0.5f + 0.8f * velocity) * (1.0f + 1.5f * biteNow), 0.42f * rate);
                 for (auto& flt : filter) flt.set(c, 0.7f, rate);
                 formant.set(formantHz, 2.0f, rate);
+                if (presence > 0.0f) {
+                    presenceBand.set(3000.0f, 0.9f, rate);
+                    presenceNow = presence * (1.0f + 1.5f * biteNow);
+                }
                 blat *= std::exp(-chunkSeconds / 0.012f);
                 break;
             }
@@ -216,7 +236,9 @@ struct SynthVoice {
             const float buzz = a + (detuneCents > 0.01f ? 0.7f * b : 0.0f) + n * (breath + 0.6f * blat);
             const float lp = filter[0].tick(buzz).lp;
             const float hot = softClip(lp * drive * 0.6f) / (0.6f * std::sqrt(drive));
-            const float y = (hot + formantLevel * formant.bandpass(hot)) * e * gain * 0.9f;
+            float y = hot + formantLevel * formant.bandpass(hot);
+            if (presence > 0.0f) y += presenceNow * presenceBand.bandpass(hot);
+            y *= e * gain * 0.9f;
             l += y * pan.l;
             r += y * pan.r;
             return;
@@ -234,7 +256,9 @@ struct SynthVoice {
             const float n = air.white(noiseIndex++);
             const float reeds = p1 + 0.85f * p2 + n * (breath * e + 0.5f * blat);
             const float lp = filter[0].tick(reeds).lp;
-            const float y = (lp + formantLevel * formant.bandpass(lp)) * e * gain * 0.8f;
+            float y = lp + formantLevel * formant.bandpass(lp);
+            if (presence > 0.0f) y += presenceNow * presenceBand.bandpass(lp);
+            y *= e * gain * 0.8f;
             l += y * pan.l;
             r += y * pan.r;
             return;

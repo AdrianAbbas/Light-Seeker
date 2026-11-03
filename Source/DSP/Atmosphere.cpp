@@ -209,8 +209,9 @@ float Atmosphere::render(Voice& v) noexcept {
 }
 
 void Atmosphere::process(float* l, float* r, int n, double beats, double beatsPerSample, int location, int sub,
-                         float level, float density, int seed, const float* dryL, const float* dryR) noexcept {
+                         float level, float density, int seed, const float* dryL, const float* dryR, float mixGain) noexcept {
     level = clamp01(level);
+    mixGain = std::clamp(std::isfinite(mixGain) ? mixGain : 1.0f, 0.0f, 1.5f);
     // Schedule: one chance per eighth note, decided by a hash of (seed, slot, place).
     const auto slotAt = [](double b) { return static_cast<long long>(std::floor(std::max(0.0, b) * 2.0)); };
     const long long first = slotAt(beats), last = slotAt(beats + beatsPerSample * n);
@@ -230,6 +231,8 @@ void Atmosphere::process(float* l, float* r, int n, double beats, double beatsPe
     const float levelStep = timeCoefficient(0.05, sr);
     for (int i = 0; i < n; ++i) {
         smoothLevel += levelStep * (level - smoothLevel);
+        smoothMix += levelStep * (mixGain - smoothMix);
+        if (std::abs(mixGain - smoothMix) < 1.0e-6f) smoothMix = mixGain;
         // Ducking: under the instrument the layer steps back (-12 dB when it is loud).
         const float in = std::max(std::abs(dryL[i]), std::abs(dryR[i]));
         envelope += (in > envelope ? attack : release) * (in - envelope);
@@ -242,7 +245,7 @@ void Atmosphere::process(float* l, float* r, int n, double beats, double beatsPe
             sr2 += y * (1.0f + v.pan) * 0.7f;
         }
         // At Level 100 % an event peaks around -20 dBFS: a background, never a feature.
-        const float g = smoothLevel * smoothLevel * duck * 0.18f;
+        const float g = smoothLevel * smoothLevel * duck * 0.18f * smoothMix;
         l[i] += sl * g;
         r[i] += sr2 * g;
     }

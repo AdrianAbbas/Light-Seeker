@@ -18,6 +18,21 @@ inline constexpr float twoPi = 6.283185307179586f;
 inline constexpr float shimmerLayerBase = 0.85f, shimmerLoopBase = 0.75f, shimmerBusBase = 0.8f;
 inline constexpr float shimmerMax = 1.5f;
 inline float shimmerControl(float control) noexcept { return std::clamp(std::isfinite(control) ? control : 1.0f, 0.0f, shimmerMax); }
+// Mix and Punch: the instrument's Punch control (0..1): 0 none, 0.5 the instrument's own
+// gain on hit (`designDb`), 1 the most (+12 dB).
+inline constexpr float punchMaxDb = 12.0f;
+inline float punchDb(float control, float designDb) noexcept {
+    control = std::clamp(std::isfinite(control) ? control : 0.5f, 0.0f, 1.0f);
+    designDb = std::clamp(designDb, 0.0f, punchMaxDb);
+    return control <= 0.5f ? designDb * control * 2.0f : designDb + (punchMaxDb - designDb) * (control - 0.5f) * 2.0f;
+}
+inline float punchControl(float db, float designDb) noexcept {
+    db = std::clamp(std::isfinite(db) ? db : 0.0f, 0.0f, punchMaxDb);
+    designDb = std::clamp(designDb, 0.0f, punchMaxDb);
+    if (designDb < 1.0e-4f) return db > 0.0f ? 0.5f + 0.5f * db / punchMaxDb : 0.0f;
+    if (db <= designDb) return 0.5f * db / designDb;
+    return 0.5f + 0.5f * (db - designDb) / std::max(1.0e-4f, punchMaxDb - designDb);
+}
 inline float clamp01(float x) noexcept { return std::clamp(x, 0.0f, 1.0f); }
 inline float lerp(float a, float b, float t) noexcept { return a + t * (b - a); }
 inline float dbToGain(float db) noexcept { return std::pow(10.0f, db * 0.05f); }

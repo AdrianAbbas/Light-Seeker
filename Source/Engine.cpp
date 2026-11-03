@@ -50,7 +50,39 @@ Frame Engine::targetFrame(const Controls& c) noexcept {
     // inaudible), so Intensity never flips a chamber or an interval half-way.
     for (std::size_t i = 0; i < Count; ++i)
         if (moduleSpecs[i].glide == Glide::Step) f[i] = place[i];
+    applyMix(f, c.mix);
     return f;
+}
+
+void Engine::applyMix(Frame& f, const Controls::Mix& m) noexcept {
+    const auto scale = [](float s) { return std::clamp(std::isfinite(s) ? s : 1.0f, 0.0f, 1.5f); };
+    // A crossfaded wet layer (equal power: wet sqrt(m), dry sqrt(1 - m)): its wet-to-dry
+    // amplitude ratio times s, so the total power, and the level, stay.
+    const auto ratio = [&f](P id, float s) {
+        if (s == 1.0f) return;
+        const float v = std::clamp(f[id], 0.0f, 0.9999f);
+        const float a = s * s * v;
+        f[id] = a + (1.0f - v) > 0.0f ? a / (a + (1.0f - v)) : 0.0f;
+    };
+    // An added layer or a modulation depth: its amount times s (within its range).
+    const auto linear = [&f](P id, float s) {
+        if (s == 1.0f) return;
+        f[id] = std::clamp(f[id] * s, moduleSpecs[id].min, moduleSpecs[id].max);
+    };
+    const float space = scale(m.reverb), echoes = scale(m.echoes), mod = scale(m.modulation), character = scale(m.character);
+    // Reverb / Space: the halls, the Radiance spaces (generated and captured), the aura.
+    for (P id : { ReverbMix, VaultMix, WraithMix }) ratio(id, space);
+    if (m.preDelayMs != 0.0f && std::isfinite(m.preDelayMs))
+        f[PreDelay] = std::clamp(f[PreDelay] + std::clamp(m.preDelayMs, -50.0f, 150.0f), 0.0f, 250.0f);
+    // Echoes: the delays (and the tape echo).
+    ratio(DelayMix, echoes);
+    linear(TapeMix, echoes);
+    // Modulation: chorus, the rising phaser, flutter, the filter's movement, pitch waver
+    // and the tape's wow (not the shimmer).
+    for (P id : { EnsMix, Spiral, Flicker, FilterMovement, Instability, TapeWow }) linear(id, mod);
+    // Character: the resonator, the chimes, the warmth, the choir and drone layers, wind
+    // and water beads (the places' own sounds).
+    for (P id : { Tomb, Metal, BloodMix, ChoirBlend, Drone, Wind, Drips, Drops }) linear(id, character);
 }
 
 Frame Engine::targetFrame(int location, float intensity) noexcept {
@@ -102,6 +134,14 @@ void Engine::prepare(double sampleRate) {
     for (auto& slot : slots) slot.gain.prepare(0.02, sr);
     for (auto& slot : sigSlots) slot.gain.prepare(0.02, sr);
     trimGain.setTime(0.05, sr);
+    // Mix: the duck follows the playing in 10 ms and lets go over 150 ms; its gain glides
+    // over 8 ms; the low cut's corner glides (per chunk) over about 100 ms.
+    duckAttack = dsp::timeCoefficient(0.01, sr);
+    duckRelease = dsp::timeCoefficient(0.15, sr);
+    duckGain.setTime(0.008, sr);
+    lowCutGlide = 1.0f - std::exp(-static_cast<float>(maxChunk) / static_cast<float>(0.1 * sr));
+    for (auto& d : vaultPre) d.prepare(static_cast<std::size_t>(0.16 * sr) + 8);
+    vaultPreSamples.setTime(0.12, sr);
     warmUpSamples = std::max(1, static_cast<int>(0.005 * sr));
     settleSamples = static_cast<int>(0.5 * sr);
     reset();
@@ -122,6 +162,11 @@ void Engine::reset() {
     activeRoom = 0; departingRoom = -1; roomCrossfade = false;
     roomDry.snap(1.0f);
     levelMatcher.reset();
+    for (auto& ch : reverbHp) for (auto& f : ch) f.clear();
+    lowCutOn = false; lowCutHz = 20;
+    duckEnv = 0; duckGain.snap(1.0f); duckActive = false;
+    for (auto& d : vaultPre) d.clear();
+    vaultPreSamples.snap(0.0f);
     for (auto& slot : slots) { slot.gain.value = 0; slot.idle = true; slot.warmUp = 0; }
     place = {};   // the next setControls() arrives at its place at once
     travel = 1;
@@ -189,6 +234,15 @@ void Engine::setControls(const Controls& c) noexcept {
     for (auto& sig : signatures) sig.setShimmer(shimmer * dsp::shimmerLayerBase);
     for (auto& room : rooms) room.setShimmer(shimmer * (moonwell ? 1.0f : dsp::shimmerLoopBase));
     for (auto& v : vaults) v.setShimmer(shimmer * dsp::shimmerLoopBase);
+    // Mix: the signatures' own stages per group (smoothed in each instance).
+    {
+        const auto scale = [](float v) { return std::clamp(std::isfinite(v) ? v : 1.0f, 0.0f, 1.5f); };
+        for (auto& sig : signatures) sig.setMix(scale(c.mix.reverb), scale(c.mix.echoes), scale(c.mix.modulation), scale(c.mix.character));
+        mixNow = c.mix;
+        mixNow.duck = std::isfinite(c.mix.duck) ? dsp::clamp01(c.mix.duck) : 0.0f;
+        mixNow.lowCutHz = std::isfinite(c.mix.lowCutHz) && c.mix.lowCutHz >= 20.0f ? std::clamp(c.mix.lowCutHz, 20.0f, 1000.0f) : 0.0f;
+        mixNow.preDelayMs = std::isfinite(c.mix.preDelayMs) ? std::clamp(c.mix.preDelayMs, -50.0f, 150.0f) : 0.0f;
+    }
     const int location = std::clamp(c.location, 0, static_cast<int>(LocationCount) - 1);
     const Place wanted { location, clampSubLocation(location, c.sub) };
     const Frame target = targetFrame(c);
@@ -275,6 +329,7 @@ void Engine::runRooms(float* l, float* r, int n, float eased) noexcept {
     }
     roomDry.set(std::sqrt(1.0f - dsp::clamp01(m)));
     if (!any && roomDry.value == 1.0f && roomDry.target == 1.0f) return;
+    if (any) shapeReverb(roomSum, n, 0);
     for (int i = 0; i < n; ++i) {
         const auto k = static_cast<std::size_t>(i);
         float g = roomDry.next();
@@ -291,6 +346,28 @@ void Engine::runVaults(float* l, float* r, int n, float eased) noexcept {
     bool any = false;
     std::copy(l, l + n, vaultIn[0].begin());
     std::copy(r, r + n, vaultIn[1].begin());
+    // Mix: the Reverb Pre-delay offset (later only: the spaces' own pre-delay is in their
+    // impulse responses) delays what is sent into the spaces; the dry stays.
+    std::array<std::array<float, maxChunk>, 2> sendIn;
+    const float* sendL = vaultIn[0].data();
+    const float* sendR = vaultIn[1].data();
+    vaultPreSamples.set(std::max(0.0f, mixNow.preDelayMs) * 0.001f * static_cast<float>(sr));
+    if (vaultPreSamples.target > 0.0f || vaultPreSamples.value > 0.0f) {
+        for (int i = 0; i < n; ++i) {
+            const auto k = static_cast<std::size_t>(i);
+            vaultPre[0].push(vaultIn[0][k]);
+            vaultPre[1].push(vaultIn[1][k]);
+            float d = vaultPreSamples.next();
+            if (vaultPreSamples.target == 0.0f && d < 1.0f) d = vaultPreSamples.value = 0.0f;
+            sendIn[0][k] = d < 1.0f ? vaultIn[0][k] : vaultPre[0].read(d);
+            sendIn[1][k] = d < 1.0f ? vaultIn[1][k] : vaultPre[1].read(d);
+        }
+        sendL = sendIn[0].data();
+        sendR = sendIn[1].data();
+    } else {
+        // Kept filled, so turning the offset on starts from the recent signal.
+        for (int i = 0; i < n; ++i) { vaultPre[0].push(vaultIn[0][static_cast<std::size_t>(i)]); vaultPre[1].push(vaultIn[1][static_cast<std::size_t>(i)]); }
+    }
     std::fill(vaultSum[0].begin(), vaultSum[0].begin() + n, 0.0f);
     std::fill(vaultSum[1].begin(), vaultSum[1].begin() + n, 0.0f);
     for (int k = 0; k < vaultCount; ++k) {
@@ -313,8 +390,8 @@ void Engine::runVaults(float* l, float* r, int n, float eased) noexcept {
         for (int i = 0; i < n; ++i) {
             float g = vaultSend[K].next();
             if (warm < warmUpSamples) { g *= 0.5f - 0.5f * std::cos(dsp::twoPi * 0.5f * static_cast<float>(warm) / static_cast<float>(warmUpSamples)); ++warm; }
-            vaultWet[0][static_cast<std::size_t>(i)] = vaultIn[0][static_cast<std::size_t>(i)] * g;
-            vaultWet[1][static_cast<std::size_t>(i)] = vaultIn[1][static_cast<std::size_t>(i)] * g;
+            vaultWet[0][static_cast<std::size_t>(i)] = sendL[i] * g;
+            vaultWet[1][static_cast<std::size_t>(i)] = sendR[i] * g;
         }
         v.process(vaultWet[0].data(), vaultWet[1].data(), vaultWet[0].data(), vaultWet[1].data(), n, k == activeVault ? (vaultCrossfade ? to : current) : current);
         for (int i = 0; i < n; ++i) {
@@ -325,6 +402,7 @@ void Engine::runVaults(float* l, float* r, int n, float eased) noexcept {
     }
     vaultDry.set(std::sqrt(1.0f - m));
     if (!any && vaultDry.value == 1.0f && vaultDry.target == 1.0f) return;
+    if (any) shapeReverb(vaultSum, n, 1);
     for (int i = 0; i < n; ++i) {
         const auto k = static_cast<std::size_t>(i);
         float g = vaultDry.next();
@@ -332,6 +410,53 @@ void Engine::runVaults(float* l, float* r, int n, float eased) noexcept {
         l[i] = vaultIn[0][k] * g + vaultSum[0][k];
         r[i] = vaultIn[1][k] * g + vaultSum[1][k];
     }
+}
+
+void Engine::prepareMixChunk(const float* dryL, const float* dryR, int n) noexcept {
+    // The low cut's corner: towards the wanted frequency (or back down to 20 Hz, then off).
+    const float wanted = mixNow.lowCutHz > 0.0f ? mixNow.lowCutHz : 20.0f;
+    if (mixNow.lowCutHz > 0.0f && !lowCutOn) {
+        lowCutOn = true;
+        lowCutHz = 20.0f;
+        for (auto& ch : reverbHp) for (auto& f : ch) f.clear();
+    }
+    if (lowCutOn) {
+        lowCutHz += lowCutGlide * (wanted - lowCutHz);
+        if (std::abs(wanted - lowCutHz) < 0.05f) lowCutHz = wanted;
+        if (mixNow.lowCutHz <= 0.0f && lowCutHz <= 20.5f) lowCutOn = false;
+        else for (auto& ch : reverbHp) for (auto& f : ch) { const float s1 = f.s1, s2 = f.s2; f.set(lowCutHz, sr, 1.4142f); f.s1 = s1; f.s2 = s2; }
+    }
+    // The duck: follows the playing (the engine's input), from -48 dBFS (none) to -24 dBFS
+    // (all of it), the reverbs' return down to -15 dB at Duck 100 %.
+    duckActive = mixNow.duck > 0.0f || duckGain.value != 1.0f;
+    for (int i = 0; i < n; ++i) {
+        const float level = std::max(std::abs(dryL[i]), std::abs(dryR[i]));
+        duckEnv += (level > duckEnv ? duckAttack : duckRelease) * (level - duckEnv);
+        if (!duckActive) continue;
+        float amount = std::clamp((duckEnv - 0.004f) / (0.063f - 0.004f), 0.0f, 1.0f);
+        amount = amount * amount * (3.0f - 2.0f * amount);
+        duckGain.set(1.0f - mixNow.duck * (1.0f - 0.178f) * amount);
+        float g = duckGain.next();
+        if (mixNow.duck <= 0.0f && std::abs(g - 1.0f) < 1.0e-5f) g = duckGain.value = 1.0f;
+        duckRow[static_cast<std::size_t>(i)] = g;
+    }
+}
+
+void Engine::shapeReverb(std::array<std::array<float, maxChunk>, 2>& wet, int n, int which) noexcept {
+    if (lowCutOn) {
+        auto& hp = reverbHp[static_cast<std::size_t>(which)];
+        for (int i = 0; i < n; ++i) {
+            const auto k = static_cast<std::size_t>(i);
+            wet[0][k] = hp[0].highPass(wet[0][k]);
+            wet[1][k] = hp[1].highPass(wet[1][k]);
+        }
+    }
+    if (duckActive)
+        for (int i = 0; i < n; ++i) {
+            const auto k = static_cast<std::size_t>(i);
+            wet[0][k] *= duckRow[k];
+            wet[1][k] *= duckRow[k];
+        }
 }
 
 void Engine::runSignatures(float* l, float* r, int n, float eased) noexcept {
@@ -418,6 +543,7 @@ void Engine::process(float* l, float* r, int n, const float* dryL, const float* 
     const bool wetActive = p[ChoirBlend] > 1.0e-4f || p[Drone] > 1.0e-4f || p[WraithMix] > 1.0e-4f
                         || echoesActive || cryptActive || p[BloodMix] > 1.0e-4f || relicsActive || p[SigAmount] > 1.0e-4f
                         || anyDeparting() || to[SigAmount] > 1.0e-4f || ensembleActive || vaultActive;
+    prepareMixChunk(dryL, dryR, n);
     runSlot(abyss, slots[0], abyssActive, l, r, n);
     blood.process(l, r, n, p, context);
     runSlot(relics, slots[1], relicsActive, l, r, n);

@@ -28,7 +28,7 @@ public:
     // Adds the layer to l/r. `beats` = the musical position at the start of the block,
     // `beatsPerSample` its rate; `inputLevel` the instrument's level (for ducking).
     void process(float* l, float* r, int n, double beats, double beatsPerSample, int location, int sub,
-                 float level, float density, int seed, const float* dryL, const float* dryR) noexcept;
+                 float level, float density, int seed, const float* dryL, const float* dryR, float mixGain = 1.0f) noexcept;
     int activeVoices() const noexcept;
     // Whether the Breath sound plays the recordings (tests).
     static bool breathRecorded() noexcept;
@@ -54,5 +54,6 @@ private:
     long long lastSlot = -1;
     int started = 0;
     float duck = 1, envelope = 0, attack = 0, release = 0, smoothLevel = 0;
+    float smoothMix = 1;   // Mix and Punch: the MIX Atmosphere control (0..1.5), smoothed
 };
 }

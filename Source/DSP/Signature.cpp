@@ -205,6 +205,7 @@ void Signature::prepare(double sampleRate) {
     sr = sampleRate;
     amount.setTime(0.04, sr);
     shimmerGain.setTime(0.05, sr);
+    for (auto* m : { &mixSpace, &mixEchoes, &mixModulation, &mixCharacter }) m->setTime(0.05, sr);
     for (auto& d : wobbleLine) d.prepare(static_cast<std::size_t>(0.03 * sr));
     for (auto& ch : combLines) for (auto& d : ch) d.prepare(static_cast<std::size_t>(0.07 * sr));
     for (auto& ch : shifters) for (auto& s : ch) s.prepare(sr, 0.045);
@@ -348,9 +349,18 @@ void Signature::process(float* l, float* r, int n, const Frame& p, const Context
     const float wobbleDepth = rc.wobbleMs * 0.001f * static_cast<float>(sr);
     float* io[] = { l, r };
 
+    // A MIX group's gain now (exactly its target once there: at 100 % nothing changes).
+    const auto step = [](Smoothed& m) noexcept {
+        m.value += m.coefficient * (m.target - m.value);
+        if (std::abs(m.target - m.value) < 1.0e-6f) m.value = m.target;
+        return m.value;
+    };
     for (int i = 0; i < n; ++i) {
         const float a = amount.next();
         const float sg = shimmerGain.next();
+        const float gs = step(mixSpace), ge = step(mixEchoes), gm = step(mixModulation), gc = step(mixCharacter);
+        const float tremDepth = gm == 1.0f ? rc.tremDepth : std::min(1.0f, rc.tremDepth * gm);
+        const float wobbleMix = gm == 1.0f ? rc.wobbleMix : std::min(1.0f, rc.wobbleMix * gm);
         // Departing (ringing out after a journey): the serial blend and the layers' input
         // fade with the amount, the layers' output stays, so their tails ring on.
         const float feed = departing ? (heldOut > 1.0e-5f ? std::min(1.0f, a / heldOut) : 0.0f) : 1.0f;
@@ -369,7 +379,7 @@ void Signature::process(float* l, float* r, int n, const Frame& p, const Context
         const float wobbleR = rc.wobbleMs > 0 ? (rc.wobbleShape == sig::Sine || rc.wobbleShape == sig::Slosh
                                                      ? wobbleLfoR.next(rc.wobbleShape, rc.wobbleHz * rate, sr, random) : wobble) : 0.0f;
         float trem = 1;
-        if (rc.tremDepth > 0) trem = 1.0f - rc.tremDepth * (0.5f + 0.5f * tremLfo.next(rc.tremShape, rc.tremHz * rate, sr, random));
+        if (rc.tremDepth > 0) trem = 1.0f - tremDepth * (0.5f + 0.5f * tremLfo.next(rc.tremShape, rc.tremHz * rate, sr, random));
         // Only real onsets (the peak well above the slower envelope) are softened, not the
         // beating of a sustained chord.
         const float swellGain = rc.swellMs > 0 ? std::min(1.0f, 1.4f * envSwell / std::max(1.0e-5f, envFast)) : 1.0f;
@@ -399,6 +409,7 @@ void Signature::process(float* l, float* r, int n, const Frame& p, const Context
         for (int ch = 0; ch < 2; ++ch) {
             const auto C = static_cast<std::size_t>(ch);
             float y = x[ch];
+            const float unsaturated = y;
             // Saturation flavours.
             switch (rc.sat) {
                 case sig::SatWarm: {
@@ -430,6 +441,8 @@ void Signature::process(float* l, float* r, int n, const Frame& p, const Context
                 }
                 default: break;
             }
+            // Character (MIX): how much of the saturation's colour.
+            if (gc != 1.0f && rc.sat != sig::SatNone) y = unsaturated + gc * (y - unsaturated);
             switch (rc.tone) {
                 case sig::ToneLow: y = toneSvf[C].low(y); break;
                 case sig::ToneHigh: y = toneSvf[C].highPass(y); break;
@@ -441,7 +454,7 @@ void Signature::process(float* l, float* r, int n, const Frame& p, const Context
                 auto& line = wobbleLine[C];
                 line.push(y);
                 const float moved = line.read(wobbleCentre + wobbleDepth * (ch == 0 ? wobble : wobbleR));
-                y = y + rc.wobbleMix * (moved - y);
+                y = y + wobbleMix * (moved - y);
             }
             serialBeforeTrem[ch] = y;
             if (!rc.tremLayersOnly && !rc.autoPan) y *= trem;
@@ -459,7 +472,7 @@ void Signature::process(float* l, float* r, int n, const Frame& p, const Context
                 const float out = line.read(combSamples[K] * (ch == 0 ? 1.0f : 1.003f));
                 combState[C][K] += combCoefficient * (out - combState[C][K]);
                 line.push(pre[ch] + rc.combFeedback * combState[C][K]);
-                add += out * rc.combGain * (1.0f - rc.combFeedback) * 2.5f;
+                add += out * rc.combGain * (1.0f - rc.combFeedback) * 2.5f * gc;
             }
             if (rc.modes > 0) {
                 // Struck modes: the attack itself plus a short noise "mallet" scaled by
@@ -467,7 +480,7 @@ void Signature::process(float* l, float* r, int n, const Frame& p, const Context
                 const float excite = rc.modeStruck ? (pre[ch] + random.bipolar() * envFast * 0.7f) * gateEnv * gateEnv : pre[ch];
                 float ring = 0;
                 for (int k = 0; k < rc.modes; ++k) ring += modeGain[static_cast<std::size_t>(k)] * modes[C][static_cast<std::size_t>(k)].bandPass(excite);
-                add += rc.modeGain * 2.2f * softLimit(ring, 1.5f);
+                add += rc.modeGain * 2.2f * softLimit(ring, 1.5f) * gc;
             }
             if (rc.pitches > 0) {
                 float voice = 0;
@@ -482,6 +495,7 @@ void Signature::process(float* l, float* r, int n, const Frame& p, const Context
                 if (rc.pitchMode == sig::PitchGlitter) voice *= glitterGain[C] * (ch == 0 ? 1.0f - glitterPan : 1.0f + glitterPan);
                 if (rc.bloomMs > 0) voice *= std::min(1.5f, envBloom / std::max(1.0e-5f, envFast));
                 if (shimmerPitch) voice *= sg;
+                else voice *= gc;
                 add += voice * rc.pitchGain;
                 pitchVoice[C] = voice * rc.pitchGain;
             }
@@ -495,7 +509,7 @@ void Signature::process(float* l, float* r, int n, const Frame& p, const Context
                     line.push(v);
                     s = d - 0.62f * v;
                 }
-                add += rc.smear * s;
+                add += rc.smear * s * gs;
             }
             if (rc.reverseMs > 0) {
                 // Two reverse heads, sin^2 windows half a segment apart.
@@ -509,7 +523,7 @@ void Signature::process(float* l, float* r, int n, const Frame& p, const Context
                     const float w = std::sin(dsp::twoPi * 0.5f * static_cast<float>(ph));
                     rev += line.read(1.0f + 2.0f * length * static_cast<float>(ph)) * w * w;
                 }
-                add += reverseLp[C].low(rev) * rc.reverseGain;
+                add += reverseLp[C].low(rev) * rc.reverseGain * ge;
             }
             layers[ch] = add;
         }
@@ -614,8 +628,8 @@ void Signature::process(float* l, float* r, int n, const Frame& p, const Context
                         *both[ch] = d - 0.6f * v;
                     }
             }
-            layers[0] += tl;
-            layers[1] += tr;
+            layers[0] += tl * ge;
+            layers[1] += tr * ge;
         }
         const float layerGain = rc.tremLayersOnly ? trem : 1.0f;
         float out[2];
@@ -624,18 +638,20 @@ void Signature::process(float* l, float* r, int n, const Frame& p, const Context
         if (rc.autoPan && rc.tremDepth > 0) {
             // The tremolo as a pan: what leaves one side arrives on the other (equal power).
             const float m = 1.0f - trem;   // 0 .. depth
-            const float side = rc.tremDepth > 0 ? std::clamp(m / rc.tremDepth * 2.0f - 1.0f, -1.0f, 1.0f) : 0.0f;
-            const float angle = (1.0f + a * rc.tremDepth * side) * 0.25f * static_cast<float>(pi);
+            const float side = tremDepth > 0 ? std::clamp(m / tremDepth * 2.0f - 1.0f, -1.0f, 1.0f) : 0.0f;
+            const float angle = (1.0f + a * tremDepth * side) * 0.25f * static_cast<float>(pi);
             const float dryL = serialBeforeTrem[0], dryR = serialBeforeTrem[1];
             const float panned = 0.5f * (dryL + dryR);
-            out[0] += a * (panned * std::cos(angle) * 1.41f - serial[0]);
-            out[1] += a * (panned * std::sin(angle) * 1.41f - serial[1]);
+            // Modulation below 100 % also returns the image it pans (at 0: the input's own).
+            const float panBlend = gm < 1.0f ? a * gm : a;
+            out[0] += panBlend * (panned * std::cos(angle) * 1.41f - serial[0]);
+            out[1] += panBlend * (panned * std::sin(angle) * 1.41f - serial[1]);
         }
         if (rc.swirlDepth > 0) {
             // The stereo image turns around the listener (a rotation of left/right).
             swirlPhase += rc.swirlHz * rate / sr;
             swirlPhase -= std::floor(swirlPhase);
-            const float theta = a * rc.swirlDepth * 0.9f * std::sin(twoPi * static_cast<float>(swirlPhase));
+            const float theta = a * rc.swirlDepth * gm * 0.9f * std::sin(twoPi * static_cast<float>(swirlPhase));
             const float c = std::cos(theta), sn = std::sin(theta);
             const float l0 = out[0], r0 = out[1];
             out[0] = c * l0 - sn * r0;

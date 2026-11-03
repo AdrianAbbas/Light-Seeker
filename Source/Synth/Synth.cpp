@@ -536,7 +536,11 @@ struct Synth::Voice {
         bool character = false, stretchRelease = true;
         float bent = 0, vowelBase = 3, singersBase = 1, choirVowelBase = 0;
     };
-    bool on = false, keyDown = false, sustained = false, released = false, grace = false;
+    bool on = false, keyDown = false, sustained = false, released = false, grace = false, moved = false;
+    // Punch: the gain on hit (dB at its start), where it is in its settling, the gain now
+    // and its step per sample (set once per chunk).
+    float punchDb = 0, punchGain = 1, punchStep = 0;
+    int punchPos = 0, punchLength = 0;
     int note = -1, patch = 0, delay = 0, layerMask = 0;
     int sweep = -1, sweepIndex = 0, sweepCount = 0;   // a grace note: its sweep, place in it
     float velocity = 0, semis = 0, levelDb = 0, kill = 1, killStep = 0;
@@ -550,6 +554,10 @@ struct Synth::Bus {
     lswb::dsp::Shimmer shimmer;
     Smoother shelfGain, chorusMix, shimmerSend, trim, tremolo;
     float tremoloPhase = 0;
+    // Punch's safety limiter: the punched sum never goes above the ceiling, or above what
+    // it would be without Punch (so it only ever takes back what Punch added).
+    float limiterGain = 1, limiterRelease = 0.001f, limiterLowest = 1;
+    bool punching = false;
 };
 
 namespace {
@@ -613,6 +621,7 @@ void Synth::prepare(double sampleRate) {
     bus->chorus.prepare(r);
     bus->shimmer.prepare(r);
     for (auto& s : bus->shelf) s.setCutoff(2800.0f, r);
+    bus->limiterRelease = 1.0f - std::exp(-1.0f / (0.06f * r));
     const float controlRate = r / float(chunk);
     for (auto* s : { &bus->shelfGain, &bus->chorusMix, &bus->shimmerSend, &bus->trim, &bus->tremolo }) s->setTime(0.08f, controlRate);
     reset();
@@ -650,7 +659,13 @@ void Synth::reset() noexcept {
     bus->shimmerSend.snap(p.shimmer * dc::dsp::shimmerBusBase * dc::dsp::shimmerControl(macros.shimmer));
     bus->trim.snap(dbToGain(macros.levelDb));
     bus->tremolo.snap(0);
+    bus->limiterGain = 1;
+    bus->limiterLowest = 1;
+    bus->punching = false;
 }
+
+float Synth::punchLimiterGain() const noexcept { return bus->limiterGain; }
+float Synth::punchLimiterLowest() const noexcept { return bus->limiterLowest; }
 
 void Synth::setMacros(const Macros& m) noexcept {
     macros = m;
@@ -662,6 +677,9 @@ void Synth::setMacros(const Macros& m) noexcept {
     macros.ensemble = clamp01(m.ensemble);
     macros.octave = std::clamp(m.octave, -3, 3);
     macros.levelDb = std::isfinite(m.levelDb) ? std::clamp(m.levelDb, -48.0f, 12.0f) : 0.0f;
+    macros.modulation = std::isfinite(m.modulation) ? std::clamp(m.modulation, 0.0f, 1.5f) : 1.0f;
+    macros.punch = clamp01(std::isfinite(m.punch) ? m.punch : 0.5f);
+    macros.punchSeconds = std::isfinite(m.punchSeconds) ? std::clamp(m.punchSeconds, 0.02f, 0.5f) : 0.12f;
 }
 
 int Synth::activeVoices() const noexcept {
@@ -761,6 +779,8 @@ void Synth::startLayers(Voice& voice) noexcept {
                 s.air.setKey(voice.serial, uint32_t(k));
                 s.scoopScale = 1;
                 s.plainScoop = 0;
+                s.bite = L.bite;
+                s.presence = L.presence;
                 if (L.engine == Engine::Brass) {
                     s.formantHz = L.p[0];
                     s.formantLevel = L.p[1];
@@ -953,6 +973,16 @@ void Synth::startLayers(Voice& voice) noexcept {
         lv.pan = panGains(std::clamp(L.pan + L.keyPan * (midi - 60.0f) / 30.0f, -1.0f, 1.0f));
         lv.on = true;
     }
+    // Punch: the note's level overshoots (by up to +12 dB, less on softer notes) and settles
+    // back to its own level over Punch Time (a raised cosine: smooth at both ends). The note
+    // starts from silence, so the overshoot never clicks. Notes moved to a new instrument by
+    // travel are not struck again.
+    const float db = voice.moved ? 0.0f : dc::dsp::punchDb(macros.punch, p.punchDb) * (0.35f + 0.65f * std::pow(clamp01(velocity), 1.3f));
+    voice.punchDb = db;
+    voice.punchPos = 0;
+    voice.punchStep = 0;
+    voice.punchLength = db > 0.05f ? std::max(1, int(macros.punchSeconds * r)) : 0;
+    voice.punchGain = voice.punchLength > 0 ? dbToGain(db) : 1.0f;
 }
 
 void Synth::startNote(int note, float velocity, bool sustained, bool moved) noexcept {
@@ -966,6 +996,10 @@ void Synth::startNote(int note, float velocity, bool sustained, bool moved) noex
         v->sustained = sustained;
         v->released = false;
         v->grace = grace;
+        v->moved = moved;
+        v->punchLength = 0;
+        v->punchGain = 1;
+        v->punchStep = 0;
         v->note = note;
         v->patch = current;
         v->velocity = velocity;
@@ -1204,6 +1238,16 @@ void Synth::updateChunk() noexcept {
             }
             continue;
         }
+        if (v.punchLength > 0) {
+            // Punch: the gain at the end of this chunk, reached linearly over it.
+            if (v.punchPos >= v.punchLength) { v.punchLength = 0; v.punchGain = 1; v.punchStep = 0; }
+            else {
+                v.punchPos += chunk;
+                const float t = std::min(1.0f, float(v.punchPos) / float(v.punchLength));
+                const float next = t >= 1.0f ? 1.0f : dbToGain(v.punchDb * 0.5f * (1.0f + std::cos(3.14159265f * t)));
+                v.punchStep = (next - v.punchGain) / float(chunk);
+            }
+        }
         const auto& vpatch = patch(v.patch);
         const float bend = bendNow * vpatch.bendRange;
         const float vibratoAdd = vpatch.tremoloMod ? 0.0f : modNow * vpatch.modDepth;
@@ -1303,7 +1347,7 @@ void Synth::updateChunk() noexcept {
     }
     // The bus follows the instrument.
     bus->shelfGain.next(dbToGain(p.air + (macros.tone - 0.5f) * 8.0f));
-    const float chorusTarget = p.characterMode == Character::Chorus ? p.chorus * characterGain : p.chorus;
+    const float chorusTarget = (p.characterMode == Character::Chorus ? p.chorus * characterGain : p.chorus) * macros.modulation;
     const float shimmerTarget = (p.characterMode == Character::Shimmer ? p.shimmer * characterGain : p.shimmer) * dc::dsp::shimmerBusBase * dc::dsp::shimmerControl(macros.shimmer);
     bus->chorusMix.next(chorusTarget);
     bus->shimmerSend.next(shimmerTarget);
@@ -1323,7 +1367,8 @@ void Synth::render(float* outL, float* outR, int n) noexcept {
             chunkLeft = chunk;
         }
         --chunkLeft;
-        float l = 0, r = 0;
+        float l = 0, r = 0, l0 = 0, r0 = 0;
+        bool punched = false;
         for (auto& vp : voices) {
             auto& v = *vp;
             if (!v.on || v.delay > 0) continue;
@@ -1369,8 +1414,38 @@ void Synth::render(float* outL, float* outR, int n) noexcept {
                 vl *= v.kill;
                 vr *= v.kill;
             }
+            if (v.punchLength > 0) {
+                // Punch: the note's own sum (l0, r0) and the punched one.
+                l0 += vl;
+                r0 += vr;
+                const float g = v.punchGain;
+                v.punchGain = std::max(1.0f, v.punchGain + v.punchStep);
+                vl *= g;
+                vr *= g;
+                punched = true;
+            } else {
+                l0 += vl;
+                r0 += vr;
+            }
             l += vl;
             r += vr;
+        }
+        // Punch's safety limiter (instant attack, 60 ms release): only what Punch added is
+        // ever taken back, and only above the ceiling (-1 dBFS here).
+        auto& lim = *bus;
+        if (punched || lim.limiterGain < 1.0f) {
+            constexpr float ceiling = 0.891f;
+            const float peak = std::max(std::abs(l), std::abs(r));
+            const float floorLevel = std::max(ceiling, std::max(std::abs(l0), std::abs(r0)));
+            const float needed = peak > floorLevel ? floorLevel / peak : 1.0f;
+            if (needed < lim.limiterGain) lim.limiterGain = needed;
+            else {
+                lim.limiterGain = std::min(needed, lim.limiterGain + lim.limiterRelease * (1.0f - lim.limiterGain));
+                if (lim.limiterGain > 0.99999f) lim.limiterGain = 1.0f;
+            }
+            lim.limiterLowest = std::min(lim.limiterLowest, lim.limiterGain);
+            l *= lim.limiterGain;
+            r *= lim.limiterGain;
         }
         // The bus: tremolo (mod wheel on struck instruments), the bright shelf, chorus, shimmer.
         auto& b = *bus;

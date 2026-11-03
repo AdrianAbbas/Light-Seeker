@@ -11,6 +11,7 @@
 //   Bypass                        the host bypass
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "World/Locations.h"
+#include "DSP/Common.h"
 #include <functional>
 
 namespace dc::ids {
@@ -55,6 +56,19 @@ inline constexpr const char* instEnsemble = "instEnsemble";
 // Final touches: the Shimmer control (both plug-ins; added last, so sessions saved
 // before it open at its default, 100 %).
 inline constexpr const char* shimmer = "shimmer";
+// Mix and Punch (both plug-ins unless noted; added last, so sessions saved before them
+// open at the defaults: every MIX group at 100 % = as designed, the reverb helpers off).
+inline constexpr const char* mixReverb = "mixReverb";
+inline constexpr const char* mixEchoes = "mixEchoes";
+inline constexpr const char* mixModulation = "mixModulation";
+inline constexpr const char* mixCharacter = "mixCharacter";
+inline constexpr const char* mixAtmosphere = "mixAtmosphere";
+inline constexpr const char* mixLowCut = "mixLowCut";
+inline constexpr const char* mixPreDelay = "mixPreDelay";
+inline constexpr const char* mixDuck = "mixDuck";
+inline constexpr const char* atmosOn = "atmosOn";
+inline constexpr const char* punch = "punch";          // the instrument only
+inline constexpr const char* punchTime = "punchTime";  // the instrument only
 inline juce::String advanced(std::size_t index) { return juce::String("adv_") + moduleSpecs[index].id; }
 }
 
@@ -70,6 +84,14 @@ inline constexpr const char* roamBarNames = "1/2 bar|1 bar|2 bars|4 bars|8 bars|
 // in the octave above, C..E choose the sub-location). Octave numbers as in most DAWs
 // (middle C = C3 here, MIDI note 60).
 inline constexpr const char* midiOctaveNames = "C-2|C-1|C0|C1|C2|C3|C4|C5|C6";
+// Mix: the group sliders' range (0-150 %), the reverb low cut (at or below `lowCutOff`
+// it is off), the pre-delay offset and the most Punch can add.
+inline constexpr float mixMax = 1.5f;
+inline constexpr float lowCutOff = 75.0f, lowCutMax = 600.0f;
+inline constexpr float preDelayMin = -50.0f, preDelayMax = 150.0f;
+using dsp::punchMaxDb;
+using dsp::punchDb;
+using dsp::punchControl;
 
 inline juce::StringArray advancedChoices(const ModuleParamSpec& spec) {
     juce::StringArray choices { "Place" };
@@ -80,7 +102,9 @@ inline juce::StringArray advancedChoices(const ModuleParamSpec& spec) {
 }
 
 // `currentLocation` names the sub-locations of the location in use (for host display).
-inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout(std::function<int()> currentLocation, bool instrument = false) {
+// `punchDesign` gives the playing instrument's own Punch in dB (for the Punch text).
+inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout(std::function<int()> currentLocation, bool instrument = false,
+                                                                                 std::function<float()> punchDesign = {}) {
     juce::AudioProcessorValueTreeState::ParameterLayout layout;
     juce::StringArray places;
     for (const auto* name : locationNames) places.add(name);
@@ -194,6 +218,49 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
     // (0-150 %; 100 % = the default, a little below the original design).
     layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { ids::shimmer, 1 }, "Shimmer",
                                                            juce::NormalisableRange<float>(0.0f, 1.5f), 1.0f, percent));
+    // Mix and Punch: the MIX section scales each group of effects (0-150 %; 100 % = as
+    // designed; Intensity stays the master on top), three helpers for the reverbs, the
+    // Atmosphere's on/off; the instrument's Punch (gain on hit) and its time.
+    layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { ids::mixReverb, 1 }, "Mix Reverb",
+                                                           juce::NormalisableRange<float>(0.0f, mixMax), 1.0f, percent));
+    layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { ids::mixEchoes, 1 }, "Mix Echoes",
+                                                           juce::NormalisableRange<float>(0.0f, mixMax), 1.0f, percent));
+    layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { ids::mixModulation, 1 }, "Mix Modulation",
+                                                           juce::NormalisableRange<float>(0.0f, mixMax), 1.0f, percent));
+    layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { ids::mixCharacter, 1 }, "Mix Character",
+                                                           juce::NormalisableRange<float>(0.0f, mixMax), 1.0f, percent));
+    layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { ids::mixAtmosphere, 1 }, "Mix Atmosphere",
+                                                           juce::NormalisableRange<float>(0.0f, mixMax), 1.0f, percent));
+    layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { ids::mixLowCut, 1 }, "Reverb Low Cut",
+        juce::NormalisableRange<float>(lowCutOff - 5.0f, lowCutMax, 0.0f, 0.5f), lowCutOff - 5.0f,
+        juce::AudioParameterFloatAttributes().withLabel("Hz")
+            .withStringFromValueFunction([](float v, int) { return v <= lowCutOff ? juce::String("Off") : juce::String(juce::roundToInt(v)) + " Hz"; })
+            .withValueFromStringFunction([](const juce::String& s) { return s.trim().equalsIgnoreCase("Off") ? lowCutOff - 5.0f : s.getFloatValue(); })));
+    layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { ids::mixPreDelay, 1 }, "Reverb Pre-delay",
+        juce::NormalisableRange<float>(preDelayMin, preDelayMax), 0.0f,
+        juce::AudioParameterFloatAttributes().withLabel("ms")
+            .withStringFromValueFunction([](float v, int) { const int ms = juce::roundToInt(v); return (ms > 0 ? "+" : "") + juce::String(ms) + " ms"; })
+            .withValueFromStringFunction([](const juce::String& s) { return s.getFloatValue(); })));
+    layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { ids::mixDuck, 1 }, "Reverb Duck",
+                                                           juce::NormalisableRange<float>(0.0f, 1.0f), 0.0f, percent));
+    layout.add(std::make_unique<juce::AudioParameterBool>(juce::ParameterID { ids::atmosOn, 1 }, "Atmosphere On", true));
+    if (instrument) {
+        layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { ids::punch, 1 }, "Punch",
+            juce::NormalisableRange<float>(0.0f, 1.0f), 0.5f,
+            juce::AudioParameterFloatAttributes().withLabel("dB")
+                .withStringFromValueFunction([punchDesign](float v, int) {
+                    const float db = punchDb(v, punchDesign ? punchDesign() : 0.0f);
+                    return db < 0.05f ? juce::String("Off") : "+" + juce::String(db, 1) + " dB";
+                })
+                .withValueFromStringFunction([punchDesign](const juce::String& s) {
+                    return s.trim().equalsIgnoreCase("Off") ? 0.0f : punchControl(s.getFloatValue(), punchDesign ? punchDesign() : 0.0f);
+                })));
+        layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { ids::punchTime, 1 }, "Punch Time",
+            juce::NormalisableRange<float>(20.0f, 500.0f, 0.0f, 0.5f), 120.0f,
+            juce::AudioParameterFloatAttributes().withLabel("ms")
+                .withStringFromValueFunction([](float v, int) { return juce::String(juce::roundToInt(v)) + " ms"; })
+                .withValueFromStringFunction([](const juce::String& s) { return s.getFloatValue(); })));
+    }
     return layout;
 }
 }

@@ -67,6 +67,18 @@ private:
     std::atomic<float>* midiOctave = nullptr;
     std::atomic<float>* atmosLevel = nullptr;
     std::atomic<float>* shimmer = nullptr;   // final touches: the Shimmer control
+    // Mix and Punch: the MIX section, the reverb helpers, Atmosphere on/off; Punch.
+    std::atomic<float>* mixReverb = nullptr;
+    std::atomic<float>* mixEchoes = nullptr;
+    std::atomic<float>* mixModulation = nullptr;
+    std::atomic<float>* mixCharacter = nullptr;
+    std::atomic<float>* mixAtmosphere = nullptr;
+    std::atomic<float>* mixLowCut = nullptr;
+    std::atomic<float>* mixPreDelay = nullptr;
+    std::atomic<float>* mixDuck = nullptr;
+    std::atomic<float>* atmosOn = nullptr;
+    std::atomic<float>* punch = nullptr;
+    std::atomic<float>* punchTime = nullptr;
     std::atomic<float>* atmosDensity = nullptr;
     std::atomic<float>* atmosSeed = nullptr;
     std::atomic<float>* quality = nullptr;
@@ -156,6 +168,10 @@ public:
     bool canUndo() const noexcept { return !undoStack.empty(); }
     bool canRedo() const noexcept { return !redoStack.empty(); }
     bool applyingSnapshot() const noexcept { return applying; }
+    // Mix and Punch: the reverbs' duck gain now (1 = none; tests and the MIX section's meter).
+    float reverbDuckGain() const noexcept { return duckShown.load(std::memory_order_relaxed); }
+    // The playing instrument's own Punch in dB (the Punch parameter's 50 %).
+    float punchDesignDb() const noexcept;
     // Calibration only (tests): the chain's raw level, without trims or level matcher.
     void setLevelMatching(bool on) noexcept { world.setLevelMatching(on); }
 
@@ -219,6 +235,7 @@ private:
     std::atomic<float> bendNow { 0 }, modNow { 0 };
     std::atomic<bool> sustainNow { false };
     std::atomic<int> voicesNow { 0 };
+    std::atomic<float> duckShown { 1.0f };
     static constexpr float neutralIntensity = 1.0e-4f;   // at or below: the dry path
     dc::Controls controls;
     struct Snapshot { std::vector<float> values; std::vector<dc::Stop> route; bool operator==(const Snapshot& o) const; };

@@ -70,6 +70,9 @@ struct Layer {
     float lowpass = 18000, highpass = 30;
     float velocityGain = 0.6f;   // 0: every velocity as loud; 1: fully velocity sensitive
     float velocityTone = 0.5f;   // octaves the low-pass closes on the softest note
+    // Brass and Reed (Mix and Punch): the attack's bite (brighter, harder blown in the first
+    // ~100 ms, with velocity) and a 2-4 kHz presence band; 0 = as before.
+    float bite = 0, presence = 0;
     float vibrato = 0, vibratoHz = 5.2f, vibratoDelay = 0.35f;   // semitones
     int model = 0;               // BodyType, Modes, StringSize or SynthModel as the engine says
     std::array<float, 6> p {};
@@ -108,6 +111,12 @@ struct Patch {
     float chorus = 0, shimmer = 0;
     Character characterMode = Character::Layers;
     bool sustaining = true;      // held notes sustain (organ, strings, pads) or ring out
+    // Mix and Punch. How much of the place's reverbs this instrument takes (times the MIX
+    // Reverb control; 1 = the place as designed: the instruments mostly played in a mix sit
+    // a little drier), the reverbs' pre-delay added and how much they dip under its attacks
+    // (the dry hit first: the brass), and its own Punch (dB of gain on hit at Punch 50 %).
+    float space = 1.0f, spacePreDelayMs = 0, spaceDuck = 0;
+    float punchDb = 0;
 };
 
 inline constexpr int instrumentCount = 31;
@@ -128,6 +137,9 @@ struct Macros {
     int octave = 0;
     float levelDb = 0;
     float shimmer = 1.0f;   // the Shimmer control (0..1.5), on the bus shimmer
+    float modulation = 1.0f;   // the MIX Modulation control (0..1.5), on the bus chorus
+    // Punch (0..1; 0.5 = the instrument's own) and the time it takes to settle.
+    float punch = 0.5f, punchSeconds = 0.12f;
 };
 
 class Synth {
@@ -160,6 +172,9 @@ public:
     void render(float* l, float* r, int n) noexcept;
 
     int activeVoices() const noexcept;
+    // Tests: the Punch gain the punch limiter applies now (1 = none), and the most it took.
+    float punchLimiterGain() const noexcept;
+    float punchLimiterLowest() const noexcept;
     // Tests: the pitches the glissando's grace notes started on (MIDI note numbers, in the
     // order they sounded), and the sample each started at; cleared by clearRunLog().
     struct RunNote { int pitch; uint64_t at; };

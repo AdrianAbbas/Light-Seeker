@@ -111,6 +111,14 @@ public:
     // The Shimmer control times its base (Common.h) on the shimmer and sparkle layers
     // (octave/sparkle pitch layers, the spiral, the prism, the hue shimmer); smoothed.
     void setShimmer(float scale) noexcept { shimmerGain.set(scale); }
+    // Mix and Punch: the MIX groups (0..1.5, 1 = as designed) on the kind's own stages:
+    // Reverb on the smear, Echoes on the taps and the reverse swell, Modulation on the
+    // wobble, tremolo, auto-pan and swirl depth, Character on the combs, the modes, the
+    // pitch layers that are not shimmer (a sung choir, a doubling) and the saturation.
+    // Smoothed over 50 ms (click-free while moving).
+    void setMix(float space, float echoes, float modulation, float character) noexcept {
+        mixSpace.set(space); mixEchoes.set(echoes); mixModulation.set(modulation); mixCharacter.set(character);
+    }
     void process(float* l, float* r, int n, const Frame&, const Context&) noexcept;
     static const char* kindName(int kind) noexcept;
     // After a journey to another kind: stop taking input (as the amount falls) and ring
@@ -138,6 +146,7 @@ private:
     dsp::Smoothed amount;
     dsp::Smoothed shimmerGain { dsp::shimmerLayerBase, dsp::shimmerLayerBase, 1.0f };
     bool shimmerPitch = false;   // the pitch layer is a shimmer or sparkle (not a choir)
+    dsp::Smoothed mixSpace { 1, 1, 1 }, mixEchoes { 1, 1, 1 }, mixModulation { 1, 1, 1 }, mixCharacter { 1, 1, 1 };
     // Serial stages.
     std::array<dsp::Svf, 2> toneSvf, growlLow, growlSub;
     std::array<dsp::Biquad, 2> toneEq, bite;
