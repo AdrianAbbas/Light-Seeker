@@ -144,7 +144,7 @@ usage limit or a compaction) continues from the first unticked line. Push to `ma
 - [x] M1. MIX parameters (both plug-ins, added last): Reverb, Echoes, Modulation, Character, Atmosphere (0-150 %, 100 % = as designed; Shimmer moved there unchanged), Reverb Low Cut, Reverb Pre-delay, Reverb Duck (0 % = off); Atmosphere On; engine and synth scale each group, smoothed, level-matched; old sessions unchanged; push `[skip ci]`
 - [x] M2. MIX section in the FX's main controls and on the instrument panel (collapsible, ivory/gold); Atmosphere On/Level/Density in the Advanced tab; push `[skip ci]`
 - [x] M3. Punch (gain on hit, per voice, Punch + Punch Time, velocity-sensitive, click-free, limited) with per-instrument defaults; brass attack/bite/presence pass (Fanfare Trumpets, Soaring Horn, Heroic Horns, Epic Choir and Brass, Grand Organ's trumpet); default reverb re-check on mix instruments; push `[skip ci]`
-- [ ] M4. Tests (`mix` group), listening renders (mini-song before/after, brass Punch 0 vs default), DEVLOG handoff; final push without `[skip ci]`, CI green
+- [x] M4. Tests (`mix` group), listening renders (mini-song before/after, brass Punch 0 vs default), DEVLOG handoff; final push without `[skip ci]`, CI green
 
 ---
 
@@ -2010,6 +2010,12 @@ higher up (the siblings' chord is above it: their distances are unchanged). Then
 Local run with the recordings (CI's condition, without the captured spaces): basics 308
 passed, 1 failed (the known wall-clock "a full repaint with the drawer fits in a 30 fps
 frame", 40.6 ms with ten shards on four cores; alone 12.0 ms, the previous build 11.6 ms),
-robustness 152, qa 1, strength 118, instruments 354, recorded 93, search 143, mix 161, all
-passed.
+robustness 152, locations 886, qa 1, strength 118, instruments 354, recorded 93, search
+143, mix 161, all passed.
+
+**CI, `c58aa9f`: green.** Linux with the recordings and the captured spaces 2240 passed,
+0 failed (the `mix` shard included; the summary now also counts `9-search`); the Mix and
+Punch listening renders and the brass report in `test-logs/mix/`. macOS build, smoke +
+instrument on arm64 and x86_64 78 passed each, auval and the AU harness for both plug-ins,
+the package uploaded.
 
