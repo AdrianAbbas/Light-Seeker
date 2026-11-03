@@ -785,6 +785,7 @@ void LightSeekerProcessor::getStateInformation(juce::MemoryBlock& data) {
         w.setProperty("advancedScroll", v.advancedScroll, nullptr);
         w.setProperty("journeyScroll", v.journeyScroll, nullptr);
         w.setProperty("lowestKey", v.lowestKey, nullptr);
+        w.setProperty("mix", v.mix, nullptr);
         state.appendChild(w, nullptr);
     }
     if (auto xml = state.createXml()) copyXmlToBinary(*xml, data);
@@ -829,6 +830,7 @@ void LightSeekerProcessor::setStateInformation(const void* data, int size) {
             v.advancedScroll = juce::jlimit(0, 100000, static_cast<int>(w.getProperty("advancedScroll", 0)));
             v.journeyScroll = juce::jlimit(0, 100000, static_cast<int>(w.getProperty("journeyScroll", 0)));
             v.lowestKey = juce::jlimit(0, 127, static_cast<int>(w.getProperty("lowestKey", 36)));
+            v.mix = static_cast<bool>(w.getProperty("mix", false));
         });
     }
     // The journey route (version 3); older states have none.

@@ -29,9 +29,10 @@ InstrumentPanel::InstrumentPanel(LightSeekerProcessor& p) : processor(p) {
     if (auto* param = processor.parameters.getParameter(dc::ids::instLock))
         lockAttachment = std::make_unique<juce::ButtonParameterAttachment>(*param, lock);
 
-    const std::array<const char*, 8> ids { dc::ids::instTone, dc::ids::instAttack, dc::ids::instRelease, dc::ids::instCharacter,
-                                           dc::ids::instVowel, dc::ids::instEnsemble, dc::ids::instLevel, dc::ids::intensity };
-    const std::array<const char*, 8> names { "Tone", "Attack", "Release", "Character", "Vowel", "Ensemble", "Level", "Intensity" };
+    const std::array<const char*, 10> ids { dc::ids::instTone, dc::ids::instAttack, dc::ids::instRelease, dc::ids::instCharacter,
+                                            dc::ids::instVowel, dc::ids::instEnsemble, dc::ids::instLevel, dc::ids::intensity,
+                                            dc::ids::punch, dc::ids::punchTime };
+    const std::array<const char*, 10> names { "Tone", "Attack", "Release", "Character", "Vowel", "Ensemble", "Level", "Intensity", "Punch", "Punch Time" };
     for (std::size_t k = 0; k < macros.size(); ++k) {
         auto& s = macros[k];
         s.setSliderStyle(juce::Slider::LinearVertical);
@@ -52,6 +53,17 @@ InstrumentPanel::InstrumentPanel(LightSeekerProcessor& p) : processor(p) {
     macros[4].setTooltip("The voices' vowel: mmm, ooh, oh, aah, ee (50 %: the instrument's own)");
     macros[5].setTooltip("The voices: one singer at 0 %, the instrument's choir at 50 %, eight singers at 100 %");
     macros[7].setTooltip("How much of the place's space (0 %: the instrument dry)");
+    macros[8].setTooltip("Gain on hit: each note starts louder and settles to its level (50 %: the instrument's own; up to +12 dB)");
+    macros[9].setTooltip("How long the Punch takes to settle (20-500 ms)");
+    for (auto* param : { processor.parameters.getParameter(dc::ids::punch), processor.parameters.getParameter(dc::ids::punchTime) })
+        if (param != nullptr) {
+            auto& s = macros[param == processor.parameters.getParameter(dc::ids::punch) ? 8u : 9u];
+            s.setDoubleClickReturnValue(true, static_cast<double>(param->convertFrom0to1(param->getDefaultValue())));
+        }
+    mix.setClickingTogglesState(true);
+    mix.setTooltip("The MIX section: how much reverb, echoes, modulation, shimmer, character and atmosphere");
+    mix.onClick = [this] { if (onMix) onMix(); };
+    addAndMakeVisible(mix);
     octave.addItemList({ "-2", "-1", "0", "+1", "+2" }, 1);
     addAndMakeVisible(octave);
     if (auto* param = processor.parameters.getParameter(dc::ids::instOctave))
@@ -170,6 +182,7 @@ void InstrumentPanel::refreshName() {
     family.setText(juce::String(dc::locationNames[static_cast<std::size_t>(l)]) + juce::String::fromUTF8(" \xc2\xb7 ") + dc::subLocationName(l, k),
                    juce::dontSendNotification);
     macroLabels[3].setText(p.character, juce::dontSendNotification);
+    macros[8].updateText();   // the Punch reads in dB of this instrument's own
     // Vowel and Ensemble only act on the voices (dimmed elsewhere).
     const bool voiced = ls::inst::patchHasVoice(p);
     for (std::size_t k : { std::size_t(4), std::size_t(5) }) {
@@ -233,14 +246,15 @@ void InstrumentPanel::resized() {
     previous.setBounds(10, 52, 28, 24);
     choose.setBounds(42, 52, 124, 24);
     next.setBounds(170, 52, 28, 24);
+    mix.setBounds(204, 52, 52, 24);
     lock.setBounds(10, 80, 140, 24);
     octaveLabel.setBounds(150, 80, 56, 24);
     octave.setBounds(208, 80, 48, 24);
     int x = 280;
     for (std::size_t k = 0; k < macros.size(); ++k) {
-        macroLabels[k].setBounds(x - 8, 22, 68, 16);
-        macros[k].setBounds(x, 38, 52, 66);
-        x += k == 5 || k == 6 ? 72 : 62;
+        macroLabels[k].setBounds(x - 6, 22, 62, 16);
+        macros[k].setBounds(x, 38, 50, 66);
+        x += k == 5 || k == 7 ? 62 : 56;
     }
     status.setBounds(x + 4, 22, getWidth() - x - 14, 60);
     bendLabel.setBounds(8, 112, 34, 14);

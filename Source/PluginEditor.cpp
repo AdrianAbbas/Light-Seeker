@@ -17,7 +17,7 @@ int moduleOf(std::size_t index) {
 }
 
 //==============================================================================
-LightSeekerView::Drawer::Drawer(juce::AudioProcessorValueTreeState& state) {
+LightSeekerView::Drawer::Drawer(juce::AudioProcessorValueTreeState& s) : state(s) {
     setOpaque(true);
     hint.setText("Advanced: every module parameter, as an offset from the place (0 % = as designed) or an override "
                  "(\"Place\" = as designed). Offsets travel with you.", juce::dontSendNotification);
@@ -61,6 +61,35 @@ LightSeekerView::Drawer::Drawer(juce::AudioProcessorValueTreeState& state) {
         }
         rows.push_back(std::move(row));
     }
+    // Mix and Punch: the Atmosphere layer's settings (also in the toolbar and the MIX
+    // section): on/off, its level and density. Turning it on at level 0 starts it at 35 %.
+    atmosHeading.setText("Atmosphere", juce::dontSendNotification);
+    atmosHeading.setFont(titleFont(15.0f));
+    atmosHeading.setColour(juce::Label::textColourId, colours::blood.brighter(0.3f));
+    atmosLevelLabel.setText("Level", juce::dontSendNotification);
+    atmosDensityLabel.setText("Density", juce::dontSendNotification);
+    for (auto* l : { &atmosLevelLabel, &atmosDensityLabel }) { l->setFont(labelFont(13.0f)); l->setJustificationType(juce::Justification::centredRight); }
+    atmosOn.setTooltip("The Atmosphere layer on or off (the sounds of the place; its level below)");
+    atmosOnAttachment = std::make_unique<juce::ButtonParameterAttachment>(*state.getParameter(dc::ids::atmosOn), atmosOn);
+    atmosOn.onClick = [this] {
+        auto* level = state.getParameter(dc::ids::atmosLevel);
+        if (atmosOn.getToggleState() && level != nullptr && level->getValue() <= 1.0e-4f) {
+            level->beginChangeGesture();
+            level->setValueNotifyingHost(level->convertTo0to1(0.35f));
+            level->endChangeGesture();
+        }
+    };
+    for (auto* sl : { &atmosLevel, &atmosDensity }) {
+        sl->setTextBoxStyle(juce::Slider::TextBoxRight, true, 56, 18);
+        sl->setColour(juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
+        sl->setColour(juce::Slider::textBoxTextColourId, colours::ash);
+    }
+    atmosLevel.setDoubleClickReturnValue(true, 0.0);
+    atmosDensity.setDoubleClickReturnValue(true, 0.35);
+    atmosLevelAttachment = std::make_unique<juce::SliderParameterAttachment>(*state.getParameter(dc::ids::atmosLevel), atmosLevel);
+    atmosDensityAttachment = std::make_unique<juce::SliderParameterAttachment>(*state.getParameter(dc::ids::atmosDensity), atmosDensity);
+    for (auto* c : std::initializer_list<juce::Component*> { &atmosHeading, &atmosOn, &atmosLevelLabel, &atmosDensityLabel, &atmosLevel, &atmosDensity })
+        content.addAndMakeVisible(*c);
     viewport.setViewedComponent(&content, false);
     viewport.setScrollBarsShown(true, false);
     addAndMakeVisible(viewport);
@@ -81,7 +110,15 @@ void LightSeekerView::Drawer::resized() {
     // Two columns of rows, headings spanning their column.
     const int width = viewport.getWidth() - viewport.getScrollBarThickness() - 4;
     const int columnWidth = width / 2, rowHeight = 24, headingHeight = 26;
-    std::array<int, 2> y { 0, 0 };
+    // The Atmosphere first, across the drawer: heading, On, Level, Density.
+    atmosHeading.setBounds(0, 0, 120, headingHeight);
+    atmosOn.setBounds(124, 2, 60, rowHeight);
+    const int half = (width - 190) / 2;
+    atmosLevelLabel.setBounds(190, 2, 56, rowHeight);
+    atmosLevel.setBounds(250, 4, half - 64, rowHeight - 4);
+    atmosDensityLabel.setBounds(190 + half, 2, 64, rowHeight);
+    atmosDensity.setBounds(190 + half + 68, 4, half - 72, rowHeight - 4);
+    std::array<int, 2> y { headingHeight + 8, headingHeight + 8 };
     int headingIndex = -1, group = -1, column = 0;
     for (auto& row : rows) {
         if (row->group != group) {
@@ -189,7 +226,7 @@ void LightSeekerView::PlaceButton::paintHover(juce::Graphics& g, bool hover, boo
 LightSeekerView::LightSeekerView(LightSeekerProcessor& p)
     : processor(p), cache([this] { sceneReady(); }), drawer(p.parameters),
       journeyPanel(p, [this] { return dc::Stop { shown, dc::clampSubLocation(shown, shownSub) }; }),
-      searchPanel(dc::search::index(p.isInstrument()), p.recentSearches) {
+      searchPanel(dc::search::index(p.isInstrument()), p.recentSearches), mixPanel(p) {
     setLookAndFeel(&look);
     setOpaque(true);
     auto* locationParameter = processor.parameters.getParameter(dc::ids::location);
@@ -250,8 +287,13 @@ LightSeekerView::LightSeekerView(LightSeekerProcessor& p)
     setUpFader(input, dc::ids::input, "Input");
     setUpFader(intensity, dc::ids::intensity, "Intensity");
     setUpFader(mix, dc::ids::mix, "Mix");
-    setUpFader(shimmer, dc::ids::shimmer, "Shimmer");
-    shimmer.slider.setTooltip("Every shimmer, octave shimmer and sparkle in the sound (0 to 150 %; 100 % as designed).");
+    // Mix and Punch: Shimmer moved into the MIX section; its button sits where it was.
+    mixToggle.setClickingTogglesState(true);
+    mixToggle.setTooltip("The MIX section: how much reverb, echoes, modulation, shimmer, character and atmosphere");
+    mixToggle.onClick = [this] { setMixOpen(mixToggle.getToggleState()); };
+    addAndMakeVisible(mixToggle);
+    mixPanel.onClose = [this] { setMixOpen(false); };
+    addChildComponent(mixPanel);
     setUpFader(output, dc::ids::output, "Output");
 
     travelLabel.setText("Time", juce::dontSendNotification);
@@ -284,6 +326,7 @@ LightSeekerView::LightSeekerView(LightSeekerProcessor& p)
         // A second click closes it (as do its close button, Esc and a click outside).
         drawer.setVisible(advancedToggle.getToggleState());
         if (drawer.isVisible()) {
+            setMixOpen(false);
             journeyToggle.setToggleState(false, juce::dontSendNotification);
             journeyPanel.setVisible(false);
             drawer.grabKeyboardFocus();
@@ -298,6 +341,7 @@ LightSeekerView::LightSeekerView(LightSeekerProcessor& p)
         journeyPanel.refresh();
         journeyPanel.setVisible(journeyToggle.getToggleState());
         if (journeyPanel.isVisible()) {
+            setMixOpen(false);
             advancedToggle.setToggleState(false, juce::dontSendNotification);
             drawer.setVisible(false);
             journeyPanel.grabKeyboardFocus();
@@ -409,6 +453,7 @@ LightSeekerView::LightSeekerView(LightSeekerProcessor& p)
             const auto px = pixelSize();
             cache.request(scene, px.x, px.y);
         }
+        if (saved.mix && !saved.advanced && !saved.journey) setMixOpen(true);
         if (saved.advanced) {
             advancedToggle.setToggleState(true, juce::dontSendNotification);
             advancedToggle.onClick();
@@ -427,8 +472,9 @@ void LightSeekerView::storeViewState() {
     const auto shownScene = pending ? pendingScene : scene;
     const bool advanced = drawer.isVisible(), journey = journeyPanel.isVisible();
     const int advancedScroll = drawer.scroll(), journeyScroll = journeyPanel.scroll();
-    const bool controls = controlsShown;
+    const bool controls = controlsShown, mixShown = mixPanel.isVisible();
     processor.updateViewState([&](LightSeekerProcessor::ViewState& v) {
+        v.mix = mixShown;
         v.place = place;
         if (place) { v.location = shownScene.location; v.sub = shownScene.sub; }
         else if (shown >= 0) { v.location = shown; v.sub = dc::clampSubLocation(shown, shownSub); }
@@ -591,6 +637,27 @@ void LightSeekerView::layoutSearch() {
     const int w = dc::ui::SearchPanel::panelWidth + 28;
     const int y = 32;
     searchPanel.setBounds((getWidth() - w) / 2, y, w, juce::jmax(200, juce::jmin(470, bottom + 14 - y)));
+}
+
+void LightSeekerView::layoutMix() {
+    // Above the controls, on the left (under the Levels' MIX button).
+    const int bottom = controlsShown ? getHeight() - static_cast<int>(stripHeight) - 34 : getHeight() - 44;
+    mixPanel.setBounds(14, bottom - dc::ui::MixPanel::panelHeight, dc::ui::MixPanel::panelWidth, dc::ui::MixPanel::panelHeight);
+}
+
+void LightSeekerView::setMixOpen(bool open) {
+    if (open == mixPanel.isVisible() && mixToggle.getToggleState() == open) return;
+    mixToggle.setToggleState(open, juce::dontSendNotification);
+    if (open) {
+        // It shares the space above the controls with the Advanced drawer and the Journey panel.
+        if (drawer.isVisible()) drawer.onClose();
+        if (journeyPanel.isVisible()) journeyPanel.onClose();
+        layoutMix();
+    }
+    mixPanel.setVisible(open);
+    repaint();
+    storeViewState();
+    if (onMixChanged) onMixChanged(open);
 }
 
 void LightSeekerView::mouseDown(const juce::MouseEvent& e) { pointerDown(e.eventComponent); }
@@ -1627,7 +1694,7 @@ void LightSeekerView::resized() {
     place(input, { mainX, row, 48, rowHeight });
     place(intensity, { mainX + 48, row, 58, rowHeight });
     place(mix, { mainX + 106, row, 48, rowHeight });
-    place(shimmer, { mainX + 154, row, 58, rowHeight });
+    mixToggle.setBounds(mainX + 156, row + 18, 54, 30);
     place(output, { mainX + 212, row, 48, rowHeight });
     travelLabel.setBounds(520, row + 2, 60, 22);
     travelTime.setBounds(574, row + 2, 190, 22);
@@ -1638,7 +1705,7 @@ void LightSeekerView::resized() {
     macroHeading.setBounds(0, 0, 0, 0);
     controlsToggle.setBounds(w - 38, controlsShown ? top - 30 : h - 32, 30, 26);
     for (auto* c : std::initializer_list<juce::Component*> { &input.slider, &input.label, &intensity.slider, &intensity.label, &mix.slider, &mix.label,
-                                                             &shimmer.slider, &shimmer.label, &output.slider, &output.label, &travelLabel, &travelTime, &travelSync, &bypass, &advancedToggle, &journeyToggle,
+                                                             &mixToggle, &output.slider, &output.label, &travelLabel, &travelTime, &travelSync, &bypass, &advancedToggle, &journeyToggle,
                                                              &macroHeading, &atmosphere, &atmosphereLabel, &presetButton, &prevPreset, &nextPreset, &slotA, &slotB,
                                                              &copySlot, &undoButton, &redoButton, &settingsButton })
         c->setVisible(controlsShown);
@@ -1654,6 +1721,7 @@ void LightSeekerView::resized() {
     const int panelBottom = controlsShown ? top - 34 : h - 44;
     drawer.setBounds(200, 56, w - 214, panelBottom - 56);
     journeyPanel.setBounds(14, 56, 330, panelBottom - 56);
+    layoutMix();
     layoutOverlays();
     layoutSearch();
     const auto px = pixelSize();
@@ -1788,6 +1856,10 @@ LightSeekerEditor::LightSeekerEditor(LightSeekerProcessor& p) : AudioProcessorEd
     if (processor.isInstrument()) {
         panel = std::make_unique<dc::ui::InstrumentPanel>(processor);
         addAndMakeVisible(*panel);
+        // Mix and Punch: the panel's MIX button opens the same MIX section as Levels' one.
+        panel->onMix = [this] { content.setMixOpen(!content.mixOpen()); };
+        panel->setMixShown(content.mixOpen());
+        content.onMixChanged = [this](bool open) { if (panel != nullptr) panel->setMixShown(open); };
     }
     content.onScaleChosen = [this](float scale) { setScale(scale); };
     setResizable(true, true);

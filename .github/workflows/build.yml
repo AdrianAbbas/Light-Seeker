@@ -191,6 +191,17 @@ jobs:
         env:
           LIGHTSEEKER_SAMPLES: ${{ runner.temp }}/samples
         run: build/LightSeekerTests_artefacts/Release/LightSeekerTests --listen-changed build/test-logs/changed-instruments
+      # Mix and Punch: a four-instrument mini-song with the new mix defaults and with the old
+      # mix settings, the brass with Punch 0 then its default; beside them the same song
+      # rendered by the code before Mix and Punch and by this one (docs/listening/mix, stand-ins).
+      - name: Mix and Punch listening renders (mini-song, brass Punch 0 vs default)
+        if: always()
+        env:
+          LIGHTSEEKER_SAMPLES: ${{ runner.temp }}/samples
+        run: |
+          build/LightSeekerTests_artefacts/Release/LightSeekerTests --listen-mix build/test-logs/mix
+          cp docs/listening/mix/*.ogg build/test-logs/mix/
+          build/LightSeekerTests_artefacts/Release/LightSeekerTests --brass-report > build/test-logs/mix/brass-report.txt
       - name: Upload test logs
         if: always()
         uses: actions/upload-artifact@v4

@@ -2768,6 +2768,9 @@ int paintedSnapshots(const juce::String& directory) {
 #include "InstrumentTests.h"
 #include "WindowTests.h"
 #include "ShimmerTests.h"
+#define LS_HAS_MIX 1
+#include "MixSong.h"
+#include "MixTests.h"
 #include "SearchTests.h"
 
 int main(int argc, char** argv) {
@@ -2793,6 +2796,10 @@ int main(int argc, char** argv) {
         else if (arg == "--hotfix-snapshots" && i + 1 < argc) return hotfixSnapshots(argv[i + 1]);
         else if (arg == "--window-snapshots" && i + 1 < argc) return windowSnapshots(argv[i + 1]);
         else if (arg == "--search-snapshots" && i + 1 < argc) return searchSnapshots(argv[i + 1]);
+        else if (arg == "--listen-mix" && i + 1 < argc) return listenMix(argv[i + 1]);
+        else if (arg == "--brass-report") return brassReport();
+        else if (arg == "--mix-debug" && i + 2 < argc) return mixDebug(juce::String(argv[i + 1]).getIntValue(), juce::String(argv[i + 2]).getIntValue());
+        else if (arg == "--mix-snapshots" && i + 1 < argc) return mixSnapshots(argv[i + 1]);
         else if (arg == "--render" && i + 2 < argc)
             return renderToFile(argv[i + 1], juce::String(argv[i + 2]).getIntValue(), i + 3 < argc ? juce::String(argv[i + 3]).getDoubleValue() : 8.0);
     }
@@ -2810,6 +2817,7 @@ int main(int argc, char** argv) {
     if (run("musicality")) testMusicality(s);
     if (run("strength")) testStrength(s);
     if (run("shimmer")) testShimmer(s);
+    if (run("mix")) testMix(s);
     if (run("modules")) { testModules(s); testNewModules(s); }
     if (run("rates")) testRates(s);
     if (run("extremes")) testExtremes(s);

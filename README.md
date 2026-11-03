@@ -51,7 +51,8 @@ WORLDBUILDER's sound engine (brass, bowed strings, voices, plucked strings, bell
 | **Vowel, Ensemble** | The voice instruments (the choirs, the chord pad's Voices). Vowel morphs between the sung vowels (mmm, ooh, oh, aah, ee: two either way from the instrument's own at 50 %). Ensemble brings the singers in one by one: one voice at 0 %, the instrument's own choir at 50 %, eight singers (each its own take, detune, timing and place in the stereo field) at 100 %. Dimmed on the other instruments. |
 | **Level** | The instrument's level (all instruments are level-matched as designed). |
 | **Intensity** | How much of the place's space: 0 % is the instrument dry. |
-| **Shimmer** | (In the Levels group, as in the effect.) Every shimmer, octave shimmer and sparkle, the places' and the instrument's own: 0-150 %, 100 % the default. |
+| **Punch, Punch Time** | Gain on hit: each note starts louder (by up to +12 dB, less on soft notes) and settles back to its level over Punch Time (20-500 ms, default 120 ms). 50 % is the instrument's own: high on the brass (+6-8 dB), medium on plucks and harps (+3-3.5 dB), low on strings, bells and winds, off on pads and choirs; the text shows it in dB. A limiter keeps it from clipping. |
+| **MIX** | Opens the MIX section (as the MIX button in Levels; Shimmer is there now). The instruments mostly played in a mix (brass, strings, plucks, harps, guitars) take a little less of the place's reverb by default; MIX Reverb at 150 % brings back the whole space. The brass's reverb also starts 15-20 ms later and dips under its hits, so the dry hit comes first. |
 | **Bend, Mod, Sustain** | Pitch bend (a whole tone), modulation (vibrato; tremolo on struck and plucked instruments), the sustain pedal. Your MIDI keyboard's wheels and pedal move them. |
 | **Keyboard** | Plays (click and drag); the keys light up with the notes the host plays. |
 
@@ -163,7 +164,7 @@ its tags.
 | **Input** | How hard the place is driven (warmth, resonances); loudness stays matched. |
 | **Intensity** | How much of the place: 0 % is the dry signal exactly, 50 % already clearly audible, 100 % as designed. |
 | **Mix** | Dry/wet. |
-| **Shimmer** | Every shimmer, octave shimmer and sparkle in the sound (the places' shimmering reverbs and signatures; in the instrument also its own shimmer): 0 % none, 100 % the default (a little below the original design), 150 % more. Click-free while you move it, automatable, saved with presets and projects. |
+| **MIX** (button, in place of Shimmer) | Opens the MIX section above the controls (below); a second click or its ✕ folds it away. It stays open while you play and the window remembers it. |
 | **Output** | Output level. |
 | **Travel** (time + sync) | How long a journey takes: Instant to 10 s, or 1/4 note to 4 bars at the song's tempo. Tails ring on when you leave a place. |
 | **Atmosphere** | Level of the place's sparse background sounds (soft wind, distant bells, birdsong, fountain shimmer, chimes, harp glints, leaves, a brook); 0 % = off (default). They step back when you play. |
@@ -178,6 +179,25 @@ its tags.
 | **⚙** | Window size (75–200 %, or drag the corner) and Quality: Eco (lightest: no animation, a mono spectral layer), Standard, High (smoothest animation). |
 | **▾** (above the controls) | Hide the controls to see the whole picture. |
 
+**The MIX section** (both plug-ins; for sitting a place in a song with other instruments). Each
+group control runs 0–150 %, 100 % = as designed; Intensity stays the master on top. Moving
+any of them is click-free and keeps the level steady (turning the reverb down does not make
+the sound jump); all are automatable and saved with presets and projects. Older projects open
+with everything at 100 % and sound exactly as before.
+
+| Control | What it does |
+|---|---|
+| **Reverb** | Every reverb and captured space (the halls, the Radiance spaces, the aura's wash). |
+| **Echoes** | The delays, multi-taps, slap echoes, rising and soaring delays, the tape echo. |
+| **Modulation** | Chorus, flutter, tremolo and auto-pan, the swirl, pitch waver (not the shimmer). |
+| **Shimmer** | Every shimmer, octave shimmer and sparkle (the places' and the instrument's own): 0 % none, 100 % the default (a little below the original design), 150 % more. Unchanged, only moved here. |
+| **Character** | Resonators, bells and chimes, harp strings, harmonic richness (warmth), the choir layers: the place's signature sounds. |
+| **Atmosphere** | The Atmosphere layer's level, 0–150 % of its own Level (turn it on in the toolbar or in Advanced). |
+| **Low Cut** | Takes the mud out of the reverbs: everything below 80–600 Hz (Off: as designed). |
+| **Pre-delay** | Starts the reverbs later (up to +150 ms; earlier, to -50 ms, where a hall's own pre-delay allows): the dry note comes first. |
+| **Duck** | The reverbs dip (to -15 dB at 100 %) while you play and bloom in the gaps. 0 % = off (default). |
+| **As designed** | Every MIX control back to 100 % / off. |
+
 **Journey panel:**
 
 | Control | What it does |
@@ -188,7 +208,7 @@ its tags.
 | **Roam** + rate | The plug-in wanders between the current location's places, every ½–16 bars. |
 | **Randomness / Seed** | 0 % visits the places in order; more is more random. The same seed always gives the same wandering at the same bar. |
 | **MIDI travel** + octave | Notes C–A of the chosen octave pick the ten locations, C–D♯ an octave higher the places (see host support below). |
-| **Atmosphere Density / Seed** | How often background sounds come, and which. |
+| **Atmosphere Density / Seed** | How often background sounds come, and which. (On/off, Level and Density are also at the top of Advanced.) |
 
 **A click always wins:** choosing a location on the map, a place in the list or a ring, or
 the location in the breadcrumb takes you there at once and stops a running Journey or Roam

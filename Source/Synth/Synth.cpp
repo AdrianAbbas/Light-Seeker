@@ -1431,10 +1431,10 @@ void Synth::render(float* outL, float* outR, int n) noexcept {
             r += vr;
         }
         // Punch's safety limiter (instant attack, 60 ms release): only what Punch added is
-        // ever taken back, and only above the ceiling (-1 dBFS here).
+        // ever taken back, and only above the ceiling (-0.4 dBFS here).
         auto& lim = *bus;
         if (punched || lim.limiterGain < 1.0f) {
-            constexpr float ceiling = 0.891f;
+            constexpr float ceiling = 0.955f;
             const float peak = std::max(std::abs(l), std::abs(r));
             const float floorLevel = std::max(ceiling, std::max(std::abs(l0), std::abs(r0)));
             const float needed = peak > floorLevel ? floorLevel / peak : 1.0f;

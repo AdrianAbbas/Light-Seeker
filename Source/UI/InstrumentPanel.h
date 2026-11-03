@@ -36,6 +36,11 @@ public:
     juce::Button& nextButton() { return next; }
     juce::Button& previousButton() { return previous; }
     juce::Button& sustainButton() { return sustain; }
+    // Mix and Punch: the MIX button (opens the MIX section above the controls) and the
+    // Punch macros (8: Punch, 9: Punch Time).
+    juce::Button& mixButton() { return mix; }
+    std::function<void()> onMix;
+    void setMixShown(bool open) { mix.setToggleState(open, juce::dontSendNotification); }
     juce::Slider& bendWheel() { return bend; }
     juce::Slider& modWheelSlider() { return mod; }
     juce::MidiKeyboardComponent& keyboardComponent() { return keyboard; }
@@ -59,9 +64,11 @@ private:
     juce::TextButton previous, next, choose { "Instruments" };
     juce::ToggleButton lock { "Lock instrument" };
     std::unique_ptr<juce::ButtonParameterAttachment> lockAttachment;
-    std::array<juce::Slider, 8> macros;      // Tone, Attack, Release, Character, Vowel, Ensemble, Level, Intensity
-    std::array<juce::Label, 8> macroLabels;
-    std::array<std::unique_ptr<juce::SliderParameterAttachment>, 8> macroAttachments;
+    // Tone, Attack, Release, Character, Vowel, Ensemble, Level, Intensity, Punch, Punch Time
+    std::array<juce::Slider, 10> macros;
+    std::array<juce::Label, 10> macroLabels;
+    std::array<std::unique_ptr<juce::SliderParameterAttachment>, 10> macroAttachments;
+    juce::TextButton mix { "MIX" };
     juce::ComboBox octave;
     juce::Label octaveLabel;
     std::unique_ptr<juce::ComboBoxParameterAttachment> octaveAttachment;

@@ -20,6 +20,7 @@
 #include "UI/InstrumentPanel.h"
 #include "UI/Hover.h"
 #include "UI/SearchPanel.h"
+#include "UI/MixPanel.h"
 
 class LightSeekerView final : public juce::Component, private juce::Timer, private juce::AudioProcessorParameter::Listener {
 public:
@@ -134,6 +135,14 @@ public:
     dc::ui::SearchPanel& searchPanelForTest() noexcept { return searchPanel; }
     juce::Button& searchButtonForTest() noexcept { return searchButton; }
 
+    // Mix and Punch: the MIX section above the controls (the MIX button in Levels, and in
+    // the instrument the instrument panel's MIX button). It stays open while you play.
+    void setMixOpen(bool open);
+    bool mixOpen() const noexcept { return mixPanel.isVisible(); }
+    std::function<void(bool)> onMixChanged;   // the instrument panel follows
+    dc::ui::MixPanel& mixPanelForTest() noexcept { return mixPanel; }
+    juce::Button& mixButton() noexcept { return mixToggle; }
+
 private:
     enum class View { Map, Place };
     struct Fader {
@@ -167,6 +176,8 @@ private:
     class Drawer final : public juce::Component {
     public:
         explicit Drawer(juce::AudioProcessorValueTreeState&);
+        // Mix and Punch: the Atmosphere's settings at the top (on/off, level, density).
+        juce::Button& atmosphereButton() { return atmosOn; }
         void paint(juce::Graphics&) override;
         void resized() override;
         juce::Button& closeButton() { return close; }
@@ -189,6 +200,13 @@ private:
         std::vector<std::unique_ptr<Row>> rows;
         std::vector<std::unique_ptr<juce::Label>> headings;
         juce::Label hint;
+        juce::AudioProcessorValueTreeState& state;
+        juce::Label atmosHeading, atmosLevelLabel, atmosDensityLabel;
+        juce::ToggleButton atmosOn { "On" };
+        juce::Slider atmosLevel { juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight },
+                     atmosDensity { juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight };
+        std::unique_ptr<juce::SliderParameterAttachment> atmosLevelAttachment, atmosDensityAttachment;
+        std::unique_ptr<juce::ButtonParameterAttachment> atmosOnAttachment;
     };
     // Journeys (Milestone 9): the route, roaming and MIDI travel.
     class JourneyPanel final : public juce::Component {
@@ -366,7 +384,7 @@ private:
     juce::Label placeCrumb;
     std::unique_ptr<juce::ParameterAttachment> locationAttachment, subLocationAttachment;
     std::array<Fader, dc::macroCount> macros;
-    Fader input, intensity, mix, shimmer, output;   // shimmer: final touches
+    Fader input, intensity, mix, output;   // Shimmer moved to the MIX section (Mix and Punch)
     juce::Slider travelTime { juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight };
     juce::Slider atmosphere { juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight };
     juce::Label atmosphereLabel;
@@ -388,6 +406,9 @@ private:
     dc::ui::SearchButton searchButton;
     dc::ui::SearchPanel searchPanel;
     void layoutSearch();
+    juce::TextButton mixToggle { "MIX" };
+    dc::ui::MixPanel mixPanel;
+    void layoutMix();
     bool wasSteering = false;
     int shown = -1, shownSub = -1;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(LightSeekerView)

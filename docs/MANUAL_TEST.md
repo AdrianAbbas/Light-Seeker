@@ -266,3 +266,28 @@ installed and validated" (two auval PASS lines).
 9. With the panel open on the map, click a landmark: the panel closes and the view travels
    there. The panel never covers the controls strip; the animation stays smooth while
    typing (MacBook Air, Standard quality).
+
+## Mix and Punch (both plug-ins)
+
+Four LIGHT SEEKER tracks (Fanfare Trumpets at Gates of Dawn, Warm Strings at Golden Nest,
+Angelic Choir at Sanctum, Concert Harp at Royal Gardens) playing together:
+
+- [ ] MIX (the button in Levels, or on the instrument panel) opens the MIX section above the
+      controls; ✕ or the button folds it; it is still open after closing and reopening the
+      window. Advanced and Journey fold it away and the other way round.
+- [ ] Reverb 0 % on every track: dry places, no sudden jump in loudness; 150 %: the huge spaces.
+      Moving it while playing: no clicks.
+- [ ] Echoes, Modulation, Character on a place that has them (Wildflower Hill, Butterfly Glade,
+      Bell Garden): each changes only its own effect; at 0 % it is gone.
+- [ ] Shimmer behaves as before (Cloud Steps, Prism Hall).
+- [ ] Low Cut 300 Hz on the strings: the reverb loses its boom, the strings themselves do not.
+- [ ] Pre-delay +60 ms on the harp: the pluck, then the space.
+- [ ] Duck 70 % on the choir: the reverb steps back while it sings, blooms in the rests.
+- [ ] Atmosphere: Advanced shows On / Level / Density at the top; On at Level 0 starts it at 35 %;
+      MIX Atmosphere scales it.
+- [ ] The brass (Fanfare Trumpets, Heroic Horns, Soaring Horn): a sharper, brighter, louder
+      hit that cuts through, then the same sustain as before; radiant, not harsh. Punch 0 vs
+      50 % vs 100 %; Punch Time 30 ms vs 300 ms. Hard chords at Level +12 dB never clip.
+- [ ] Punch on the harp and guitar (medium), none on the choir and pads.
+- [ ] An older project opens with every MIX control at 100 % (the effect sounds exactly as before).
+

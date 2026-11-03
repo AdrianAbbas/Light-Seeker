@@ -138,6 +138,7 @@ public:
         bool controls = true, advanced = false, journey = false;
         int advancedScroll = 0, journeyScroll = 0;
         int lowestKey = 36;            // the instrument panel's keyboard
+        bool mix = false;              // the MIX section open (Mix and Punch)
         bool operator==(const ViewState&) const = default;
     };
     ViewState viewState() const;

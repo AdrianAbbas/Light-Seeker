@@ -720,9 +720,9 @@ std::array<Patch, instrumentCount> build() {
         a.attack = 0.25f;
         auto b = standIn(shift(choir(2.5f, 0.6f, -9.0f), 12.0f, 3.0f, 0.2f));
         b.attack = 0.3f;
-        // Mix and Punch: the brass strikes (50-70 ms, with bite and presence, 2 dB louder)
-        // and the choir swells in under it (it used to swell with the choir, 350 ms).
-        auto c = hit(brass(800.0f, 0.5f, -7.0f), 0.6f, 0.3f);
+        // Mix and Punch: the brass strikes (50-70 ms, with bite and presence) and the choir
+        // swells in under it (it used to swell with the choir, 350 ms).
+        auto c = hit(brass(800.0f, 0.5f, -9.0f), 0.6f, 0.3f);
         c.attack = 0.05f;
         c.p[3] = 7.0f;
         c.release = 0.6f;
