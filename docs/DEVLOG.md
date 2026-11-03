@@ -146,6 +146,14 @@ usage limit or a compaction) continues from the first unticked line. Push to `ma
 - [x] M3. Punch (gain on hit, per voice, Punch + Punch Time, velocity-sensitive, click-free, limited) with per-instrument defaults; brass attack/bite/presence pass (Fanfare Trumpets, Soaring Horn, Heroic Horns, Epic Choir and Brass, Grand Organ's trumpet); default reverb re-check on mix instruments; push `[skip ci]`
 - [x] M4. Tests (`mix` group), listening renders (mini-song before/after, brass Punch 0 vs default), DEVLOG handoff; final push without `[skip ci]`, CI green
 
+**Real brass: VSCO 2 Community Edition** (see "Real brass" below; CC0 samples, never committed here)
+
+- [x] V1. Download VSCO 2 CE from its official source, check the licence (CC0 1.0 Universal: go), log it in `docs/LICENSES/VSCO-2-CE.txt` and here (source URL, version, commit, licence hash); push `[skip ci]`
+- [ ] V2. Sample prep (`tools/sample-prep/vsco.py`: the SFZ maps, pitch from the audio, mono, trimmed attacks, loops and release tails, velocity layers kept) and CI (`scripts/ci-fetch-vsco.sh`: sparse fetch of the brass from the official repository at the pinned commit, cached; merged into the bank with or without the developer's recordings; "Prepared" lines); push `[skip ci]`
+- [ ] V3. Engine: library layers (play with the library, synthesis stand-ins without it, independent of the developer's recordings), the brass shaping (presence, bite, drive) on sample layers; push `[skip ci]`
+- [ ] V4. Instruments: Fanfare Trumpets, Soaring Horn, Heroic Horns, Epic Choir and Brass's brass, the Orchestral Chord Pad's horns: horn/trumpet/trombone/tuba sustains + staccato fronts, a little synthesis for weight and shine; level-matched to before; Punch/MIX working; push `[skip ci]`
+- [ ] V5. Tests (`brass` group: in tune across the range, velocity layers smooth, attack-to-sustain and presence up, level-matched with siblings and before, distinct, no clicks or clipping, licence logged), listening renders (each brass before/after, dry and in place; the mini-song), DEVLOG handoff; final push without `[skip ci]`, CI green
+
 ---
 
 ## Lessons carried over from DUNGEON CRAWLER (read first)
@@ -2019,3 +2027,34 @@ Punch listening renders and the brass report in `test-logs/mix/`. macOS build, s
 instrument on arm64 and x86_64 78 passed each, auval and the AU harness for both plug-ins,
 the package uploaded.
 
+
+---
+
+## Real brass: VSCO 2 Community Edition
+
+The developer: real brass for every brass instrument, from the free sample library "VSCO 2
+Community Edition" (Versilian Studios), its horn, trumpet, trombone and tuba (sustains,
+staccatos, the dynamics there are), layered and processed into LIGHT SEEKER's own sound:
+hitting hard and cutting through a mix (sharp, majestic attacks) without getting louder
+overall or harsh. The synthesis stays as the stand-in for builds without the samples.
+The samples never go into this public repository.
+
+### V1. The licence (checked before anything else)
+
+- **Source**: the official repository https://github.com/sgossner/VSCO-2-CE (linked from
+  Versilian Studios' page http://vis.versilstudios.net/vsco-community.html), release tag
+  **1.1.0**, commit `28092772094b2d9f1148d84cea97f4545b8c687d` (2017-02-18; its
+  `How To Install.txt` calls it "Build 1.1.1"). Downloaded 2026-11-03 (git, the brass
+  folders, the SFZ maps and the licence: 223 MB of brass WAVs, 44.1 kHz 16-bit stereo).
+- **Licence**: the `LICENSE` file at the root of that commit is **Creative Commons CC0 1.0
+  Universal** (the public-domain dedication: all four sections, nothing added; 6555 bytes,
+  sha256 `36ffd9dc...a39673`). Commercial use in software is allowed, no attribution
+  required. So: go. The full text, verbatim, with the source, version and commit is in
+  [`docs/LICENSES/VSCO-2-CE.txt`](LICENSES/VSCO-2-CE.txt); the credits (Sam Gossner, Simon
+  Dalzell, Elan Hickler/Soundemote) are there too, though CC0 does not ask for them.
+- **Where the samples live**: not in this repository and not in `AdrianAbbas/Samples` (left
+  untouched): CI fetches the brass from the official repository at the pinned commit (a
+  sparse, blob-filtered clone of only the folders used), caches the prepared notes, and
+  ships them inside the instrument's bundle with the developer's recordings. Fetching from
+  the official source needs no token, so every build has the real brass; a build without
+  them (the fetch failing, or a local build) plays the synthesis as before.
