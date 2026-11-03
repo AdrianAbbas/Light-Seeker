@@ -134,9 +134,9 @@ usage limit or a compaction) continues from the first unticked line. Push to `ma
 
 **Search** (see "Search" below; no sound changes)
 
-- [ ] S1. Search index (`Source/World/Search`): every location, place, instrument, preset and journey with sound/mood tags, the recordings it uses and a short description; instant fuzzy matching (case-insensitive, partial words, typos); push `[skip ci]`
-- [ ] S2. Search panel in both plug-ins: magnifier at the top and Cmd+F, light results panel over the scene (Esc / click outside closes, never blocks the map), grouped results with icon, location and tags, arrow keys + Enter or click jumps there exactly like choosing by hand, description on hover, filter chips, Recent (8); push `[skip ci]`
-- [ ] S3. Preview note for instruments (a short phrase while held, sensible level, never while the host plays); push `[skip ci]`
+- [x] S1. Search index (`Source/World/Search`): every location, place, instrument, preset and journey with sound/mood tags, the recordings it uses and a short description; instant fuzzy matching (case-insensitive, partial words, typos); push `[skip ci]`
+- [x] S2. Search panel in both plug-ins: magnifier at the top and Cmd+F, light results panel over the scene (Esc / click outside closes, never blocks the map), grouped results with icon, location and tags, arrow keys + Enter or click jumps there exactly like choosing by hand, description on hover, filter chips, Recent (8); push `[skip ci]`
+- [x] S3. Preview note for instruments (a short phrase while held, sensible level, never while the host plays); push `[skip ci]`
 - [ ] S4. Tests (`search` group: findable by name and 3+ tags, typos, Enter = by hand (state compare), keyboard), snapshots in `docs/snapshots/`, README/manual, DEVLOG handoff; final push without `[skip ci]`, CI green
 
 ---
@@ -1576,3 +1576,149 @@ animate stay gated.
 0 failed (the preparation smoothed the same 32 notes); macOS build, smoke + instrument on
 arm64 and x86_64 77 passed each, auval and the AU harness for both plug-ins, the package
 uploaded.
+
+---
+## Search (2026-11-03)
+
+The brief: a search tool in both plug-ins to find sounds fast. No sound changes (the
+preview is new, the instrument and places are untouched).
+
+### The index (`Source/World/Search.h/.cpp`)
+
+One index per edition, built once on first use (0.6 ms) and only read afterwards:
+
+| Entries | LIGHT SEEKER (instrument) | LIGHT SEEKER FX |
+|---|---|---|
+| Instruments | 31 | none |
+| Places (the 31 sub-locations) and locations (10) | 41 | 41 |
+| Presets and journeys | 41 + 9 (every factory preset) | 18 + 9 |
+
+Every entry has a name, where it belongs, its **tags** (sound and mood: choir, voice, harp,
+pluck, pad, strings, brass, bells, shimmer, reverb, echo, bright, airy, epic, calm, magical,
+pastoral, sacred, heroic, warm, sparkly, long tail and more, written per place, location and
+instrument), the developer's **recordings** it plays (guitar: Elven Lyre, Warm Acoustic
+Guitar; banjo: Shimmering Pluck; piano: Celesta; violin: Bouncy Pizzicato, Warm Strings;
+kalimba: Bouncy Kalimba; voice: Orchestral Chord Pad, Angelic, Radiant and Epic choirs;
+"synth" for the analog synth recordings in Cloud Pad and Shimmering Pluck: no brand names;
+"breath" on the Windswept Isle) and a one- or two-sentence **description** (the places' and
+instruments' from this log's design tables). A place in the instrument edition also carries
+its instrument's name and recordings; presets take their instrument's and place's tags
+(plus "dry", "gentle", "carried", "atmosphere" where they apply) and describe what they set
+(the macros they raise, Intensity); journeys list their route ("Blossom Meadow → ...") and
+mode, roaming journeys their location.
+
+**Matching** (each query word must match some word of the entry; scores add up): exact 1,
+the start of a word 0.7-0.95 ("cho" → choir), inside a word 0.5, one typo 0.62 (two in words
+of 8+ letters; optimal string alignment, so a swap of two letters is one), the start of a
+word with a typo 0.45; weighted by field (name 1, tags 0.8, location / family / instrument
+0.6, the kind's own word 0.5); stop words ("the", "of"...) ignored; the whole name typed +1.5,
+the name's first whole words +0.6 x the share typed ("harp" is not a prefix of
+"Harpsichord": that ranked the harpsichord above the harps in the first pass). Results are
+grouped (Instruments, Places, Presets), the group with the best match first; presets count
+85 % in that order so an instrument or place that matches about as well comes first (in the
+first pass "harp" showed the presets first: "Harp up the Cloud Steps" took the name bonus).
+At most 8 per group unless a group chip is on. One query: 0.18 ms.
+
+### The panel (`Source/UI/SearchPanel.h/.cpp`)
+
+- The **magnifier** (pearl plate, gold ring) at the top right of the picture, left of the
+  place list; the Journey badge's position now stops left of it. **Cmd+F** opens search from
+  the view and from the editor (so also with the instrument panel focused: its keyboard
+  component does not take Cmd+F).
+- The **panel**: 480 px, top centre over the scene, ending above the controls strip like
+  the other panels; pearl and ivory, gold rule, a soft shadow (outside its hit area). Field
+  with the magnifier, ✕, chips (Instruments / Places / Presets, one at a time; Calm / Epic /
+  Magical / Sacred, combining), the results list (heading per group with "8 of 13", rows of
+  icon + name + "location · tags", a thin scroll indicator) and the description line.
+- **Icons** drawn as paths: a note (instrument), a pin (place), a tower (location), a star
+  of light (preset), a dotted path to a flag (journey), a magnifier (a recent search).
+- **Keyboard**: the field passes ↑ ↓ PgUp PgDn Enter Esc to the panel; the selection skips
+  headings and stops at the ends; the description follows the hovered row, else the
+  selected one. With nothing typed: **Recent**, the last eight results and searches
+  (`"e:key"` and `"q:text"` in `LightSeekerProcessor::recentSearches`: kept while the
+  plug-in lives, so a closed and reopened window still has them; not in the session).
+- **Closing**: Esc, ✕, the magnifier again, or a mouse-down anywhere outside (the view's
+  existing click-outside hook). That click is not consumed: a landmark clicked with the
+  panel open closes it and travels. Never modal.
+- **Choosing** (`LightSeekerView::chooseSearchResult`): a place or location does what the
+  landmark + place list do (`travelManually`: a running Journey or Roam stops with its note;
+  on the map the path is drawn and the view zooms in after 0.55 s; inside a place the scene
+  crossfades); an instrument does what the Instruments menu does (`chooseInstrument`: played
+  here, locked); a preset or journey what the preset menu does (`choosePreset`). Held notes
+  and Lock instrument are the processor's, so they behave exactly as by hand.
+- **Cheap**: the list is a child with `setBufferedToImage`, repainted only when the results,
+  selection, hover or scroll change; nothing animates; no timer.
+
+**A bug found on the way:** the toolbar's preset menu (and ◀ ▶) listed the effect's 27
+presets in the instrument too, while loading by index from the instrument's 50: in LIGHT
+SEEKER choosing "Infinite Mirrors" loaded "Hall of Mirrors Strings", and ▶ never reached
+the last 23. The menu and the arrows now use `dc::presetsFor(edition)`, one submenu per
+category (Instruments, Carried elsewhere, Journeys in the instrument).
+
+### Preview (the instrument edition)
+
+`LightSeekerProcessor::startPreview(instrument)` / `stopPreview()`: a second small
+`ls::inst::Synth` (prepared with the main one) plays C4 E4 G4 C5, 0.17 s apart, then holds,
+at the instrument's defaults and 4 dB below its level, mixed into the instrument's signal so
+it sounds in the place you are in (and through Intensity, Mix, Shimmer, Output). The ▶ on an
+instrument's row starts it on mouse-down and stops it on mouse-up (released after 3 s at the
+latest); refused while the host's transport plays (the ▶ dims), and a preview stops when the
+host starts. Lock-free: an atomic request read at the block start; the phrase is scheduled in
+samples; nothing allocates on the audio thread; the synth only renders while it sounds.
+
+### Tests (`search` group, `Tests/SearchTests.h`; its own Linux shard, `9-search`)
+
+- **Index**: every instrument (31), place (31), location (10), preset and journey of each
+  edition indexed, none of the instruments in the effect; unique keys; 3+ tags and a
+  description each; every tag the brief names in use (and the recordings in the instrument).
+- **Findable**: every entry (122 in the instrument, 68 in the effect) is the first of its
+  kind for its own name (several entries share a name, e.g. the place and the preset "Choir
+  Loft": then the first result has that name), found in capitals, by its first four letters,
+  and by at least three of its own tags.
+- **Typos**: "harpe" (top result a harp), "choire" (choirs first; Choir Loft or Sanctum first
+  among places; in the effect the choir places/preset), "glockenspeil", "celsta", "moonwel",
+  "cathedrl", "gitar", "jurney"; "banjo", "kalimba", "piano" find the instruments on those
+  recordings; "calm harp" narrows to a calm harp; nonsense finds nothing.
+- **Filters**: the Places chip, every mood chip, the cap of eight per group.
+- **Enter = by hand** (every parameter, the route, the preset, the instrument and its lock
+  after two blocks, the place shown, map or scene and which scene): ten places each from the
+  map, from another place of the same location (by hand: its list) and from a place
+  elsewhere (by hand: back to the map), two locations, **every** preset and journey of both
+  editions, every third instrument; Lock instrument kept on a jump to a place, the place's
+  instrument when unlocked; held notes carry over a jump to a place and to an instrument.
+- **Keyboard and panel**: Cmd+F (view and editor), Esc, results as you type with the first
+  selected, headings, instruments first for "harp", ↓ ↑ and the ends, the description
+  following arrows and hover, Enter chooses and closes, Recent (the result and the search,
+  at most 8, a recent search typed again, kept across closing the window), closing four ways,
+  a click inside keeps it, a landmark clicked with it open still travels, the magnifier at
+  the top, the panel above the controls.
+- **Preview**: sounds (> -36 dB), no peak near full scale, about 4 dB below the same phrase
+  played on the keys, silent after release, refused and silent while the host plays, stops
+  when the host starts, none in the effect.
+- **Cost**: index build 0.6 ms, one query 0.18 ms (gated < 5 ms per query: generous; a
+  frame is 33 ms).
+
+Snapshots (`--search-snapshots docs/snapshots`): `search-instrument-harp.png` (a result
+selected, its description), `search-instrument-typo-choire.png`, `search-instrument-recent.png`,
+`search-fx-calm-places.png` (two chips, nothing typed), `search-fx-journeys.png`,
+`search-fx-echo-in-a-place.png` (inside the Choir Loft).
+
+### Handoff: what to look at and listen for in GarageBand
+
+`docs/MANUAL_TEST.md`, "Search". In short: the magnifier and Cmd+F in both plug-ins (does
+GarageBand pass Cmd+F to the plug-in window, or take it? The magnifier always works);
+typing feels instant; "harpe" and "choire" land right; Enter on a place while holding a chord
+travels with the chord; Lock instrument holds; the ▶ preview is short and not loud, and dims
+while the song plays; Recent after closing and reopening the window.
+
+### Known issues and decisions to revisit
+
+- **Cmd+F in hosts**: some hosts keep Cmd+F for themselves when the plug-in window does not
+  have keyboard focus; click the picture first, or use the magnifier. Not verifiable here.
+- **Recent is not saved with the project** (it is a convenience of the session, like an
+  open menu); it lasts as long as the plug-in is loaded.
+- **The preview** plays the found instrument at its defaults (not your Tone/Attack/...) in
+  the place you are in, so it is how the instrument would sound if you chose it here.
+- **Tags are hand-written** (`Search.cpp` tables, one line per place, location and
+  instrument): a new place, instrument or preset needs its line (the index tests fail
+  otherwise: 3+ tags and a description each).

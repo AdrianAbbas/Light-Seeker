@@ -120,6 +120,40 @@ The map and the controls below are the same in both:
    changing the sound; the location's name travels back to its own first place.
 3. Automate **Location** and **Sub-location** to move through the world over the song; or
    use a **Journey** (below).
+4. **Search** (the magnifier at the top of the window, or Cmd+F): type a name, a sound or a
+   mood and choose from the results (below).
+
+### Search
+
+Click the **magnifier** (top right of the picture) or press **Cmd+F** anywhere in the window.
+A light panel opens over the scene; type and the results appear at once, grouped as
+**Instruments** (LIGHT SEEKER only), **Places** (the ten locations and their 31 places) and
+**Presets** (presets and journeys), each with a small icon, the location it belongs to and
+its tags.
+
+- **What you can type:** names ("Moonwell", "Concert Harp", "Ascent to the Citadel"), a
+  location ("Golden Cathedral"), sounds and moods ("choir", "harp", "pluck", "pad",
+  "strings", "brass", "bells", "shimmer", "reverb", "echo", "long tail", "bright", "airy",
+  "epic", "calm", "magical", "pastoral", "sacred", "heroic", "warm", "sparkly"...) and which
+  of the developer's recordings an instrument plays ("guitar", "banjo", "piano", "violin",
+  "kalimba", "voice", "synth"). Case does not matter, the start of a word is enough ("cho"),
+  small typos are forgiven ("harpe", "choire", "glockenspeil"), and several words narrow it
+  down ("calm harp", "epic brass").
+- **Choose:** ↑ ↓ and Enter, or click. It does exactly what choosing it by hand does: a
+  place travels there (from the map the golden path is drawn and the view zooms in; held
+  notes carry over and Lock instrument is respected), an instrument plays here and locks
+  (as the Instruments menu does), a preset or journey loads (as the preset menu does).
+  The panel closes.
+- **Hover or arrow** over a result to read a short description at the bottom of the panel.
+- **Preview** (LIGHT SEEKER): hold the small ▶ on an instrument's row to hear a short phrase
+  on it, a little below its normal level, through the place you are in; it stops when you let
+  go. It is unavailable while the song plays.
+- **Chips** under the field show only Instruments, Places or Presets, or only what is Calm,
+  Epic, Magical or Sacred (they combine; with nothing typed they list everything that fits).
+- **Recent:** with nothing typed, your last eight searches and results (kept until the
+  plug-in is unloaded).
+- **Closing:** Esc, the ✕, the magnifier again, or a click anywhere outside the panel (that
+  click still does what it does: the map is never blocked).
 
 ## Controls
 
@@ -136,7 +170,8 @@ The map and the controls below are the same in both:
 | **Journey** (button) | The Journey panel: route, roaming, MIDI travel, atmosphere density/seed (below). Closes with ✕, a second click on Journey, Esc or a click outside it. |
 | **Bypass** | Bypass (crossfaded). |
 | **Advanced** | (Closes like the Journey panel.) Every module parameter as an offset from the place (0 % = as designed) or an override ("Place" = as designed), in ten groups: I Horizon (filters, resonator), II Sunwarmth (saturation), III Choir, IV Aura (spectral), V Echoes, VI Halls (reverb), VII Charms (flutter, bells, crystal, harp strings, wind, drops), VIII Signature (kind, amount, tone, rate), IX Radiance (convolution spaces, incl. the captured ones), X Ensemble (chorus, rising phaser, tape echo). Offsets travel with you. |
-| **Preset name ▾, ◀ ▶** | Init / No preset, factory presets (favourite spots, journeys), your presets, Save as your preset… After any change the name shows a star ("Grand Citadel Tour *"). |
+| **Preset name ▾, ◀ ▶** | Init / No preset, factory presets (LIGHT SEEKER FX: favourite spots, journeys; LIGHT SEEKER: instruments, carried elsewhere, journeys), your presets, Save as your preset… After any change the name shows a star ("Grand Citadel Tour *"). |
+| **Magnifier** (top right), Cmd+F | Search (above). |
 | **Journey active · Stop** (top centre) | Shown while a Journey or Roam runs (journey presets start one). Stop ends it where it is. |
 | **A / B, A→B** | Compare two complete settings; copy the current one to the other slot. |
 | **↶ ↷** | Undo / redo of your edits in the window. |

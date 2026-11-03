@@ -5,6 +5,8 @@
 #include "Synth/Synth.h"
 #include <algorithm>
 #include <cctype>
+#include <cmath>
+#include <cstdlib>
 #include <map>
 #include <memory>
 #include <set>

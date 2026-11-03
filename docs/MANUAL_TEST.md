@@ -238,3 +238,31 @@ installed and validated" (two auval PASS lines).
    Places without shimmer (Marble Colonnade, Butterfly Glade, Sunlit Meadow) do not change
    at all. Automate it in GarageBand, save, reopen: it comes back; an older project opens
    at 100 %.
+
+## Search (both plug-ins)
+
+1. Open each plug-in's window. The **magnifier** sits at the top right of the picture (left
+   of the place list inside a location). Click it: a light panel opens over the scene with
+   the field focused. Press Esc: it closes. Press **Cmd+F**: it opens again (also with the
+   mouse over the instrument's keyboard panel).
+2. Type **harp** (LIGHT SEEKER): the instruments come first (the harps), then places and
+   presets; each row has an icon, its location and tags. Arrow down and up: the selection
+   moves, headings are skipped, the description at the bottom follows. Hover a row: its
+   description shows.
+3. Type **harpe**, **choire**, **glockenspeil**, **cho**: the right results are still there.
+   Type **calm**, **long tail**, **guitar**, **banjo**, **epic brass**: sensible results.
+4. Press Enter on **Moonwell** while holding a chord on the keyboard: the map draws the
+   path and zooms in, the chord carries over into the Glass Harp, the panel closes. Turn on
+   Lock instrument, search **Eyrie**, Enter: the place changes, the instrument stays.
+5. Search **Concert Harp**, Enter: it plays here and Lock instrument lights (as the
+   Instruments menu does). Search a preset and a journey: they load exactly as from the
+   preset menu (the name shows in the toolbar; a journey's badge appears).
+6. **Preview** (LIGHT SEEKER): hold the ▶ on an instrument's row: a short phrase, not loud;
+   let go: it stops. Start the song: the ▶ dims and does nothing.
+7. The **chips**: Places + Calm with nothing typed lists the calm places; Presets only
+   presets. In LIGHT SEEKER FX there is no Instruments chip and no instrument results.
+8. Clear the field: **Recent** lists your last searches and results; click a search to run
+   it again. Close and reopen the window: Recent is still there.
+9. With the panel open on the map, click a landmark: the panel closes and the view travels
+   there. The panel never covers the controls strip; the animation stays smooth while
+   typing (MacBook Air, Standard quality).
