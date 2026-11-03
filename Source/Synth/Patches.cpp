@@ -720,9 +720,18 @@ std::array<Patch, instrumentCount> build() {
         a.attack = 0.25f;
         auto b = standIn(shift(choir(2.5f, 0.6f, -9.0f), 12.0f, 3.0f, 0.2f));
         b.attack = 0.3f;
-        // Mix and Punch: the brass strikes (50-70 ms, with bite and presence) and the choir
-        // swells in under it (it used to swell with the choir, 350 ms).
-        auto c = hit(brass(800.0f, 0.5f, -9.0f), 0.6f, 0.3f);
+        // Mix and Punch: the brass strikes (50-70 ms, with bite and presence; it used to swell
+        // with the choir, 350 ms) as a bright low section an octave under the choir (a brighter
+        // formant: trombones), the warm brass an octave below with it, and the choir swells in
+        // over them. (Striking at the choir's pitch it sounded like the Eyrie's horn section:
+        // the siblings check, see docs/DEVLOG.md.)
+        // In the lowest notes (played below D3-A#3, where they cross over) the striking brass
+        // plays at the choir's pitch instead, as before (an octave lower it would blur them).
+        auto c = fadeInAbove(hit(shift(brass(1300.0f, 0.8f, -9.0f), -12.0f), 0.6f, 0.3f), 38.0f, 8.0f);
+        auto low = fadeOutAbove(hit(brass(800.0f, 0.5f, -9.0f), 0.6f, 0.3f), 50.0f, 8.0f);
+        low.attack = 0.05f;
+        low.p[3] = 7.0f;
+        low.release = 0.6f;
         c.attack = 0.05f;
         c.p[3] = 7.0f;
         c.release = 0.6f;
@@ -730,7 +739,7 @@ std::array<Patch, instrumentCount> build() {
         d.attack = 0.07f;
         d.lowKey = 24;
         Builder p("Epic Choir and Brass", "Epic, heroic", "Brass");
-        p.add(v).add(up).add(drone).add(a).add(b).add(c).add(d).air(4.5f).chorus(0.1f).trim(0.0f);
+        p.add(v).add(up).add(drone).add(a).add(b).add(c).add(d).add(low).air(4.5f).chorus(0.1f).trim(0.0f);
         put(p);
     }
     for (std::size_t i = 0; i < all.size(); ++i) {

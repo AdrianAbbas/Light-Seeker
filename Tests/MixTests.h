@@ -808,3 +808,17 @@ int mixDebug(int location, int sub) {
     std::cout << "all groups 0: tail " << fmt(tail(rawRender(location, sub, all0, bursts(0.3f), 2.0))) << "\n";
     return 0;
 }
+
+// Debugging aid: the fingerprint distance between two instruments (as the siblings check).
+int printDebug(int a, int b) {
+    const auto pa = instrumentPrint(renderInstrument(a)), pb = instrumentPrint(renderInstrument(b));
+    double colour = 0, envelope = 0;
+    const std::size_t nb = 60, n = std::min(pa.size(), pb.size());
+    for (std::size_t k = 0; k < n; ++k) (k < nb ? colour : envelope) += (pa[k] - pb[k]) * (pa[k] - pb[k]);
+    std::array<double, 3> parts {};
+    for (std::size_t k = 0; k < std::min<std::size_t>(nb, n); ++k) parts[k / 20] += (pa[k] - pb[k]) * (pa[k] - pb[k]);
+    std::cout << instrumentName(a) << " / " << instrumentName(b) << ": distance " << fmt(printDistance(pa, pb), 2) << " (colour "
+              << fmt(std::sqrt(colour / double(n)), 2) << ", envelope " << fmt(std::sqrt(envelope / double(n)), 2) << "; colour attack / sustain / release "
+              << fmt(std::sqrt(parts[0] / double(n)), 2) << " / " << fmt(std::sqrt(parts[1] / double(n)), 2) << " / " << fmt(std::sqrt(parts[2] / double(n)), 2) << ")\n";
+    return 0;
+}

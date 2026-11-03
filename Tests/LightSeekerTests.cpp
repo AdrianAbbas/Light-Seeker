@@ -2798,6 +2798,7 @@ int main(int argc, char** argv) {
         else if (arg == "--search-snapshots" && i + 1 < argc) return searchSnapshots(argv[i + 1]);
         else if (arg == "--listen-mix" && i + 1 < argc) return listenMix(argv[i + 1]);
         else if (arg == "--brass-report") return brassReport();
+        else if (arg == "--print-distance" && i + 2 < argc) return printDebug(juce::String(argv[i + 1]).getIntValue(), juce::String(argv[i + 2]).getIntValue());
         else if (arg == "--mix-debug" && i + 2 < argc) return mixDebug(juce::String(argv[i + 1]).getIntValue(), juce::String(argv[i + 2]).getIntValue());
         else if (arg == "--mix-snapshots" && i + 1 < argc) return mixSnapshots(argv[i + 1]);
         else if (arg == "--render" && i + 2 < argc)

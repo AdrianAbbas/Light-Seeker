@@ -1853,9 +1853,11 @@ celesta +2-2.5, strings and winds +1-1.5, pads and choirs 0.
 ~90 ms harder (brighter filter, more drive, with velocity), `presence` adds a 3 kHz band
 (Q 0.9), more of it on the attack; quicker rises (Fanfare 6-10 ms, was 12-16; Soaring Horn
 35-45 ms, was 90-110, its low-pass opened to let the 3 kHz through; Heroic Horns 12-20, was
-30-40; the Epic brass 50-70, was 350: it strikes and the choir swells in under it; the
-organ's trumpet stop 25, was 50); more velocity response (velocity gain 0.8 -> 0.9). Trims:
-Fanfare Trumpets -0.4 dB (the presence), so every brass sustain sits where it was.
+30-40; the Epic brass 50-70, was 350: it strikes as a bright low section an octave under the
+choir, see the CI note below, and the choir swells in over it; the organ's trumpet stop 25,
+was 50); more velocity response (velocity gain 0.8 -> 0.9). Trims: Fanfare Trumpets -0.4 dB
+(the presence), Epic Choir and Brass -0.6 dB (-1.1 with its stand-ins), so every brass
+sustain sits where it was.
 
 Before/after (`--brass-report`, the same code built against both commits; a held C major
 chord, velocity 0.95, dry, stand-ins):
@@ -1865,7 +1867,8 @@ chord, velocity 0.95, dry, stand-ins):
 | Fanfare Trumpets | 10 -> 10 ms | 6.1 -> 8.5 dB | -15.6 -> -13.3 dB | -18.6 -> -18.6 dBFS |
 | Soaring Horn | 85 -> 20 ms | 4.9 -> 8.7 dB | -26.2 -> -23.2 dB | -17.3 -> -17.2 dBFS |
 | Heroic Horns | 20 -> 10 ms | 5.5 -> 10.7 dB | -19.5 -> -17.3 dB | -17.1 -> -17.0 dBFS |
-| Epic Choir and Brass | 150 -> 50 ms | -1.9 -> 5.2 dB | -24.4 -> -17.2 dB | -17.6 -> -17.6 dBFS |
+| Epic Choir and Brass | 150 -> 50 ms | -1.9 -> 4.5 dB | -24.4 -> -18.4 dB | -17.6 -> -17.6 dBFS |
+| ... with the recordings | 200 -> 50 ms | -4.6 -> 3.3 dB | -24.0 -> -18.4 dB | -17.9 -> -17.9 dBFS |
 | Grand Organ | 45 -> 35 ms | 3.5 -> 4.5 dB | -19.2 -> -18.5 dB | -19.8 -> -19.8 dBFS |
 
 At velocity 0.6 the hits gain more (Fanfare 6.4 -> 11.6 dB, Heroic 5.6 -> 11.2 dB): at full
@@ -1970,6 +1973,43 @@ into the same folder by CI.
 ### Local run before the final push (Linux, this container, no recordings or captures)
 
 The whole suite in its shards on four cores: **2196 passed, 0 failed** (basics 309,
-robustness 152, locations, qa, strength 118, instruments 354, recorded 59, search 143, mix
-164). The strength and shimmer gates pass unchanged at the defaults (the effect is
+robustness 152, locations 886, qa 1, strength 118, instruments 354, recorded 59, search
+143, mix 164). The strength and shimmer gates pass unchanged at the defaults (the effect is
 byte-identical to the build before). Every changed source also compiles with clang.
+
+### CI, first final push (`3d0c8ba`): one real failure, two brasses too alike
+
+macOS green. Linux with the recordings 2239 passed, 1 failed: *Heroic Horns (Eyrie) is
+distinct from its sibling Epic Choir and Brass (Summit of Winds)*, distance 2.57 (the gate
+is 3.0; colour 1.80, envelope 1.83). Without the recordings it passed here (3.60; the old
+code 3.92). Measured (`--print-distance a b`, the siblings check's own fingerprint): the
+colour converged because the Epic brass now sounds in the attack window, where before only
+the choir did, and with the developer's voice as the choir the two attacks are both brass.
+Neither instrument's Punch, bite or presence was the cause (each tried: within 0.1).
+
+**Fix** (measured under CI's conditions: the Samples repository read here, never modified, and
+prepared with `tools/sample-prep`; `--print-distance` then gives 2.57 exactly as CI did; the
+old code 3.07). The cause is the strike itself: with the Epic brass back at 350 ms the pair is
+at 3.12, and neither instrument's Punch, bite or presence, nor the choir's own attack, moves
+it by more than 0.1. Its striking brass at the choir's pitch read as the Eyrie's horn section
+(attack colour 0.54 apart); made bright and higher (trumpets an octave up: 5.5) it moved
+next to the Warm Strings instead (2.2-2.4; the gate also holds between them). The striking
+brass now plays an octave *below* the choir with a brighter formant (1.3 kHz: a biting low
+trombone section; the warm brass an octave below as before), the choir swelling in over it:
+Heroic Horns / Epic 3.23 with the recordings (3.92 without), Warm Strings / Epic 3.96 (4.61).
+Its sustain is where it was (trims -0.6 dB, stand-ins -1.1 dB); its hit 3.3 dB over the
+sustain (was -4.6 with the recordings), presence -18.4 dB (was -24.0). The siblings gate is
+unchanged.
+
+The striking low section blurred the lowest notes' pitch (the recorded instruments' tuning
+check: B2 -25 cents; it measures a note every 4 semitones from G2): below D3-A#3 the striking
+brass now plays at the choir's pitch, as before, crossfading by key into the low section
+higher up (the siblings' chord is above it: their distances are unchanged). Then recorded
+93 passed, 0 failed.
+
+Local run with the recordings (CI's condition, without the captured spaces): basics 308
+passed, 1 failed (the known wall-clock "a full repaint with the drawer fits in a 30 fps
+frame", 40.6 ms with ten shards on four cores; alone 12.0 ms, the previous build 11.6 ms),
+robustness 152, qa 1, strength 118, instruments 354, recorded 93, search 143, mix 161, all
+passed.
+
