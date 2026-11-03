@@ -1729,3 +1729,7 @@ while the song plays; Recent after closing and reopening the window.
 the known wall-clock check "a full repaint with the drawer fits in a 30 fps frame" (34.0 ms
 with nine shards sharing four cores; 9.5 ms alone, see above). The sound shards are
 untouched by this change.
+
+**CI, `f1ebe74`: green.** Linux with the recordings and the captured spaces 2078 passed,
+0 failed (the `search` shard included); macOS build, smoke + instrument on arm64 and x86_64
+77 passed each, auval and the AU harness for both plug-ins, the package uploaded.
