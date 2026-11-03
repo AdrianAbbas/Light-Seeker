@@ -2818,6 +2818,7 @@ int main(int argc, char** argv) {
     if (run("strength")) testStrength(s);
     if (run("shimmer")) testShimmer(s);
     if (run("mix")) testMix(s);
+    else if (run("mix-punch")) testMixPunch(s);
     if (run("modules")) { testModules(s); testNewModules(s); }
     if (run("rates")) testRates(s);
     if (run("extremes")) testExtremes(s);

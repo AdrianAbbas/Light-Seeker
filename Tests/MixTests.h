@@ -130,7 +130,7 @@ Played play(const char* name, float punch, float velocity, const std::vector<int
     h.set(dc::ids::punch, punch);
     if (punchMs > 0) h.set(dc::ids::punchTime, punchMs);
     if (levelDb != 0.0f) h.set(dc::ids::instLevel, levelDb);
-    h.render(0.1);
+    h.render(0.4);   // the Level trim glides (80 ms): settled before the first note
     for (int n : notes) h.noteOn(n, velocity);
     h.render(hold);
     for (int n : notes) h.noteOff(n);
@@ -139,7 +139,7 @@ Played play(const char* name, float punch, float velocity, const std::vector<int
     p.l = h.outL;
     p.r = h.outR;
     p.sr = h.sr;
-    p.onset = h.at(0.1);
+    p.onset = h.at(0.4);
     p.limiterLowest = h.p->synthForTest().punchLimiterLowest();
     return p;
 }
@@ -189,6 +189,7 @@ double bandShare(const Played& p, double from, double to, double low, double hig
 }
 }
 
+void testMixPunch(Suite& s);
 void testMix(Suite& s) {
     using namespace mixtest;
     s.section("mix: the MIX section, the reverb helpers, Atmosphere, Punch and the brass");
@@ -474,7 +475,9 @@ void testMix(Suite& s) {
             return std::sqrt(sum / double(std::max<std::size_t>(1, count)));
         };
         const double underPlaying = windowed(0.25, 0.55), inGaps = windowed(1.6, 1.95);
-        s.check(underPlaying > 1.0e-3 && inGaps < 0.1 * underPlaying, "... the duck takes the reverb down under the playing, not in the gaps",
+        // (Not quite nothing in the gaps: the Radiance space after the Halls reverberates the
+        // Halls' ducked return, so a little of the dip carries into its long tail.)
+        s.check(underPlaying > 1.0e-3 && inGaps < 0.2 * underPlaying, "... the duck takes the reverb down under the playing, hardly in the gaps",
                 fmt(toDb(underPlaying)) + " vs " + fmt(toDb(inGaps)) + " dBFS of difference");
         dc::Controls::Mix offAgain;
         (void) offAgain;
@@ -506,6 +509,12 @@ void testMix(Suite& s) {
         s.check(diff(off) == 0.0, "Atmosphere On off: no Atmosphere (as at Level 0 %)");
     }
 
+    testMixPunch(s);
+}
+
+// Punch, the brass, the instruments' defaults and the windows (also alone: `--only mix-punch`).
+void testMixPunch(Suite& s) {
+    using namespace mixtest;
     // ---- Punch.
     {
         // The overshoot it is set to, settled in its time (envelope ratio to Punch 0, 5 ms frames).
@@ -563,8 +572,9 @@ void testMix(Suite& s) {
             const auto loud = play("Heroic Horns", 1.0f, 1.0f, { 48, 55, 60, 64, 67, 72 }, 1.0, 300.0f, 12.0f, false);
             s.check(peakOf(loud) <= 0.9661, "Punch 100 % on loud brass at +12 dB: no clipping (below -0.3 dBFS)", fmt(toDb(peakOf(loud)), 2) + " dBFS");
             s.check(loud.limiterLowest < 1.0f, "... the Punch limiter took the overshoot back", fmt(toDb(loud.limiterLowest), 1) + " dB");
-            const auto below = play("Warm Acoustic Guitar", 1.0f, 1.0f, chord, 1.0, 120.0f, -12.0f);
-            s.check(below.limiterLowest == 1.0f, "below the ceiling (Level -12 dB, Punch 100 %) the limiter does nothing");
+            const auto below = play("Warm Acoustic Guitar", 1.0f, 1.0f, chord, 1.0, 120.0f, -18.0f);
+            s.check(below.limiterLowest == 1.0f && peakOf(below) < 0.9, "below the ceiling (Level -18 dB, Punch 100 %) the limiter does nothing",
+                    fmt(toDb(peakOf(below)), 1) + " dBFS peak");
             const auto normal = play("Warm Acoustic Guitar", 0.5f, 0.8f, chord, 1.0);
             std::cout << "  [report] Warm Acoustic Guitar, a chord at velocity 0.8, its own Punch, Level 0 dB: the limiter took "
                       << fmt(-toDb(normal.limiterLowest), 1) << " dB at most\n";

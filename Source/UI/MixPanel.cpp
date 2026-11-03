@@ -25,6 +25,9 @@ const char* MixPanel::parameterId(int k) noexcept { return ids[static_cast<std::
 
 MixPanel::MixPanel(LightSeekerProcessor& p) : processor(p) {
     setOpaque(true);
+    // Double-buffered: the animated scene behind it never redraws its sliders (only a moved
+    // slider redraws the cached image).
+    setBufferedToImage(true);
     for (std::size_t k = 0; k < sliders.size(); ++k) {
         auto& s = sliders[k];
         s.setSliderStyle(juce::Slider::LinearVertical);

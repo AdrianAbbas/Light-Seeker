@@ -1431,10 +1431,11 @@ void Synth::render(float* outL, float* outR, int n) noexcept {
             r += vr;
         }
         // Punch's safety limiter (instant attack, 60 ms release): only what Punch added is
-        // ever taken back, and only above the ceiling (-0.4 dBFS here).
+        // ever taken back, and only above the ceiling (-0.4 dBFS at the instrument's output).
         auto& lim = *bus;
         if (punched || lim.limiterGain < 1.0f) {
-            constexpr float ceiling = 0.955f;
+            // The ceiling at the synth's output: the Level trim comes after, so it is divided out.
+            const float ceiling = 0.955f / std::max(1.0e-3f, lim.trim.value);
             const float peak = std::max(std::abs(l), std::abs(r));
             const float floorLevel = std::max(ceiling, std::max(std::abs(l0), std::abs(r0)));
             const float needed = peak > floorLevel ? floorLevel / peak : 1.0f;

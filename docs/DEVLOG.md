@@ -143,7 +143,7 @@ usage limit or a compaction) continues from the first unticked line. Push to `ma
 
 - [x] M1. MIX parameters (both plug-ins, added last): Reverb, Echoes, Modulation, Character, Atmosphere (0-150 %, 100 % = as designed; Shimmer moved there unchanged), Reverb Low Cut, Reverb Pre-delay, Reverb Duck (0 % = off); Atmosphere On; engine and synth scale each group, smoothed, level-matched; old sessions unchanged; push `[skip ci]`
 - [x] M2. MIX section in the FX's main controls and on the instrument panel (collapsible, ivory/gold); Atmosphere On/Level/Density in the Advanced tab; push `[skip ci]`
-- [ ] M3. Punch (gain on hit, per voice, Punch + Punch Time, velocity-sensitive, click-free, limited) with per-instrument defaults; brass attack/bite/presence pass (Fanfare Trumpets, Soaring Horn, Heroic Horns, Epic Choir and Brass, Grand Organ's trumpet); default reverb re-check on mix instruments; push `[skip ci]`
+- [x] M3. Punch (gain on hit, per voice, Punch + Punch Time, velocity-sensitive, click-free, limited) with per-instrument defaults; brass attack/bite/presence pass (Fanfare Trumpets, Soaring Horn, Heroic Horns, Epic Choir and Brass, Grand Organ's trumpet); default reverb re-check on mix instruments; push `[skip ci]`
 - [ ] M4. Tests (`mix` group), listening renders (mini-song before/after, brass Punch 0 vs default), DEVLOG handoff; final push without `[skip ci]`, CI green
 
 ---
@@ -1740,3 +1740,236 @@ untouched by this change.
 **CI, `f1ebe74`: green.** Linux with the recordings and the captured spaces 2078 passed,
 0 failed (the `search` shard included); macOS build, smoke + instrument on arm64 and x86_64
 77 passed each, auval and the AU harness for both plug-ins, the package uploaded.
+
+## Mix and Punch: sitting in a song (2026-11-03, unattended)
+
+From the developer's tests in songs (several LIGHT SEEKER instances on different tracks):
+everything drowned in reverb and shimmer, and the brass did not cut through. DUNGEON CRAWLER
+was checked first for a MIX / Punch / brass session to copy (its DEVLOG ends at Session 9;
+nothing there, read only, never modified), so this was designed here.
+
+### 1. The MIX section (both plug-ins)
+
+**Parameters** (`Parameters.h`, added last: older sessions open at the defaults; all
+automatable, in the state, presets, A/B and undo; a factory preset sets them as designed):
+
+| ID | Name | Range, default |
+|---|---|---|
+| `mixReverb` | Mix Reverb | 0-150 %, 100 % |
+| `mixEchoes` | Mix Echoes | 0-150 %, 100 % |
+| `mixModulation` | Mix Modulation | 0-150 %, 100 % |
+| `shimmer` | Shimmer | unchanged (the same parameter; only its fader moved into MIX) |
+| `mixCharacter` | Mix Character | 0-150 %, 100 % |
+| `mixAtmosphere` | Mix Atmosphere | 0-150 %, 100 % |
+| `mixLowCut` | Reverb Low Cut | Off (70-75 Hz), 80-600 Hz; Off |
+| `mixPreDelay` | Reverb Pre-delay | -50..+150 ms, 0 |
+| `mixDuck` | Reverb Duck | 0-100 %, 0 % (off) |
+| `atmosOn` | Atmosphere On | on (the Level, 0 % by default, keeps it silent) |
+
+**What each group scales** (`Engine::applyMix` on the frame after Intensity, so Intensity
+stays the master; the Signature's own stages in `Signature::setMix`):
+
+- *Reverb / Space*: the Halls (`ReverbMix`), the Radiance spaces incl. the captured ones
+  (`VaultMix`), the Aura's spectral wash (`WraithMix`); the signatures' smear.
+- *Echoes*: the Echoes module (`DelayMix`), the tape echo (`TapeMix`); the signatures' tap
+  patterns (fanfare and mirror reflections, sky / valley / cliff echoes, the Nave's radiant
+  cascade, cloud swirl echoes, soaring echoes, column slaps, bouncy sparkle echoes) and the
+  reverse swell.
+- *Modulation*: chorus (`EnsMix`), the rising phaser, flutter, the filter's movement, pitch
+  waver, the tape's wow; the signatures' wobble (chorus, water glass, living wood, fountain),
+  tremolo, auto-pan (below 100 % the auto-pan also gives back the input's own image) and swirl.
+  In the instrument also its own bus chorus. Not the shimmer.
+- *Shimmer*: unchanged.
+- *Character*: the resonator, the chimes (harp strings, bells, crystal), the warmth
+  (saturation), the choir and drone layers, wind and water beads; the signatures' combs (harp
+  resonance), modal banks (fanfare modes, wind chimes, living wood, crystal modes, golden
+  harmonics), sung or doubling pitch layers (choir bloom, angel choir) and saturation.
+- *Atmosphere*: the Atmosphere layer's output (smoothed, 50 ms), on top of its Level.
+
+**Level-matched**: a crossfaded wet layer (the reverbs, the spaces, the echoes, the aura:
+wet sqrt(m), dry sqrt(1-m)) scales its wet-to-dry *ratio* by the control,
+m' = s²m / (s²m + 1 - m): the total power stays (turning the reverb down brings the dry up
+by exactly what keeps the loudness), and 150 % never reaches "all wet". Added layers and
+modulation depths scale linearly within their ranges. The level matcher does the rest.
+Every module already smooths its mixes (40-80 ms); the Signature's group gains glide over
+50 ms; at exactly 100 % nothing is multiplied (the code path is bit-identical).
+
+**The reverb helpers** (`Engine::prepareMixChunk` / `shapeReverb`, on the rooms' and the
+Vault's return, i.e. the reverbs only):
+- *Low Cut*: a 12 dB/octave high-pass (TPT SVF), its corner gliding over ~100 ms; Off is a
+  true bypass (it engages from 20 Hz with cleared state, never a step).
+- *Pre-delay*: added to the Halls' pre-delay (0-250 ms, so a hall's own pre-delay can also be
+  shortened, to -50 ms); the Radiance spaces (their pre-delay is in their impulse responses)
+  take only the positive part, as a delay on what is sent into them (gliding over 120 ms).
+- *Duck*: an envelope follower on the engine's input (10 ms attack, 150 ms release) from
+  -48 dBFS (nothing) to -24 dBFS (all of it), the reverbs' return down to -15 dB at 100 %
+  (gain gliding over 8 ms). The tails generated while ducked are full: they bloom in the
+  gaps as soon as the playing stops.
+
+**The window** (`Source/UI/MixPanel.*`): a collapsible section above the controls, opened by
+the MIX button in Levels (where the Shimmer fader was) and, in the instrument, by the MIX
+button on the instrument panel; ✕ or the button folds it. Pearl/ivory with gold value
+tracks and a gold hairline between EFFECTS and REVERB HELPERS; "As designed" resets them (one
+undo step). It stays open while you play (a click elsewhere does not close it), the window
+remembers it (`ViewState::mix`, saved with the project), and it shares its space with the
+Advanced drawer and the Journey panel (opening one folds the other). Double-buffered (cached
+image; the animated scene behind never redraws its sliders). Snapshots:
+`docs/snapshots/mix-section-fx.png`, `mix-section-instrument.png`, `advanced-atmosphere.png`.
+
+**The Atmosphere in Advanced**: On / Level / Density at the top of the drawer (the Density
+also in the Journey panel, the Level in the toolbar). Turning it on at Level 0 % starts it
+at 35 %.
+
+**Old sessions**: a state without the new IDs opens with every MIX control at 100 % / off.
+The effect at the defaults is *byte-identical* to the build before (`--listen`: the dry phrase,
+every place and the journey render, 33 WAV files, compared with the same command on the
+previous commit: all 33 identical).
+
+### 2. The instruments in a mix: reverb defaults, Punch, the brass
+
+**Reverb defaults** (`Patch::space`, times MIX Reverb in the instrument): the instruments
+mostly played in a mix take a drier share of their place's reverbs by default: brass 70-75 %
+(Epic Choir and Brass 85 %), strings 75 %, plucks, harps and guitars 70-80 %; MIX Reverb at
+150 % brings the place's whole space back (1.5 x 0.7 >= 1). Pads, choirs, bells and winds
+keep the whole space. The brass's reverb also starts later (`spacePreDelayMs`: +20 ms; Epic
++15, the organ +10) and dips under its hits (`spaceDuck`: 25-30 %, Epic 20 %; combined with the
+user's Duck as 1 - (1-u)(1-p)), so the dry hit comes first.
+
+**Punch** (`punch`, `punchTime`; the instrument only; on the panel after Intensity): on each
+note-on the voice's level overshoots and settles back over Punch Time (20-500 ms, default
+120 ms) on a raised cosine in dB (smooth at both ends; the note starts from silence, so the
+overshoot never clicks). Punch 0..1: 0 none, 50 % the instrument's own (`Patch::punchDb`),
+100 % +12 dB; the text reads in dB for the instrument playing. Velocity-sensitive
+(x(0.35 + 0.65 v^1.3)). Notes moved to a new instrument by travel are not struck again.
+Per voice, gain stepped per sample (set per 32-sample chunk). **Safety limiter** on the
+synth's sum: instant attack, 60 ms release, ceiling -0.4 dBFS, and never below what the sum
+would be without Punch: it only ever takes back what Punch added (Punch 0 is bit-identical).
+Defaults: Fanfare Trumpets and Heroic Horns +8 dB, Soaring Horn +6, Epic Choir and Brass +4,
+plucks and harps +3-3.5 (harpsichord +3), Celesta and Harp +3, the organ +2.5, bells and
+celesta +2-2.5, strings and winds +1-1.5, pads and choirs 0.
+
+**The brass** (`Layer::bite`, `Layer::presence` in the brass and reed models,
+`Source/Synth/wb/Voices.h`, 0 = WORLDBUILDER's sound unchanged): `bite` blows the first
+~90 ms harder (brighter filter, more drive, with velocity), `presence` adds a 3 kHz band
+(Q 0.9), more of it on the attack; quicker rises (Fanfare 6-10 ms, was 12-16; Soaring Horn
+35-45 ms, was 90-110, its low-pass opened to let the 3 kHz through; Heroic Horns 12-20, was
+30-40; the Epic brass 50-70, was 350: it strikes and the choir swells in under it; the
+organ's trumpet stop 25, was 50); more velocity response (velocity gain 0.8 -> 0.9). Trims:
+Fanfare Trumpets -0.4 dB (the presence), so every brass sustain sits where it was.
+
+Before/after (`--brass-report`, the same code built against both commits; a held C major
+chord, velocity 0.95, dry, stand-ins):
+
+| | rise 10-90 % | attack over sustain | presence 2-4 kHz (attack) | sustain |
+|---|---|---|---|---|
+| Fanfare Trumpets | 10 -> 10 ms | 6.1 -> 8.5 dB | -15.6 -> -13.3 dB | -18.6 -> -18.6 dBFS |
+| Soaring Horn | 85 -> 20 ms | 4.9 -> 8.7 dB | -26.2 -> -23.2 dB | -17.3 -> -17.2 dBFS |
+| Heroic Horns | 20 -> 10 ms | 5.5 -> 10.7 dB | -19.5 -> -17.3 dB | -17.1 -> -17.0 dBFS |
+| Epic Choir and Brass | 150 -> 50 ms | -1.9 -> 5.2 dB | -24.4 -> -17.2 dB | -17.6 -> -17.6 dBFS |
+| Grand Organ | 45 -> 35 ms | 3.5 -> 4.5 dB | -19.2 -> -18.5 dB | -19.8 -> -19.8 dBFS |
+
+At velocity 0.6 the hits gain more (Fanfare 6.4 -> 11.6 dB, Heroic 5.6 -> 11.2 dB): at full
+velocity a dry brass chord already peaks near full scale, so the safety limiter takes part
+of the Punch back (that is its job: never clip). The sustain at velocity 0.6 is 0.3-0.6 dB
+lower than before: the stronger velocity response (soft notes softer), intended.
+
+### Tests (`mix` group, `Tests/MixTests.h`; its own shard `9-mix` in CI; `--only mix-punch` runs the Punch, brass and window part alone)
+
+- The parameters in both plug-ins (range, default, automatable, text), saved and restored, a
+  session saved before them opens at the defaults, a user preset carries them, a factory
+  preset sets them as designed, moving one marks the preset modified; Punch and Punch Time
+  only in the instrument (the instrument now adds eleven parameters).
+- An older session plays sample for sample as the defaults; at 100 % the MIX leaves every
+  place's frame exactly as designed.
+- Each group (Reverb, Echoes, Modulation, Character) on five places that have its effects:
+  0 % takes them out, 150 % never less than 100 % and clearly more on most (Butterfly
+  Glade's flutter is at 90 % depth already: 1.02x, reported); every place *without* its
+  effects is sample-identical at 0 % and 150 % (only that group moves); MIX Reverb 0 %
+  leaves no reverb tail (the Nave of Light, the other groups off: its Radiant Cascade is an
+  echo).
+- Level-matched through the processor at 0 / 100 / 150 % (two places per group, within
+  1.5 dB); click-free while each control (the four groups, Low Cut, Pre-delay, Duck) sweeps
+  every 64-sample block and jumps.
+- Low Cut 400 Hz: the reverb tail's lows (below 150 Hz) 8+ dB lower, its highs within 1.5 dB.
+  Pre-delay +100 ms: the reverbs start about 100 ms later. Duck 100 %: the reverbs' return
+  dips below -12 dB under the playing, back above -0.3 dB in the gaps; the difference
+  with/without it lies under the playing (in the gaps less than a fifth of it: the Radiance
+  space reverberates the Halls' ducked return); Duck 0 % changes nothing.
+- The Atmosphere: MIX Atmosphere 150 % about 1.5x the layer of 100 %, 0 % none; Atmosphere
+  On off: none.
+- Punch: the overshoot it is set to (within 1 dB) at 50 % and 100 %, half of it half way,
+  settled (within 0.3 dB) after Punch Time; Punch Time 400 ms still punching at 300 ms,
+  settled at 440 ms; a soft note punches less; no step beyond the gain it adds (20 ms);
+  Punch 0 is exactly the instrument; the most Punch on loud brass chords at Level +12 dB
+  never clips (and the limiter acted), below the ceiling the limiter does nothing. Defaults:
+  high on the brass, medium on plucks and harps, off/low on pads and choirs.
+- The brass against the design before (numbers above, measured by the old code): a louder
+  hit over the sustain, more 2-4 kHz presence on the attack, the same sustain (within
+  0.5 dB), the same sustain with and without its Punch (0.3 dB); its Punch makes the hit
+  louder; the fanfare rises in under 25 ms. Epic Choir and Brass is compared only with its
+  stand-ins (with the recordings its choir is the developer's voice: reported).
+- The reverb defaults (drier for brass, strings, plucks, harps, guitars; 150 % brings the
+  whole space back; pads and choirs keep it); the instrument's chorus follows Modulation.
+- The windows: the MIX button, the section above the controls with its nine labelled
+  controls moving their parameters (Shimmer the same control), As designed, remembered when
+  the window reopens, sharing its space with Advanced; the instrument panel's MIX button and
+  its Punch / Punch Time; the Atmosphere's On / Level / Density in Advanced.
+
+`scripts/run-tests-parallel.sh`: the summary counted only the shards `1-` to `8-`; the
+`9-search` shard ran but was not counted. Now `9-search` and `9-mix` are counted too.
+
+### Listening renders
+
+`--listen-mix dir` (CI: `test-logs/mix/`): a four-instrument mini-song (Fanfare Trumpets at
+Gates of Dawn, Warm Strings at Golden Nest, Angelic Choir at Sanctum, Concert Harp at Rose
+Garden; four instrument instances in their own places, summed 6 dB down, 8 bars of C - Am -
+F - G at 100 bpm): `mini-song-mix-defaults.wav` and `mini-song-old-mix-settings.wav` (every
+instrument's whole reverb, no Punch, no added pre-delay; the new brass voice), and the brass
+alone with Punch 0 then its default (`fanfare-trumpets-`, `heroic-horns-`,
+`soaring-horn-punch-0-then-default.wav`); `brass-report.txt`. The true before/after (the same
+song rendered by the code before Mix and Punch and by this one, here without the recordings:
+stand-ins) are `docs/listening/mix/mini-song-before.ogg` and `mini-song-after.ogg`, copied
+into the same folder by CI.
+
+### Handoff: what to listen for in GarageBand
+
+`docs/MANUAL_TEST.md`, "Mix and Punch". In short, with four tracks playing together:
+- **MIX** (Levels, or the instrument panel): Reverb down on two or three tracks and the song
+  clears up without the tracks jumping in level; Echoes, Modulation, Character each move
+  only their own part; Shimmer as before. Low Cut 200-300 Hz on the strings and choir takes
+  the boom out of the hall; Pre-delay +40-60 ms puts the harp's pluck in front of its space;
+  Duck 50-70 % on the choir and strings lets the space bloom between the chords.
+- **The brass** cuts through: a sharper, brighter hit, then the same sustain; still radiant,
+  not harsh? Punch 0 / 50 / 100 % and Punch Time 30 / 120 / 300 ms on Fanfare Trumpets and
+  Heroic Horns. Is +8 dB the right default for the trumpets, +6 for the solo horn?
+- **The new defaults**: the brass, strings, harps and guitar a little drier in their places.
+  Do they sit in the song now? Reverb 150 % should bring the big halls back.
+- **Old projects** open with the MIX at 100 %; the effect sounds exactly as before. The
+  instrument's brass, Punch and drier defaults apply to old projects too (as the Shimmer
+  change did): that is the redesign. Set Punch 0 % and MIX Reverb about 140 % to get close to
+  the old mix on a brass track.
+
+### Known issues and decisions to revisit
+
+- **The instrument's redesign reaches old projects**: Punch at its default, the drier reverb
+  share and the brass voice apply to instrument tracks saved before (their parameters are
+  unchanged). The effect (LIGHT SEEKER FX) is byte-identical at the defaults.
+- **Punch at full velocity**: a dry brass chord at velocity 1 already peaks near full scale,
+  so the safety limiter takes part of the overshoot back (the hit still rises 2-3 dB more than
+  before); at medium velocities the whole Punch comes through. Lowering the track's Level
+  leaves more room (the limiter's ceiling follows the Level).
+- **Pre-delay on the Radiance spaces** works only upwards (their own pre-delay is part of
+  their impulse responses); the Halls' can also be shortened, to -50 ms.
+- **Duck and serial reverbs**: where a Radiance space follows the Halls, it reverberates the
+  Halls' ducked return, so a little of the dip carries into its long tail.
+- **Modulation 150 %** cannot deepen a flutter that is already near full depth (Butterfly
+  Glade: 1.02x); it widens the others.
+- **Atmosphere On** is on by default (the Level, 0 %, keeps the layer silent, as before);
+  switching it on in Advanced at Level 0 % starts it at 35 %.
+
+### Local run before the final push (Linux, this container, no recordings or captures)
+
+The whole suite in its shards on four cores: **2196 passed, 0 failed** (basics 309,
+robustness 152, locations, qa, strength 118, instruments 354, recorded 59, search 143, mix
+164). The strength and shimmer gates pass unchanged at the defaults (the effect is
+byte-identical to the build before). Every changed source also compiles with clang.
