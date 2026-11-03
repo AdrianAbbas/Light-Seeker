@@ -132,6 +132,13 @@ usage limit or a compaction) continues from the first unticked line. Push to `ma
 - [x] F2b. The Shimmer slider with the main controls (light style); tests (0/100/150 % level-matched, no clicks, shimmer energy scales, strength at default, nothing else changed); push `[skip ci]`
 - [x] F3. Whole suite green, DEVLOG handoff; final push without `[skip ci]`, CI green
 
+**Search** (see "Search" below; no sound changes)
+
+- [ ] S1. Search index (`Source/World/Search`): every location, place, instrument, preset and journey with sound/mood tags, the recordings it uses and a short description; instant fuzzy matching (case-insensitive, partial words, typos); push `[skip ci]`
+- [ ] S2. Search panel in both plug-ins: magnifier at the top and Cmd+F, light results panel over the scene (Esc / click outside closes, never blocks the map), grouped results with icon, location and tags, arrow keys + Enter or click jumps there exactly like choosing by hand, description on hover, filter chips, Recent (8); push `[skip ci]`
+- [ ] S3. Preview note for instruments (a short phrase while held, sensible level, never while the host plays); push `[skip ci]`
+- [ ] S4. Tests (`search` group: findable by name and 3+ tags, typos, Enter = by hand (state compare), keyboard), snapshots in `docs/snapshots/`, README/manual, DEVLOG handoff; final push without `[skip ci]`, CI green
+
 ---
 
 ## Lessons carried over from DUNGEON CRAWLER (read first)
