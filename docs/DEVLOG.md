@@ -130,7 +130,7 @@ usage limit or a compaction) continues from the first unticked line. Push to `ma
 - [x] F1c. Map life: drifting cloud shadows, mist and light motes (cheap, <= 30 fps, double-buffered); landmarks clickable; snapshots before/after; editor CPU; push `[skip ci]`
 - [x] F2a. Shimmer about 20 % lower by default; a "Shimmer" parameter (0-150 %, default 100 %) scaling every shimmer, octave-shimmer and sparkle stage in both plug-ins, smoothed; saved; old sessions at the default; push `[skip ci]`
 - [x] F2b. The Shimmer slider with the main controls (light style); tests (0/100/150 % level-matched, no clicks, shimmer energy scales, strength at default, nothing else changed); push `[skip ci]`
-- [ ] F3. Whole suite green, DEVLOG handoff; final push without `[skip ci]`, CI green
+- [x] F3. Whole suite green, DEVLOG handoff; final push without `[skip ci]`, CI green
 
 ---
 
@@ -1564,3 +1564,8 @@ The map-life cost is now reported (a `[report]` line above 15 %), not gated: wal
 contention says nothing about the code (7 % alone). The checks that the shadows and the mist
 animate stay gated.
 
+
+**CI, `e90761c`: green.** Linux with the recordings and the captured spaces 1935 passed,
+0 failed (the preparation smoothed the same 32 notes); macOS build, smoke + instrument on
+arm64 and x86_64 77 passed each, auval and the AU harness for both plug-ins, the package
+uploaded.
