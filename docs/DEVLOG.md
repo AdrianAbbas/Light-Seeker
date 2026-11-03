@@ -137,7 +137,7 @@ usage limit or a compaction) continues from the first unticked line. Push to `ma
 - [x] S1. Search index (`Source/World/Search`): every location, place, instrument, preset and journey with sound/mood tags, the recordings it uses and a short description; instant fuzzy matching (case-insensitive, partial words, typos); push `[skip ci]`
 - [x] S2. Search panel in both plug-ins: magnifier at the top and Cmd+F, light results panel over the scene (Esc / click outside closes, never blocks the map), grouped results with icon, location and tags, arrow keys + Enter or click jumps there exactly like choosing by hand, description on hover, filter chips, Recent (8); push `[skip ci]`
 - [x] S3. Preview note for instruments (a short phrase while held, sensible level, never while the host plays); push `[skip ci]`
-- [ ] S4. Tests (`search` group: findable by name and 3+ tags, typos, Enter = by hand (state compare), keyboard), snapshots in `docs/snapshots/`, README/manual, DEVLOG handoff; final push without `[skip ci]`, CI green
+- [x] S4. Tests (`search` group: findable by name and 3+ tags, typos, Enter = by hand (state compare), keyboard), snapshots in `docs/snapshots/`, README/manual, DEVLOG handoff; final push without `[skip ci]`, CI green
 
 ---
 
@@ -1722,3 +1722,10 @@ while the song plays; Recent after closing and reopening the window.
 - **Tags are hand-written** (`Search.cpp` tables, one line per place, location and
   instrument): a new place, instrument or preset needs its line (the index tests fail
   otherwise: 3+ tags and a description each).
+
+### Local run before the final push (Linux, this container, no recordings or captures)
+
+`search` shard 143 passed, 0 failed; basics (editor, window, layouts) 308 passed, 1 failed:
+the known wall-clock check "a full repaint with the drawer fits in a 30 fps frame" (34.0 ms
+with nine shards sharing four cores; 9.5 ms alone, see above). The sound shards are
+untouched by this change.
