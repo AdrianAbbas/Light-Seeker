@@ -19,6 +19,7 @@
 #include "UI/SceneCache.h"
 #include "UI/InstrumentPanel.h"
 #include "UI/Hover.h"
+#include "UI/SearchPanel.h"
 
 class LightSeekerView final : public juce::Component, private juce::Timer, private juce::AudioProcessorParameter::Listener {
 public:
@@ -123,6 +124,15 @@ public:
     void holdTransitionForTest(float t);
     // Tests and snapshots: advance the life by a number of frames (embers, mist).
     void advanceLifeForTest(int frames);
+
+    // Search (the magnifier at the top, Cmd+F): open, close, and what choosing a result does
+    // (exactly what choosing the same thing by hand does: travel, instrument, preset).
+    void openSearch();
+    void closeSearch();
+    bool searchOpen() const noexcept { return searchPanel.isVisible(); }
+    void chooseSearchResult(int entry);
+    dc::ui::SearchPanel& searchPanelForTest() noexcept { return searchPanel; }
+    juce::Button& searchButtonForTest() noexcept { return searchButton; }
 
 private:
     enum class View { Map, Place };
@@ -375,6 +385,9 @@ private:
     juce::Label notice;
     double noticeUntil = 0;
     Follower follower { *this };
+    dc::ui::SearchButton searchButton;
+    dc::ui::SearchPanel searchPanel;
+    void layoutSearch();
     bool wasSteering = false;
     int shown = -1, shownSub = -1;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(LightSeekerView)
@@ -393,6 +406,8 @@ public:
     void paint(juce::Graphics&) override {}
     LightSeekerView& view() noexcept { return content; }
     void setScale(float);
+    // Cmd+F anywhere in the window (the instrument panel too) opens search.
+    bool keyPressed(const juce::KeyPress&) override;
 private:
     LightSeekerProcessor& processor;
     LightSeekerView content;

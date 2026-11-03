@@ -188,7 +188,8 @@ void LightSeekerView::PlaceButton::paintHover(juce::Graphics& g, bool hover, boo
 
 LightSeekerView::LightSeekerView(LightSeekerProcessor& p)
     : processor(p), cache([this] { sceneReady(); }), drawer(p.parameters),
-      journeyPanel(p, [this] { return dc::Stop { shown, dc::clampSubLocation(shown, shownSub) }; }) {
+      journeyPanel(p, [this] { return dc::Stop { shown, dc::clampSubLocation(shown, shownSub) }; }),
+      searchPanel(dc::search::index(p.isInstrument()), p.recentSearches) {
     setLookAndFeel(&look);
     setOpaque(true);
     auto* locationParameter = processor.parameters.getParameter(dc::ids::location);
@@ -330,6 +331,22 @@ LightSeekerView::LightSeekerView(LightSeekerProcessor& p)
     notice.setInterceptsMouseClicks(false, false);
     addChildComponent(notice);
     follower.startTimerHz(10);
+
+    // Search: the magnifier at the top (and Cmd+F) opens the panel over the scene.
+    searchButton.setTooltip(juce::String("Search ") + (processor.isInstrument() ? "instruments, places and presets" : "places, journeys and presets")
+                            + " (" + (juce::SystemStats::getOperatingSystemType() & juce::SystemStats::MacOSX ? "Cmd" : "Ctrl") + "+F)");
+    searchButton.setClickingTogglesState(false);
+    searchButton.setWantsKeyboardFocus(false);
+    searchButton.onClick = [this] { if (searchPanel.isVisible()) closeSearch(); else openSearch(); };
+    addAndMakeVisible(searchButton);
+    searchPanel.onChoose = [this](int entry) { chooseSearchResult(entry); };
+    searchPanel.onClose = [this] { searchButton.setToggleState(false, juce::dontSendNotification); grabKeyboardFocus(); };
+    if (processor.isInstrument()) {
+        searchPanel.onPreviewStart = [this](int instrument) { return processor.startPreview(instrument); };
+        searchPanel.onPreviewStop = [this] { processor.stopPreview(); };
+        searchPanel.previewAllowed = [this] { return !processor.hostPlaying(); };
+    }
+    addChildComponent(searchPanel);
 
     // Toolbar (Milestone 11).
     presetButton.setTooltip("Presets: favourite spots, journeys, your own");
@@ -522,8 +539,58 @@ void LightSeekerView::closePanels() {
 }
 
 bool LightSeekerView::keyPressed(const juce::KeyPress& key) {
+    if (key == juce::KeyPress('f', juce::ModifierKeys::commandModifier, 0)) { openSearch(); return true; }
+    if (key == juce::KeyPress::escapeKey && searchPanel.isVisible()) { closeSearch(); return true; }
     if (key == juce::KeyPress::escapeKey && (journeyPanel.isVisible() || drawer.isVisible())) { closePanels(); return true; }
     return false;
+}
+
+void LightSeekerView::openSearch() {
+    layoutSearch();
+    searchButton.setToggleState(true, juce::dontSendNotification);
+    searchPanel.open();
+}
+
+void LightSeekerView::closeSearch() {
+    searchPanel.close();   // calls onClose when it was open
+    searchButton.setToggleState(false, juce::dontSendNotification);
+}
+
+void LightSeekerView::chooseSearchResult(int entryIndex) {
+    const auto& index = dc::search::index(processor.isInstrument());
+    if (entryIndex < 0 || entryIndex >= static_cast<int>(index.entries().size())) return;
+    const auto e = index.entry(entryIndex);
+    closeSearch();
+    switch (e.kind) {
+        case dc::search::Kind::Instrument:
+            // As the instrument menu does: plays it here and locks it.
+            processor.chooseInstrument(e.instrument);
+            refreshToolbar();
+            break;
+        case dc::search::Kind::Place:
+        case dc::search::Kind::Location:
+            // As a click on the map's landmark (then the place in its list) does: on the map the
+            // path is drawn and the view zooms in; inside a place the scene crossfades.
+            if (view == View::Map && !(pending && pendingView == View::Place)) {
+                const bool already = e.location == shown;
+                travelManually(e.location, e.sub);
+                if (already) goTo(View::Place, { e.location, e.sub }, 1);
+                else { zoomAt = nowSeconds() + 0.55; wakeTimer(); }
+            } else travelManually(e.location, e.sub);
+            break;
+        case dc::search::Kind::Preset:
+        case dc::search::Kind::Journey:
+            choosePreset(e.preset);
+            break;
+    }
+}
+
+void LightSeekerView::layoutSearch() {
+    // Top centre over the scene, ending above the controls (their buttons stay clickable).
+    const int bottom = controlsShown ? getHeight() - static_cast<int>(stripHeight) - 34 : getHeight() - 44;
+    const int w = dc::ui::SearchPanel::panelWidth + 28;
+    const int y = 32;
+    searchPanel.setBounds((getWidth() - w) / 2, y, w, juce::jmax(200, juce::jmin(470, bottom + 14 - y)));
 }
 
 void LightSeekerView::mouseDown(const juce::MouseEvent& e) { pointerDown(e.eventComponent); }
@@ -534,6 +601,8 @@ void LightSeekerView::pointerDown(juce::Component* target) {
     const auto within = [target](juce::Component& c) { return target == &c || c.isParentOf(target); };
     if (journeyPanel.isVisible() && !within(journeyPanel) && target != &journeyToggle) journeyPanel.onClose();
     if (drawer.isVisible() && !within(drawer) && target != &advancedToggle) drawer.onClose();
+    // Search closes on a click outside it; the click still does what it does (the map stays usable).
+    if (searchPanel.isVisible() && !within(searchPanel) && target != &searchButton) closeSearch();
 }
 
 void LightSeekerView::SteerBadge::paint(juce::Graphics& g) {
@@ -780,7 +849,7 @@ void LightSeekerView::refreshToolbar() {
 }
 
 void LightSeekerView::stepPreset(int direction) {
-    const int count = static_cast<int>(dc::factoryPresets().size());
+    const int count = static_cast<int>(dc::presetsFor(processor.isInstrument()).size());
     const int next = processor.presetIndex < 0 ? (direction > 0 ? 0 : count - 1) : (processor.presetIndex + direction + count) % count;
     processor.applyFactoryPreset(next);
     wasSteering = false;
@@ -791,16 +860,20 @@ void LightSeekerView::stepPreset(int direction) {
 }
 
 void LightSeekerView::showPresetMenu() {
-    juce::PopupMenu menu, spots, journeys, user;
+    juce::PopupMenu menu, user;
     menu.addItem(899, "Init / No preset", true, processor.presetIndex < 0 && processor.presetName == "Init" && !processor.presetModified());
     menu.addSeparator();
-    const auto& presets = dc::factoryPresets();
+    // This edition's factory presets (the index applyFactoryPreset takes), by category.
+    const auto& presets = dc::presetsFor(processor.isInstrument());
+    juce::StringArray categories;
+    std::vector<juce::PopupMenu> groups;
     for (int k = 0; k < static_cast<int>(presets.size()); ++k) {
-        auto& target = juce::String(presets[static_cast<std::size_t>(k)].category) == "Journeys" ? journeys : spots;
-        target.addItem(1 + k, presets[static_cast<std::size_t>(k)].name, true, processor.presetIndex == k);
+        const juce::String category = presets[static_cast<std::size_t>(k)].category;
+        int g = categories.indexOf(category);
+        if (g < 0) { categories.add(category); groups.emplace_back(); g = categories.size() - 1; }
+        groups[static_cast<std::size_t>(g)].addItem(1 + k, presets[static_cast<std::size_t>(k)].name, true, processor.presetIndex == k);
     }
-    menu.addSubMenu("Favourite spots", spots);
-    menu.addSubMenu("Journeys", journeys);
+    for (int g = 0; g < categories.size(); ++g) menu.addSubMenu(categories[g], groups[static_cast<std::size_t>(g)]);
     const auto files = processor.userPresetFolder().findChildFiles(juce::File::findFiles, false, "*.lspreset");
     juce::Array<juce::File> sorted(files);
     sorted.sort();
@@ -1268,6 +1341,8 @@ void LightSeekerView::layoutOverlays() {
         // under the mouse and showing it again was one way a hover could stick.
         button.setVisible(view == View::Place && k <= count);
     }
+    // The magnifier, top right, left of the place list.
+    searchButton.setBounds(getWidth() - listWidth - 14 - 40, 14, 34, 28);
     // Breadcrumb, top left.
     mapCrumb.setBounds(14, 14, 74, 28);
     const int locationWidth = 30 + juce::roundToInt(juce::GlyphArrangement::getStringWidth(labelFont(16.0f), locationCrumb.getButtonText()));
@@ -1279,7 +1354,7 @@ void LightSeekerView::layoutOverlays() {
     // place list.
     const int crumbText = placeCrumb.isVisible() ? placeCrumb.getX() + juce::roundToInt(juce::GlyphArrangement::getStringWidth(titleFont(16.0f), placeCrumb.getText())) + 14
                                                  : locationCrumb.getRight();
-    const int badgeX = juce::jlimit(0, getWidth() - 200 - 236, juce::jmax((getWidth() - 236) / 2, crumbText + 12));
+    const int badgeX = juce::jlimit(0, searchButton.getX() - 8 - 236, juce::jmax((getWidth() - 236) / 2, crumbText + 12));
     steerBadge.setBounds(badgeX, 14, 236, 28);
     notice.setBounds(badgeX, 46, 236, 24);
 }
@@ -1580,6 +1655,7 @@ void LightSeekerView::resized() {
     drawer.setBounds(200, 56, w - 214, panelBottom - 56);
     journeyPanel.setBounds(14, 56, 330, panelBottom - 56);
     layoutOverlays();
+    layoutSearch();
     const auto px = pixelSize();
     cache.request(scene, px.x, px.y);
     wakeTimer();
@@ -1719,6 +1795,12 @@ LightSeekerEditor::LightSeekerEditor(LightSeekerProcessor& p) : AudioProcessorEd
     setResizeLimits(defaultWidth / 2, h / 2, defaultWidth * 2, h * 2);
     if (auto* constrainer = getConstrainer()) constrainer->setFixedAspectRatio(static_cast<double>(defaultWidth) / h);
     setSize(juce::roundToInt(static_cast<float>(defaultWidth) * scale), juce::roundToInt(static_cast<float>(h) * scale));
+}
+
+bool LightSeekerEditor::keyPressed(const juce::KeyPress& key) {
+    if (key == juce::KeyPress('f', juce::ModifierKeys::commandModifier, 0)) { content.openSearch(); return true; }
+    if (key == juce::KeyPress::escapeKey && content.searchOpen()) { content.closeSearch(); return true; }
+    return false;
 }
 
 void LightSeekerEditor::setScale(float scale) {

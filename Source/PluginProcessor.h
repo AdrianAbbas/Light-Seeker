@@ -179,10 +179,35 @@ public:
     // Tests: the synth itself.
     const ls::inst::Synth& synthForTest() const noexcept { return *synth; }
 
+    // ---- Search (both plug-ins) ----
+    // The last searches and results the search panel remembers ("q:text", "e:key"; newest
+    // first, at most 8). Message thread; kept while the plug-in lives, not in the session.
+    juce::StringArray recentSearches;
+    // Whether the host's transport is playing (the last block).
+    bool hostPlaying() const noexcept { return hostIsPlaying.load(std::memory_order_relaxed); }
+    // The instrument edition's preview from search: a short phrase on that instrument (dry
+    // of the player's held notes, through the place you are in, a little below the
+    // instrument's own level) until stopPreview(); never while the host plays (refused, and
+    // a preview stops when the host starts). Message thread; lock-free into the next block.
+    bool startPreview(int instrument);
+    void stopPreview();
+    int previewVoices() const noexcept { return previewVoicesNow.load(std::memory_order_relaxed); }
+    static constexpr float previewLevelDb = -4.0f;
+
 private:
     void process(juce::AudioBuffer<float>&, bool forcedBypass);
     void renderInstrument(juce::AudioBuffer<float>&, int numSamples);
     std::unique_ptr<ls::inst::Synth> synth;
+    // Search's preview: its own small synth, a phrase scheduled in samples.
+    std::unique_ptr<ls::inst::Synth> previewSynth;
+    std::atomic<int> previewRequest { -2 };   // -2 nothing new, -1 stop, >= 0 play that instrument
+    std::atomic<bool> hostIsPlaying { false };
+    std::atomic<int> previewVoicesNow { 0 };
+    bool previewOn = false;
+    long long previewClock = 0;
+    int previewStep = 0;
+    std::array<std::array<float, dc::maxChunk>, 2> previewScratch {};
+    void renderPreview(float* left, float* right, int numSamples);
     juce::MidiBuffer* blockMidi = nullptr;
     juce::MidiBuffer uiMidiScratch;
     juce::AbstractFifo uiFifo { 512 };

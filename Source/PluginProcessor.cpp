@@ -51,6 +51,7 @@ LightSeekerProcessor::LightSeekerProcessor(bool instrumentEdition)
         instOctave = parameters.getRawParameterValue(dc::ids::instOctave);
         instLock = parameters.getRawParameterValue(dc::ids::instLock);
         synth = std::make_unique<ls::inst::Synth>();
+        previewSynth = std::make_unique<ls::inst::Synth>();
     }
     // The developer's recordings load on a background thread (once per process): the
     // instrument's, or in the effect only what its Atmosphere layer plays (the breaths).
@@ -70,6 +71,67 @@ void LightSeekerProcessor::chooseInstrument(int index) {
     requestedLock.store(juce::jlimit(0, ls::inst::instrumentCount - 1, index));
     shownInstrument.store(juce::jlimit(0, ls::inst::instrumentCount - 1, index));
     setPlain(dc::ids::instLock, 1.0f);
+}
+
+bool LightSeekerProcessor::startPreview(int instrument) {
+    if (!instrumentMode || hostPlaying() || instrument < 0 || instrument >= ls::inst::instrumentCount) return false;
+    previewRequest.store(instrument);
+    return true;
+}
+
+void LightSeekerProcessor::stopPreview() {
+    if (instrumentMode) previewRequest.store(-1);
+}
+
+void LightSeekerProcessor::renderPreview(float* left, float* right, int numSamples) {
+    // A short rising phrase (C E G C, then held) a little below the instrument's level;
+    // released when the button is let go (or after a few seconds), refused while the host plays.
+    static constexpr std::array<int, 4> phrase { 60, 64, 67, 72 };
+    static constexpr double stepSeconds = 0.17, holdSeconds = 3.0;
+    const int request = previewRequest.exchange(-2);
+    const bool playing = hostIsPlaying.load(std::memory_order_relaxed);
+    if ((request == -1 || playing || request >= 0) && previewOn) { previewSynth->allNotesOff(); previewOn = false; }
+    if (request >= 0 && !playing) {
+        previewSynth->setPatch(request);
+        ls::inst::Macros m;
+        m.levelDb = previewLevelDb;
+        m.shimmer = juce::jlimit(0.0f, dc::dsp::shimmerMax, std::isfinite(shimmer->load()) ? shimmer->load() : 1.0f);
+        previewSynth->setMacros(m);
+        previewOn = true;
+        previewClock = 0;
+        previewStep = 0;
+    }
+    if (!previewOn && previewSynth->activeVoices() == 0) { previewVoicesNow.store(0, std::memory_order_relaxed); return; }
+    int at = 0;
+    while (at < numSamples) {
+        int until = numSamples;
+        if (previewOn) {
+            const auto next = previewStep < static_cast<int>(phrase.size()) ? static_cast<long long>(stepSeconds * previewStep * rate)
+                                                                             : static_cast<long long>(holdSeconds * rate);
+            if (next <= previewClock) {
+                if (previewStep < static_cast<int>(phrase.size())) previewSynth->noteOn(phrase[static_cast<std::size_t>(previewStep++)], 0.72f);
+                else { previewSynth->allNotesOff(); previewOn = false; }
+                continue;
+            }
+            until = static_cast<int>(juce::jmin<long long>(numSamples, at + (next - previewClock)));
+        }
+        while (at < until) {
+            const int n = juce::jmin(until - at, dc::maxChunk);
+            auto& l = previewScratch[0];
+            auto& r = previewScratch[1];
+            std::fill(l.begin(), l.begin() + n, 0.0f);
+            std::fill(r.begin(), r.begin() + n, 0.0f);
+            previewSynth->render(l.data(), r.data(), n);
+            for (int i = 0; i < n; ++i) {
+                const auto k = static_cast<std::size_t>(i);
+                if (right != nullptr) { left[at + i] += l[k]; right[at + i] += r[k]; }
+                else left[at + i] += 0.5f * (l[k] + r[k]);
+            }
+            at += n;
+            previewClock += n;
+        }
+    }
+    previewVoicesNow.store(previewSynth->activeVoices(), std::memory_order_relaxed);
 }
 
 void LightSeekerProcessor::postUiMidi(const juce::MidiMessage& m) {
@@ -373,6 +435,8 @@ void LightSeekerProcessor::prepareToPlay(double sampleRate, int) {
     lswb::samples::Bank::get().waitUntilLoaded(instrumentMode ? 1500 : 300);
     if (instrumentMode) {
         synth->prepare(rate);
+        previewSynth->prepare(rate);
+        previewOn = false;
         uiMidiScratch.ensureSize(2048);
     }
     inputLevel = 0;
@@ -491,6 +555,7 @@ void LightSeekerProcessor::renderInstrument(juce::AudioBuffer<float>& buffer, in
             synth->handle(meta.getMessage());
         }
     renderTo(numSamples);
+    renderPreview(left, right, numSamples);
 
     // For the editor: lit keys, wheels, pedal.
     for (std::size_t w = 0; w < litKeys.size(); ++w) {
@@ -518,6 +583,7 @@ void LightSeekerProcessor::process(juce::AudioBuffer<float>& buffer, bool forced
                 if (std::isfinite(*tempo)) bpm = juce::jlimit(20.0, 400.0, *tempo);
             if (auto sig = pos->getTimeSignature())
                 if (sig->numerator > 0 && sig->denominator > 0) beatsPerBar = juce::jlimit(1.0, 32.0, sig->numerator * 4.0 / sig->denominator);
+            hostIsPlaying.store(pos->getIsPlaying(), std::memory_order_relaxed);
             if (pos->getIsPlaying())
                 if (auto ppq = pos->getPpqPosition())
                     if (std::isfinite(*ppq)) hostBeats = *ppq;

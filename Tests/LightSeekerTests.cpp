@@ -5,6 +5,7 @@
 //   LightSeekerTests --painted-snapshots dir   review images of the painted map and places (200 %)
 //   LightSeekerTests --hotfix-snapshots dir    review images of the Journey badge, note and panels
 //   LightSeekerTests --window-snapshots dir    a frame with the doves over a scene (Direction Update 2)
+//   LightSeekerTests --search-snapshots dir    the search panel (both plug-ins)
 //   LightSeekerTests --render f.wav location [seconds]   a test phrase through a location (listening aid)
 //   LightSeekerTests --calibrate Source/World/LevelTrims.h  measure and write the per-place level trims
 //   LightSeekerTests --listen dir         listening renders: guitar + synth phrase dry vs through every place
@@ -2767,6 +2768,7 @@ int paintedSnapshots(const juce::String& directory) {
 #include "InstrumentTests.h"
 #include "WindowTests.h"
 #include "ShimmerTests.h"
+#include "SearchTests.h"
 
 int main(int argc, char** argv) {
     juce::ScopedJuceInitialiser_GUI gui;
@@ -2790,6 +2792,7 @@ int main(int argc, char** argv) {
         else if (arg == "--painted-snapshots" && i + 1 < argc) return paintedSnapshots(argv[i + 1]);
         else if (arg == "--hotfix-snapshots" && i + 1 < argc) return hotfixSnapshots(argv[i + 1]);
         else if (arg == "--window-snapshots" && i + 1 < argc) return windowSnapshots(argv[i + 1]);
+        else if (arg == "--search-snapshots" && i + 1 < argc) return searchSnapshots(argv[i + 1]);
         else if (arg == "--render" && i + 2 < argc)
             return renderToFile(argv[i + 1], juce::String(argv[i + 2]).getIntValue(), i + 3 < argc ? juce::String(argv[i + 3]).getDoubleValue() : 8.0);
     }
@@ -2820,6 +2823,7 @@ int main(int argc, char** argv) {
     if (run("instrument")) { testInstrument(s); testGlissando(s); }
     if (run("instruments")) { testInstruments(s); testInstrumentPresets(s); }
     if (run("recorded")) testRecordedInstruments(s);
+    if (run("search")) testSearch(s);
     if (only.contains("qa")) testQa(s);   // long (130 journeys): run explicitly
     if (only.contains("cpu")) testCpu(s);   // report only: run explicitly
     std::cout << "\n" << s.passed << " passed, " << s.failed << " failed" << std::endl;

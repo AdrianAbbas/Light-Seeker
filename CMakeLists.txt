@@ -35,10 +35,10 @@ set(LS_SHARED_SOURCES
     Source/DSP/Abyss.cpp Source/DSP/AncientBlood.cpp Source/DSP/Choir.cpp
     Source/DSP/Wraith.cpp Source/DSP/Echoes.cpp Source/DSP/Crypt.cpp
     Source/DSP/Relics.cpp Source/DSP/Signature.cpp Source/DSP/Vault.cpp Source/DSP/Convolver.cpp Source/DSP/Ensemble.cpp Source/DSP/Atmosphere.cpp Source/World/Locations.cpp
-    Source/World/InstrumentPresets.cpp
+    Source/World/InstrumentPresets.cpp Source/World/Search.cpp
     Source/Synth/Synth.cpp Source/Synth/Patches.cpp Source/Synth/wb/SampleBank.cpp
     Source/UI/EngravedLookAndFeel.cpp Source/UI/Engraving.cpp Source/UI/Scenes.cpp Source/UI/ScenePlaces.cpp Source/UI/SceneCache.cpp
-    Source/UI/Painted.cpp Source/UI/InstrumentPanel.cpp)
+    Source/UI/Painted.cpp Source/UI/InstrumentPanel.cpp Source/UI/SearchPanel.cpp)
 # Fonts (SIL Open Font License, assets/fonts): Cinzel for titles, Cormorant Garamond for labels.
 juce_add_binary_data(LightSeekerFonts NAMESPACE LightSeekerFonts SOURCES
     assets/fonts/CormorantGaramond-SemiBold.ttf assets/fonts/CormorantGaramond-Bold.ttf assets/fonts/Cinzel-SemiBold.ttf)
