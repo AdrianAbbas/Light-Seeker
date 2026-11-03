@@ -547,6 +547,48 @@ def find_loop(x, f0_hz, region):
     return s, e, cost, period
 
 
+def declick(y, skip, min_step=0.003):
+    """Repairs isolated jumps in a recording (final touches): some takes have a sudden
+    step in the waveform, often two about 0.11 s apart (dropouts in the recording chain,
+    present in the source files), heard as small clicks in a held note. A step is a
+    sample-to-sample change far larger than the waveform's own around it (and a spike in
+    the second difference); it is smoothed by taking the offset out of the following
+    1.5 ms with a raised-cosine ramp, so the waveform stays whole on both sides. The
+    attack (`skip` samples) is left alone: transients belong there."""
+    n = len(y)
+    if n < skip + 4 * int(0.01 * RATE):
+        return y, []
+    y = y.copy()
+    w = int(0.01 * RATE)
+    fixed = []
+    d1 = np.diff(y, prepend=y[0])
+    d2 = np.zeros(n); d2[2:] = y[2:] - 2 * y[1:-1] + y[:-2]
+    k = np.ones(2 * w + 1); k[w] = 0
+    loc1 = np.sqrt(np.convolve(d1 * d1, k, mode="same") / (2 * w) + 1e-18)
+    loc2 = np.sqrt(np.convolve(d2 * d2, k, mode="same") / (2 * w) + 1e-18)
+    cand = np.nonzero((np.abs(d1) > 5 * loc1) & (np.abs(d2) > 15 * loc2) & (np.abs(d1) > min_step))[0]
+    ramp_n = int(0.0015 * RATE)
+    ramp = 0.5 * (1 + np.cos(np.pi * np.arange(ramp_n) / ramp_n))
+    last = -w
+    for i in cand:
+        if i < skip or i < 2 or i + ramp_n + 2 >= n or i - last < w:
+            continue
+        slope = 0.5 * (y[i - 1] - y[i - 2] + y[i + 2] - y[i + 1])
+        delta = (y[i] - y[i - 1]) - slope
+        a, b = max(0, i - w), min(n, i + w)
+        trial = y[a:b].copy()
+        trial[i - a:i - a + ramp_n] -= delta * ramp
+        # Only a true step is taken out: the repair must not raise the local peak (a jump
+        # that comes back at once is not a step) and must leave no jump of its own.
+        t2 = np.abs(np.diff(trial, 2))
+        if np.abs(trial).max() > np.abs(y[a:b]).max() + 1e-9 or t2.max() > 0.5 * abs(d2[i]):
+            continue
+        y[a:b] = trial
+        fixed.append(int(i))
+        last = i
+    return y, fixed
+
+
 def crossfade_loop(x, s, e, xf):
     """Blends the end of the loop into what precedes its start, so the jump is seamless.
     Two stretches of a bowed note are only partly alike, so a plain crossfade dips in
@@ -868,6 +910,10 @@ def process_set(spec, source, room, out_dir, report):
                 report["problems"].append(f"{sid}/{layer['name']}: note at {c['start'] * ENV_HOP / RATE:.2f}s has no pitch; skipped")
                 continue
             y, start = slice_note(x, c["start"], nxt, env, floor, spec.get("maxSeconds", 6.0), bowed)
+            y, clicks = declick(y, int(0.05 * RATE))
+            if clicks:
+                report.setdefault("declicked", []).append(f"{sid}/{layer['name']} at {start / RATE:.2f}s: {len(clicks)} step{'s' if len(clicks) > 1 else ''} smoothed "
+                                                          f"({', '.join(f'{t / RATE:.3f}s' for t in clicks)})")
             if len(y) < spec.get("minNoteSeconds", 0.0) * RATE:
                 entry["rejected"].append(f"{onset / RATE:.2f}s (only {len(y) / RATE:.2f} s: a false start)")
                 continue
@@ -1199,6 +1245,10 @@ def main():
     if report["renamed"]:
         print(f"\nNamed differently from how they sound ({len(report['renamed'])}; mapped where they sound):")
         for r in report["renamed"]:
+            print(f" - {r}")
+    if report.get("declicked"):
+        print(f"\nSteps in the recordings smoothed ({len(report['declicked'])} notes; dropouts in the source files, worth re-recording):")
+        for r in report["declicked"]:
             print(f" - {r}")
     print(f"\nFLAC total: {total / 1e6:.2f} MB")
     print(f"\nCould not match ({len(report['problems'])}):" if report["problems"] else "\nEverything matched.")

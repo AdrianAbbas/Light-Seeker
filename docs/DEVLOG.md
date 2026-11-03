@@ -130,7 +130,7 @@ usage limit or a compaction) continues from the first unticked line. Push to `ma
 - [x] F1c. Map life: drifting cloud shadows, mist and light motes (cheap, <= 30 fps, double-buffered); landmarks clickable; snapshots before/after; editor CPU; push `[skip ci]`
 - [x] F2a. Shimmer about 20 % lower by default; a "Shimmer" parameter (0-150 %, default 100 %) scaling every shimmer, octave-shimmer and sparkle stage in both plug-ins, smoothed; saved; old sessions at the default; push `[skip ci]`
 - [x] F2b. The Shimmer slider with the main controls (light style); tests (0/100/150 % level-matched, no clicks, shimmer energy scales, strength at default, nothing else changed); push `[skip ci]`
-- [x] F3. Whole suite green, DEVLOG handoff; final push without `[skip ci]`, CI green
+- [ ] F3. Whole suite green, DEVLOG handoff; final push without `[skip ci]`, CI green
 
 ---
 
@@ -1533,3 +1533,34 @@ changed source also compiles with clang (the macOS job's compiler).
 - The Throne of Light at Intensity 50 % passes its strength gate by a small margin (10.02 vs
   9.99; it was 10.08): its gold halo is most of what it adds at half intensity.
 - The foothills' surface shows a soft wavy pattern up close (the fBm bumps) under the haze.
+
+### CI, first final push (`5d41af4`): one real failure, a click in a recording
+
+macOS green. Linux 1933 passed, 3 failed: two wall-clock checks under the shards (the new
+"map's life stays cheap", 40 % of a core on the shared runner, and the known "Eco costs less
+than Standard"), and one real: *Angelic Choir (Sanctum): turning Vowel and Ensemble under a
+held chord, no click*. Reproduced here with the recordings (the Samples repository read, never
+modified; prepared with `tools/sample-prep`): dry, so the only change it sees is its bus
+shimmer (a send of 0.07, now 0.056). Traced sample by sample: the lead singer's "oh" sweep
+for the held G (`voice-oh/G4-soft-1`) **jumps by 0.09 between two samples** at 1.076 s (and
+0.968 s), with no loop wrap or voice event. The step is in the developer's recording itself
+("Male Vocal oh soft sweep.wav", 27.99 s in: about 0.02 before levelling). The old shimmer
+level masked it from the click detector; it was always audible as a faint tick.
+
+The same kind of step (often two, about 0.11 s apart: dropouts in the recording chain) is in
+some other takes too: voices, choir stacks, piano, guitar, kalimba, violin. **Fix, in the
+sample preparation** (`prepare.py` `declick`, after slicing, before the loop search): an
+isolated jump (the sample-to-sample change 5x the waveform's own around it and a spike 15x
+in the second difference, outside the attack's first 50 ms) is taken out with a 1.5 ms
+raised-cosine offset ramp; a repair is kept only if it removes the jump and does not raise
+the local peak (a first version without that guard over-corrected a choir stack, whose new
+peak lowered the whole voice group's gain by 3.4 dB and failed the choirs' level checks:
+caught and fixed). 32 notes are repaired; the prep log lists them ("Steps in the recordings
+smoothed": worth re-recording); no set's gain changes. The synth sweeps are left alone (their
+files jump at the cut loop end by design). With the recordings: recorded 93 passed, instrument
+58, instruments 295, 0 failed.
+
+The map-life cost is now reported (a `[report]` line above 15 %), not gated: wall-clock under
+contention says nothing about the code (7 % alone). The checks that the shadows and the mist
+animate stay gated.
+
