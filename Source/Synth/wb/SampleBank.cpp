@@ -77,9 +77,9 @@ void Instrument::index() {
         }
 }
 
-const Zone* Instrument::find(int key, float velocity, float pick) const {
+const Zone* Instrument::find(int key, float velocity, float pick, bool clamp) const {
     if (zones.empty() || table.empty()) return nullptr;
-    key = std::clamp(foldKey(key), 0, 127);
+    key = std::clamp(clamp ? std::clamp(key, lowKey, highKey) : foldKey(key), 0, 127);
     // The layer whose velocity range holds this velocity.
     int layer = layers - 1;
     for (int l = 0; l < layers; ++l) {
@@ -144,7 +144,11 @@ bool Bank::waitUntilLoaded(int ms) const {
 const Instrument* Bank::instrument(const char* id) const {
     if (!ready()) return nullptr;
     for (const auto& i : instruments)
-        if (i->id == id) return i.get();
+        if (i->id == id) {
+            const bool library = isLibraryId(i->id);
+            if ((library && libraryBypassed.load(std::memory_order_relaxed)) || (!library && recordingsBypassed.load(std::memory_order_relaxed))) return nullptr;
+            return i.get();
+        }
     return nullptr;
 }
 

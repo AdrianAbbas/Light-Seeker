@@ -53,7 +53,8 @@ public:
 
     // The zone for a key and velocity (0..1); `pick` (0..1) chooses among the
     // round-robin takes. Keys outside the instrument fold in by octaves.
-    const Zone* find(int key, float velocity, float pick) const;
+    // `clamp`: keys outside the range take the nearest recorded note (not folded by octaves).
+    const Zone* find(int key, float velocity, float pick, bool clamp = false) const;
     int foldKey(int key) const;
     // Built once after loading.
     void index();
@@ -80,6 +81,11 @@ public:
     bool ready() const { return state() == Ready && !bypassed.load(std::memory_order_relaxed); }
     // Tests: new parts act as if there were no samples (their synthesised fallbacks play).
     static void bypassForTests(bool on) { bypassed = on; }
+    // Tests: only the library brass (`vsco-*` sets) acts as missing, or only the developer's
+    // recordings (everything else): "before" and "without the recordings" in one build.
+    static void bypassLibraryForTests(bool on) { libraryBypassed = on; }
+    static void bypassRecordingsForTests(bool on) { recordingsBypassed = on; }
+    static bool isLibraryId(const juce::String& id) { return id.startsWith("vsco-"); }
     // nullptr unless Ready and the instrument exists. Safe on the audio thread.
     const Instrument* instrument(const char* id) const;
 
@@ -107,6 +113,7 @@ private:
     juce::File from;
     juce::String error;
     static inline std::atomic<bool> bypassed { false };
+    static inline std::atomic<bool> libraryBypassed { false }, recordingsBypassed { false };
 };
 
 } // namespace lswb::samples

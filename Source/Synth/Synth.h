@@ -34,7 +34,9 @@ enum class Engine : uint8_t {
     Wind,      // WindVoice: p0 h2, p1 h3, p2 h4, p3 h5, p4 breath, p5 chiff
     Bowed,     // BowedVoice (glass, metal): model Modes, p0 rosin, p1 noisiness
     Strings,   // StringVoice: model StringSize, p0 players, p1 spread (cents), p2 bow position, p3 bow noise
-    Sample,    // the developer's recordings: sample (bank id), p0 start skip (s), p1 decay T60 (s, 0 none), p2 evenness
+    Sample,    // the developer's recordings (or the library brass): sample (bank id), p0 start skip (s), p1 decay T60 (s, 0 none),
+               // p2 evenness, p3 zone offset (semitones: a neighbouring note's recording, played at this pitch: a second
+               // player), p4 start delay (ms)
     Organ,     // pipe organ: p0..p5 the ranks 16', 8', 4', 2 2/3', 2', mixture; bright = chiff
     Voice,     // the developer's voice (the recordings update): the vowel sweeps morphed by the
                // Vowel macro, an ensemble of up to eight singers from the 5-take choir stacks
@@ -53,8 +55,12 @@ inline constexpr std::array<const char*, stackCount> vowelStacks { "choir-mm", "
 enum Modes : int { ModesChime, ModesGlass, ModesGlock, ModesCelesta, ModesBell, ModesGlassHarp, ModesHarmonic, ModesCrystal, ModesCount };
 
 // When a layer plays, given the recordings: always, only when its recording is loaded
-// (a Sample layer), or only when it is not (its synthesised stand-in).
-enum class Needs : uint8_t { Always, Samples, NoSamples };
+// (a Sample layer), or only when it is not (its synthesised stand-in). The library brass
+// (VSCO 2 Community Edition, CC0: the `vsco-*` sets, the real brass update) is a source of
+// its own, independent of the developer's recordings: Library layers play when the patch's
+// library sets are loaded (a sample layer, or synthesis that goes with them), NoLibrary
+// layers (the synthesised brass) when they are not.
+enum class Needs : uint8_t { Always, Samples, NoSamples, Library, NoLibrary };
 
 struct Layer {
     Engine engine = Engine::None;
@@ -73,6 +79,37 @@ struct Layer {
     // Brass and Reed (Mix and Punch): the attack's bite (brighter, harder blown in the first
     // ~100 ms, with velocity) and a 2-4 kHz presence band; 0 = as before.
     float bite = 0, presence = 0;
+    // The library brass (Sample layers): the same bite (a bright transient band in the first
+    // ~70 ms, more with velocity) and presence (a 2-4 kHz band), and drive (gentle saturation:
+    // density and shine without more level).
+    float drive = 0;
+    // The real brass for a synthesised brass layer (Engine::Brass): with the library loaded the
+    // layer plays its sustain (looped, the recorded release when let go) and its staccato as
+    // the attack's front, shaped (presence, bite, drive), with a little of the layer's own
+    // synthesis under them (weight and shine); without the library it is the synthesis alone,
+    // exactly as before (the stand-in). Levels are dB relative to the stand-in layer's own;
+    // the patch's libraryTrimDb comes on top. Near and beyond the recordings' range the
+    // real part crossfades into the synthesis (full real within 3 semitones of the highest
+    // and lowest recorded notes, synthesis alone 9 semitones past them).
+    struct Real {
+        const char* sustain = nullptr;   // bank set (vsco-...-sus), nullptr: none
+        const char* front = nullptr;     // bank set (vsco-...-stac), nullptr: none
+        // frontDb: the front against its sustain note at equal loudness (each note levelled).
+        float db = 0, frontDb = -3, synthDb = -14;
+        float attack = 0, release = 0.35f, frontRelease = 0.7f;
+        float offset = 0, frontOffset = 0;   // zone offsets (semitones: a neighbouring note's take, a second player)
+        float delayMs = 0;                   // the real part starts this much later (a second player)
+        float lowpass = 16000, velocityGain = 0.85f, velocityTone = 0.25f;
+        float presence = 0, bite = 0, drive = 0;
+        // The strike: the real part's gain on hit (dB, more with velocity), falling away over
+        // attackMs (exponentially): a hard-tongued front on the library's softer attacks.
+        float strikeDb = 0, strikeMs = 60;
+        // The front starts this far into its recording (ms at full velocity, less when softer,
+        // faded in over 2 ms): the library's staccatos take 40-70 ms to speak; started where
+        // the tongue has already struck, the front is sharp. The strike holds while it speaks
+        // (strikeMs), then falls away over 60 ms.
+        float frontSkipMs = 0;
+    } real;
     float vibrato = 0, vibratoHz = 5.2f, vibratoDelay = 0.35f;   // semitones
     int model = 0;               // BodyType, Modes, StringSize or SynthModel as the engine says
     std::array<float, 6> p {};
@@ -102,6 +139,7 @@ struct Patch {
     std::array<Layer, 8> layers {};
     int layerCount = 0;
     float trimDb = 0;            // level matching (InstrumentTrims.h, calibrated)
+    float libraryTrimDb = 0;     // the library brass layers' level, matched to the synthesis they replace (calibrated)
     float standInTrimDb = 0;     // the same without the recordings (their stand-ins play)
     float bendRange = 2;         // semitones
     int polyphony = 16;
@@ -121,6 +159,8 @@ struct Patch {
 
 inline constexpr int instrumentCount = 31;
 const Patch& patch(int index) noexcept;
+// The calibration tool (`LightSeekerTests --calibrate-library`) tries trims in place.
+void setLibraryTrimForTests(int index, float db) noexcept;
 // Instruments follow the world's place order: Celestial Citadel's four, then three per location.
 int instrumentIndex(int location, int sub) noexcept;
 void instrumentPlace(int index, int& location, int& sub) noexcept;
@@ -129,6 +169,11 @@ bool patchSampled(const Patch&) noexcept;
 bool patchUsesRecordings(const Patch&) noexcept;
 // Whether the Vowel and Ensemble macros do anything on this instrument (a voice or choir).
 bool patchHasVoice(const Patch&) noexcept;
+// Whether a patch has library brass layers, and whether they are loaded (all its library sets).
+bool patchUsesLibrary(const Patch&) noexcept;
+bool patchLibraryLoaded(const Patch&) noexcept;
+// Whether a bank set is the library's (VSCO 2 CE: ids `vsco-*`).
+bool librarySet(const char* id) noexcept;
 
 // The instrument macros (0.5 = as designed) and the octave shift.
 struct Macros {

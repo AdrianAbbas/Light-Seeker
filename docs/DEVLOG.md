@@ -150,7 +150,7 @@ usage limit or a compaction) continues from the first unticked line. Push to `ma
 
 - [x] V1. Download VSCO 2 CE from its official source, check the licence (CC0 1.0 Universal: go), log it in `docs/LICENSES/VSCO-2-CE.txt` and here (source URL, version, commit, licence hash); push `[skip ci]`
 - [x] V2. Sample prep (`tools/sample-prep/vsco.py`: the SFZ maps, pitch from the audio, mono, trimmed attacks, loops and release tails, velocity layers kept) and CI (`scripts/ci-fetch-vsco.sh`: sparse fetch of the brass from the official repository at the pinned commit, cached; merged into the bank with or without the developer's recordings; "Prepared" lines); push `[skip ci]`
-- [ ] V3. Engine: library layers (play with the library, synthesis stand-ins without it, independent of the developer's recordings), the brass shaping (presence, bite, drive) on sample layers; push `[skip ci]`
+- [x] V3. Engine: library layers (play with the library, synthesis stand-ins without it, independent of the developer's recordings), the brass shaping (presence, bite, drive) on sample layers; push `[skip ci]`
 - [ ] V4. Instruments: Fanfare Trumpets, Soaring Horn, Heroic Horns, Epic Choir and Brass's brass, the Orchestral Chord Pad's horns: horn/trumpet/trombone/tuba sustains + staccato fronts, a little synthesis for weight and shine; level-matched to before; Punch/MIX working; push `[skip ci]`
 - [ ] V5. Tests (`brass` group: in tune across the range, velocity layers smooth, attack-to-sustain and presence up, level-matched with siblings and before, distinct, no clicks or clipping, licence logged), listening renders (each brass before/after, dry and in place; the mini-song), DEVLOG handoff; final push without `[skip ci]`, CI green
 
@@ -2094,3 +2094,31 @@ nothing), then added to the samples folder and `index.json` ("Prepared: N notes 
 per set in the log). It needs no token, so builds without the developer's recordings get the
 real brass too; `LS_REQUIRE_LIBRARY` makes the smoke test fail if it is missing in CI. Not
 in `AdrianAbbas/Samples`: nothing there was changed.
+
+### V3. The engine: the library as a source of its own, the real brass layer
+
+- **A source of its own** (`Synth.h`, `Needs::Library` / `NoLibrary`, `Layer::real`): the
+  library brass plays when its sets are loaded, independent of the developer's recordings
+  (four states: neither, either, both). `patchUsesRecordings`/`patchSampled` and the stand-in
+  trims ignore it; `patchUsesLibrary`/`patchLibraryLoaded` answer for it. The bank's
+  `bypassLibraryForTests` / `bypassRecordingsForTests` leave out one source each, so "before"
+  (the synthesised brass) and "after" are measured in one build.
+- **The real brass layer** (`Layer::real`, on a synthesised brass layer): with the library the
+  slot plays the library's **sustain** (looped, its recorded release when let go) and its
+  **staccato as the attack's front**, with a little of the layer's own **synthesis under them**
+  (weight and shine, `synthDb`); without it, the synthesis alone, exactly as before. One slot,
+  so Epic Choir and Brass (all eight layers in use) needed no more layers. Its pieces:
+  - the **front** levelled per note to its sustain note (the staccato takes and sets differ by
+    up to 8 dB; the takes are picked at random, so unlevelled they jittered by 1-2 dB), started
+    25-35 ms into its recording (less when softer, 2 ms fade): the library's staccatos take
+    40-70 ms to speak, so started where the tongue has struck the front is sharp;
+  - the **strike**: the real part's gain on hit (4-9 dB, more with velocity), held while the
+    front speaks (35-45 ms), gone 60 ms later; Punch comes on top as before;
+  - **presence** (a 2.9 kHz band), **bite** (a 4.8 kHz band on the attack, more with velocity,
+    gone in ~70 ms) and **drive** (tanh at 1.6x blended in: density, not level);
+  - a **second player**: a neighbouring note's take (`offset`), 7-12 ms later;
+  - the **range's ends**: full real within 3 semitones of the highest/lowest recorded note,
+    crossfading (equal power) into the synthesis 9 semitones past them; the bank's lookup
+    takes the nearest recorded note there (`clamp`, not folded by octaves).
+- **Level**: `Patch::libraryTrimDb` (`Source/Synth/LibraryTrims.h`, `--calibrate-library`)
+  on the real part and its synthesis: each instrument as loud as its synthesised self.

@@ -1,4 +1,5 @@
 #include "Synth.h"
+#include <string_view>
 #include "../DSP/Common.h"
 #include <algorithm>
 #include <cmath>
@@ -93,9 +94,9 @@ struct SampleVoice {
         return (((c3 * t + c2) * t + c1) * t + x0) * (1.0f / 32768.0f);
     }
     bool start(const lswb::samples::Instrument& inst, float note, float velocity, float pick, float attack, float sampleRate, float skip,
-               float decayT60, float even) {
+               float decayT60, float even, float zoneOffset = 0.0f, bool clampKeys = false) {
         rate = sampleRate;
-        zone = inst.find(int(std::lround(note)), velocity, pick);
+        zone = inst.find(int(std::lround(note + zoneOffset)), velocity, pick, clampKeys);
         if (zone == nullptr || zone->length < 16) return on = false;
         midi = note;
         rateRatio = inst.rate / rate;
@@ -534,6 +535,30 @@ struct Synth::Voice {
         PanGains pan { 0.7071f, 0.7071f };
         float gain = 1, cutoff = 18000, release = 0.3f, fade = 1, fadeMul = 1, vibrato = 0, hz = 440;
         bool character = false, stretchRelease = true;
+        // The library brass's shaping (Sample layers with presence, bite or drive).
+        bool shaped = false;
+        // The real brass of a brass layer (Layer::real): its sustain (`sample`) and front, the
+        // front's gain and the synthesis's under them (both relative to the real part's).
+        bool real = false;
+        SampleVoice front;
+        float frontGain = 0, synthRel = 0, realRelease = 0.35f, frontRelease = 0.7f, strike = 0, strikeDecay = 0;
+        int strikeHold = 0;
+        Svf presenceBand, biteBand;
+        float presenceAmount = 0, biteNow = 0, biteDecay = 0, drive = 0;
+        float shape(float y) noexcept {
+            if (!shaped) return y;
+            y += presenceAmount * presenceBand.bandpass(y);
+            if (biteNow > 1.0e-4f) {
+                y += biteNow * biteBand.bandpass(y);
+                biteNow *= biteDecay;
+            }
+            if (drive > 0.0f) {
+                // A soft saturation for density: tanh at 1.6x, blended in (the level stays).
+                const float d = std::tanh(1.6f * y) * (1.0f / 1.6f);
+                y += drive * (d - y);
+            }
+            return y;
+        }
         float bent = 0, vowelBase = 3, singersBase = 1, choirVowelBase = 0;
     };
     bool on = false, keyDown = false, sustained = false, released = false, grace = false, moved = false;
@@ -571,7 +596,8 @@ float keyFade(const Layer& l, float midi) noexcept {
     const float t = std::clamp((midi - l.fadeKey) / std::max(0.5f, l.fadeSpan), 0.0f, 1.0f);
     return l.fadeIn ? std::sin(t * 1.5707963f) : std::cos(t * 1.5707963f);
 }
-bool recorded(Engine e) noexcept { return e == Engine::Sample || e == Engine::Voice; }
+// The developer's recordings (the library brass is a source of its own: Needs::Library).
+bool recorded(const Layer& l) noexcept { return (l.engine == Engine::Sample || l.engine == Engine::Voice) && l.needs != Needs::Library; }
 // The macros' reach: Vowel moves two vowels either way, Ensemble from one singer to eight.
 float vowelPosition(float base, float macro) noexcept { return std::clamp(base + (macro - 0.5f) * 4.0f, 0.0f, 4.0f); }
 float singerCount(float base, float macro) noexcept {
@@ -581,8 +607,32 @@ float singerCount(float base, float macro) noexcept {
 
 bool patchUsesRecordings(const Patch& p) noexcept {
     for (int k = 0; k < p.layerCount; ++k)
-        if (recorded(p.layers[std::size_t(k)].engine)) return true;
+        if (recorded(p.layers[std::size_t(k)])) return true;
     return false;
+}
+
+bool librarySet(const char* id) noexcept { return id != nullptr && std::string_view(id).rfind("vsco-", 0) == 0; }
+
+bool patchUsesLibrary(const Patch& p) noexcept {
+    for (int k = 0; k < p.layerCount; ++k)
+        if (p.layers[std::size_t(k)].needs == Needs::Library || p.layers[std::size_t(k)].real.sustain != nullptr) return true;
+    return false;
+}
+
+bool patchLibraryLoaded(const Patch& p) noexcept {
+    bool any = false;
+    const auto& bank = lswb::samples::Bank::get();
+    for (int k = 0; k < p.layerCount; ++k) {
+        const auto& l = p.layers[std::size_t(k)];
+        if (l.real.sustain != nullptr) {
+            if (bank.instrument(l.real.sustain) == nullptr || (l.real.front != nullptr && bank.instrument(l.real.front) == nullptr)) return false;
+            any = true;
+        }
+        if (l.needs != Needs::Library || l.engine != Engine::Sample) continue;
+        if (!layerAvailable(l)) return false;
+        any = true;
+    }
+    return any;
 }
 
 bool patchHasVoice(const Patch& p) noexcept {
@@ -595,7 +645,7 @@ bool patchSampled(const Patch& p) noexcept {
     bool any = false;
     for (int k = 0; k < p.layerCount; ++k) {
         const auto& l = p.layers[std::size_t(k)];
-        if (!recorded(l.engine)) continue;
+        if (!recorded(l)) continue;
         if (!layerAvailable(l)) return false;
         any = true;
     }
@@ -733,6 +783,7 @@ void Synth::startLayers(Voice& voice) noexcept {
     // The instrument's level trim travels with its notes (the old instrument's notes ring
     // out at their own level while the new one's start at theirs).
     const float trimDb = patchUsesRecordings(p) && !patchSampled(p) ? p.standInTrimDb : p.trimDb;
+    const bool library = patchLibraryLoaded(p);
     const int note = voice.note;
     const float velocity = voice.velocity;
     const float graceRing = voice.grace ? 0.7f : 1.0f;
@@ -760,6 +811,8 @@ void Synth::startLayers(Voice& voice) noexcept {
         lv.fadeMul = 1;
         lv.bent = 0;
         lv.body.count = 0;
+        lv.shaped = false;
+        lv.real = false;
         const float hardness = clamp01(L.p[0] * (1.15f - 0.3f * macros.attack) + 0.25f * (vel - 0.6f));
         switch (L.engine) {
             case Engine::Brass:
@@ -937,8 +990,21 @@ void Synth::startLayers(Voice& voice) noexcept {
                 lv.sample.vibratoDelay = L.vibratoDelay;
                 lv.sample.bend = bendNow * p.bendRange;
                 if (inst == nullptr
-                    || !lv.sample.start(*inst, midi, vel, unipolar(mix64(noiseAt + 3)), attack, r, L.p[0], L.p[1] * ringScale, L.p[2]))
+                    || !lv.sample.start(*inst, midi, vel, unipolar(mix64(noiseAt + 3)), attack, r, L.p[0], L.p[1] * ringScale, L.p[2], L.p[3]))
                     continue;
+                lv.sample.wait = int(std::max(0.0f, L.p[4]) * 0.001f * r);
+                // The library brass's shaping: presence, bite (more with velocity), drive.
+                lv.shaped = L.presence > 0.0f || L.bite > 0.0f || L.drive > 0.0f;
+                if (lv.shaped) {
+                    lv.presenceBand.reset();
+                    lv.presenceBand.set(2900.0f, 0.9f, r);
+                    lv.biteBand.reset();
+                    lv.biteBand.set(std::min(4800.0f, 0.4f * r), 0.7f, r);
+                    lv.presenceAmount = 1.6f * L.presence;
+                    lv.biteNow = L.bite * (0.4f + 0.9f * vel) * 1.8f;
+                    lv.biteDecay = std::exp(-1.0f / (0.07f * r));
+                    lv.drive = L.drive;
+                }
                 break;
             }
             case Engine::Organ:
@@ -958,10 +1024,80 @@ void Synth::startLayers(Voice& voice) noexcept {
                 break;
             case Engine::None: continue;
         }
+        // The real brass (Layer::real) with the library loaded: its sustain and front start
+        // with the synthesis, which goes on under them.
+        float realWeight = 0;
+        if (L.engine == Engine::Brass && L.real.sustain != nullptr && library) {
+            const auto& R = L.real;
+            const auto* sus = lswb::samples::Bank::get().instrument(R.sustain);
+            const auto* stac = R.front != nullptr ? lswb::samples::Bank::get().instrument(R.front) : nullptr;
+            if (sus != nullptr) {
+                const float pick = unipolar(mix64(noiseAt + 5));
+                lv.sample.vibrato = L.vibrato;
+                lv.sample.vibratoHz = L.vibratoHz;
+                lv.sample.vibratoDelay = L.vibratoDelay;
+                lv.sample.bend = bendNow * p.bendRange;
+                lv.front.vibrato = 0;
+                lv.front.bend = bendNow * p.bendRange;
+                const bool ok = lv.sample.start(*sus, midi, vel, pick, R.attack * attackScale, r, 0.0f, 0.0f, 0.0f, R.offset, true);
+                const float frontSkip = R.frontSkipMs * 0.001f * (0.4f + 0.6f * vel);
+                const bool frontOk = stac != nullptr
+                                     && lv.front.start(*stac, midi, vel, unipolar(mix64(noiseAt + 7)), frontSkip > 0.0f ? 0.002f : 0.0f, r, frontSkip, 0.0f,
+                                                       0.0f, R.frontOffset, true);
+                if (!frontOk) lv.front.on = false;
+                if (ok) {
+                    const int wait = int(std::max(0.0f, R.delayMs) * 0.001f * r);
+                    lv.sample.wait = wait;
+                    lv.front.wait = wait;
+                    // Full real within 3 semitones of the recorded range, synthesis alone 9 past it.
+                    const float past = std::max({ 0.0f, midi - sus->highRoot, sus->lowRoot - midi });
+                    realWeight = std::clamp(1.0f - (past - 3.0f) / 6.0f, 0.0f, 1.0f);
+                    lv.real = realWeight > 0.0f;
+                }
+            }
+            if (lv.real) {
+                lv.shaped = R.presence > 0.0f || R.bite > 0.0f || R.drive > 0.0f;
+                lv.presenceBand.reset();
+                lv.presenceBand.set(2900.0f, 0.9f, r);
+                lv.biteBand.reset();
+                lv.biteBand.set(std::min(4800.0f, 0.4f * r), 0.7f, r);
+                lv.presenceAmount = 1.6f * R.presence;
+                lv.biteNow = R.bite * (0.4f + 0.9f * vel) * 1.8f;
+                lv.biteDecay = std::exp(-1.0f / (0.07f * r));
+                lv.drive = R.drive;
+                // The front levelled to its sustain note (the staccato takes and sets differ by
+                // several dB: measured per note by the sample prep), then its own level.
+                lv.frontGain = lv.front.on && lv.front.zone != nullptr && lv.sample.zone != nullptr
+                                   ? dbToGain(R.frontDb + std::clamp(lv.sample.zone->loudnessDb - lv.front.zone->loudnessDb, -12.0f, 12.0f))
+                                   : 0.0f;
+                lv.strike = R.strikeDb > 0.0f ? dbToGain(R.strikeDb * (0.45f + 0.55f * vel)) - 1.0f : 0.0f;
+                lv.strikeHold = int(std::max(0.0f, R.strikeMs) * 0.001f * r) + int(std::max(0.0f, R.delayMs) * 0.001f * r);
+                lv.strikeDecay = std::exp(-1.0f / (0.02f * r));   // a 20 ms time constant: gone in about 60 ms
+                lv.realRelease = R.release;
+                lv.frontRelease = R.frontRelease;
+            } else {
+                lv.sample.on = false;
+                lv.front.on = false;
+            }
+        }
         // Level, tone, pan.
         const float velGain = (1.0f - L.velocityGain) + L.velocityGain * std::pow(vel, 1.4f);
-        lv.gain = dbToGain(L.level + voice.levelDb + trimDb) * velGain * keyFade(L, midi - L.cents * 0.01f);
+        const float fade = keyFade(L, midi - L.cents * 0.01f);
+        lv.gain = dbToGain(L.level + voice.levelDb + trimDb + (L.needs == Needs::Library ? p.libraryTrimDb : 0.0f)) * velGain * fade;
         lv.cutoff = L.lowpass * std::exp2(-L.velocityTone * (1.0f - vel));
+        if (lv.real) {
+            // The real part's level and the synthesis's under it (equal power across the
+            // range's ends), both with the patch's library trim.
+            const auto& R = L.real;
+            const float standIn = lv.gain * dbToGain(p.libraryTrimDb);
+            const float realVel = (1.0f - R.velocityGain) + R.velocityGain * std::pow(vel, 1.4f);
+            const float realGain = dbToGain(L.level + R.db + voice.levelDb + trimDb + p.libraryTrimDb) * realVel * fade * std::sqrt(realWeight);
+            const float blend = dbToGain(R.synthDb);
+            const float synthGain = standIn * std::sqrt((1.0f - realWeight) + realWeight * blend * blend);
+            lv.gain = std::max(realGain, 1.0e-9f);
+            lv.synthRel = synthGain / lv.gain;
+            lv.cutoff = R.lowpass * std::exp2(-R.velocityTone * (1.0f - vel));
+        }
         lv.lowpass.reset();
         lv.lowpass.set(std::min(lv.cutoff * toneScale, 0.45f * r), 0.6f, r);
         lv.highpass.reset();
@@ -988,6 +1124,7 @@ void Synth::startLayers(Voice& voice) noexcept {
 void Synth::startNote(int note, float velocity, bool sustained, bool moved) noexcept {
     const auto& p = patch(current);
     const bool sampled = patchSampled(p);
+    const bool library = patchLibraryLoaded(p);
     const auto start = [&](int delaySamples, float semis, float levelDb, bool grace) -> Voice* {
         auto* v = freeVoice(current, !grace);
         if (v == nullptr) return nullptr;
@@ -1018,9 +1155,12 @@ void Synth::startNote(int note, float velocity, bool sustained, bool moved) noex
             if (grace && L.run <= 0) continue;
             // A recorded layer needs its recordings; a synthesised one marked Samples plays
             // with the recordings (blending with them), never instead of them.
-            if (L.needs == Needs::Samples && !(recorded(L.engine) ? layerAvailable(L) : sampled)) continue;
+            if (L.needs == Needs::Samples && !(recorded(L) ? layerAvailable(L) : sampled)) continue;
             if (L.needs == Needs::NoSamples && sampled) continue;
-            if (recorded(L.engine) && !layerAvailable(L)) continue;
+            if (recorded(L) && !layerAvailable(L)) continue;
+            // The library brass, or the synthesis standing in for it.
+            if (L.needs == Needs::Library && !library) continue;
+            if (L.needs == Needs::NoLibrary && library) continue;
             v->layerMask |= 1 << k;
             v->layer[std::size_t(k)].on = false;
         }
@@ -1119,7 +1259,13 @@ void Synth::releaseVoice(Voice& v) noexcept {
         const float s = std::max(0.01f, lv.release * scale);
         const float tau = s / 6.9078f;
         switch (lv.engine) {
-            case Engine::Brass: case Engine::Analog: case Engine::Reed: lv.synth.release(tau, float(rate)); break;
+            case Engine::Brass: case Engine::Analog: case Engine::Reed:
+                lv.synth.release(tau, float(rate));
+                if (lv.real) {
+                    lv.sample.release(std::max(0.01f, lv.realRelease * scale));
+                    lv.front.release(std::max(0.05f, lv.frontRelease * scale));
+                }
+                break;
             case Engine::Pluck: if (lv.release > 0.0f) lv.pluck.damp(s); break;
             case Engine::Bell: if (lv.release > 0.0f) lv.fadeMul = std::exp(-6.9078f / (s * float(rate))); break;
             case Engine::Tine: lv.tine.release(s); break;
@@ -1261,6 +1407,14 @@ void Synth::updateChunk() noexcept {
                     lv.synth.vibratoDepth = lv.vibrato + vibratoAdd;
                     lv.synth.update(r);
                     alive = lv.synth.active();
+                    if (lv.real) {
+                        lv.sample.bend = bend;
+                        lv.sample.vibrato = lv.vibrato + vibratoAdd;
+                        lv.sample.update();
+                        lv.front.bend = bend;
+                        lv.front.update();
+                        alive = alive || lv.sample.on || lv.front.on;
+                    }
                     break;
                 case Engine::Pluck:
                     lv.pluck.bendTo(std::exp2(bend / 12.0f));
@@ -1381,6 +1535,12 @@ void Synth::render(float* outL, float* outR, int n) noexcept {
                         float a = 0, b = 0;
                         lv.synth.tick(a, b);
                         y = (a + b) * 0.7071f;
+                        if (lv.real) {
+                            const float strike = 1.0f + lv.strike;
+                            if (lv.strikeHold > 0) --lv.strikeHold;
+                            else lv.strike *= lv.strikeDecay;
+                            y = y * lv.synthRel + lv.shape(lv.sample.tick() + lv.frontGain * lv.front.tick()) * strike;
+                        }
                         break;
                     }
                     case Engine::Pluck: y = lv.body.process(lv.pluck.tick(noise)) * 2.0f; break;
@@ -1391,7 +1551,7 @@ void Synth::render(float* outL, float* outR, int n) noexcept {
                     case Engine::Wind: y = lv.wind.tick(noise); break;
                     case Engine::Bowed: y = lv.bowed.tick(noise); break;
                     case Engine::Strings: y = lv.body.process(lv.strings.tick(noise)); break;
-                    case Engine::Sample: y = lv.sample.tick(); break;
+                    case Engine::Sample: y = lv.shape(lv.sample.tick()); break;
                     case Engine::Organ: y = lv.organ.tick(noise); break;
                     case Engine::Voice: {
                         // The ensemble is stereo of its own: each side filtered, then the layer's pan.
