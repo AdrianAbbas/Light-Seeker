@@ -11,6 +11,7 @@
 #include "Synth.h"
 #include <string_view>
 #include "InstrumentTrims.h"
+#include "LibraryTrims.h"
 #include "World/Locations.h"
 #include <algorithm>
 
@@ -156,6 +157,35 @@ Layer hit(Layer l, float bite, float presence) {
     return l;
 }
 
+// The real brass (VSCO 2 Community Edition, CC0; the real brass update): a synthesised brass
+// layer that plays the library's sustain with its staccato as the attack's front when the
+// library is loaded, a little of its own synthesis under them for weight and shine
+// (synthDb), shaped to cut through: presence (2-4 kHz), bite (a bright transient band, more
+// with velocity) and drive (density, not level). Without the library: the synthesis alone,
+// exactly as before. Levels relative to the synthesised layer's own.
+struct RealSpec {
+    const char* sustain;
+    const char* front;
+    float frontDb, synthDb, presence, bite, drive;
+};
+Layer real(Layer l, const RealSpec& r) {
+    l.real.sustain = r.sustain;
+    l.real.front = r.front;
+    l.real.frontDb = r.frontDb;
+    l.real.synthDb = r.synthDb;
+    l.real.presence = r.presence;
+    l.real.bite = r.bite;
+    l.real.drive = r.drive;
+    return l;
+}
+// A second player: a neighbouring note's take (`offset` semitones), a little later.
+Layer secondPlayer(Layer l, float offset, float frontOffset, float delayMs) {
+    l.real.offset = offset;
+    l.real.frontOffset = frontOffset;
+    l.real.delayMs = delayMs;
+    return l;
+}
+
 Layer shift(Layer l, float semis, float cents = 0.0f, float pan = 0.0f) {
     l.transpose = semis;
     l.cents = cents;
@@ -201,6 +231,21 @@ std::array<Patch, instrumentCount> build() {
         b.attack = 0.008f;
         auto c = hit(character(shift(brass(1700.0f, 0.7f, -9.0f), 12.0f, -4.0f, 0.1f)), 0.6f, 0.25f);
         c.attack = 0.01f;
+        // The real brass: the library's trumpet (sustain, staccato front) in both players
+        // (the second a neighbouring note's take, 8 ms later), bright and biting; the
+        // synthesis a little under them, and the piccolo above stays synthesised (shine).
+        a = real(a, { "vsco-trumpet-sus", "vsco-trumpet-stac", 0.0f, -12.0f, 0.6f, 0.8f, 0.35f });
+        a.real.lowpass = 15000.0f;
+        a.real.release = 0.3f;
+        a.real.strikeDb = 9.0f;
+        a.real.strikeMs = 35.0f;
+        a.real.frontSkipMs = 25.0f;
+        b = secondPlayer(real(b, { "vsco-trumpet-sus", "vsco-trumpet-stac", -2.0f, -12.0f, 0.55f, 0.7f, 0.35f }), 2.0f, -2.0f, 8.0f);
+        b.real.lowpass = 14000.0f;
+        b.real.release = 0.3f;
+        b.real.strikeDb = 8.0f;
+        b.real.strikeMs = 35.0f;
+        b.real.frontSkipMs = 25.0f;
         Builder p("Fanfare Trumpets", "Radiant brass and strings", "Piccolo");
         p.add(a).add(b).add(c).air(3.0f).poly(12).trim(0.0f);
         put(p);
@@ -227,6 +272,13 @@ std::array<Patch, instrumentCount> build() {
         b.release = 1.6f;
         b.sustain = 1.0f;
         b.p[3] = 7.0f;
+        // The real brass: the library's horn sustain swelling in with the pad (no front: a
+        // pad), warm, the synthesis under it.
+        b = real(b, { "vsco-horn-sus", nullptr, 0.0f, -9.0f, 0.1f, 0.0f, 0.15f });
+        b.real.attack = 0.7f;
+        b.real.release = 1.2f;
+        b.real.lowpass = 7000.0f;
+        b.real.velocityGain = 0.6f;
         auto c = standIn(character(choir(0.8f, 0.4f, -3.0f)));
         c.attack = 0.9f;
         c.release = 1.8f;
@@ -260,6 +312,21 @@ std::array<Patch, instrumentCount> build() {
         b.attack = 0.045f;
         b.release = 0.6f;
         b.lowpass = 4200;
+        // The real brass: the library's horn, round and majestic, its staccato under the
+        // attack (softer than the trumpets': it speaks, it does not bark), presence for the
+        // mix; the second horn a neighbouring note's take, 12 ms later.
+        a = real(a, { "vsco-horn-sus", "vsco-horn-stac", -2.0f, -13.0f, 0.5f, 0.6f, 0.25f });
+        a.real.lowpass = 11000.0f;
+        a.real.release = 0.5f;
+        a.real.strikeDb = 9.0f;
+        a.real.strikeMs = 45.0f;
+        a.real.frontSkipMs = 35.0f;
+        b = secondPlayer(real(b, { "vsco-horn-sus", "vsco-horn-stac", -5.0f, -14.0f, 0.4f, 0.45f, 0.25f }), 2.0f, 1.0f, 12.0f);
+        b.real.lowpass = 10000.0f;
+        b.real.release = 0.5f;
+        b.real.strikeDb = 7.0f;
+        b.real.strikeMs = 45.0f;
+        b.real.frontSkipMs = 35.0f;
         Builder p("Soaring Horn", "Radiant brass and strings", "Second horn");
         p.add(a).add(b).air(1.5f).poly(10).trim(0.0f);
         put(p);
@@ -674,6 +741,26 @@ std::array<Patch, instrumentCount> build() {
         auto c = hit(character(shift(brass(600.0f, 0.45f, -6.0f), -12.0f)), 0.4f, 0.0f);
         c.attack = 0.02f;
         c.lowKey = 24;
+        // The real brass: a horn section from the library (two players: a neighbouring note's
+        // take 7 ms later), hard-tongued staccato fronts, bright and biting; the depth an
+        // octave below on the library's trombone.
+        a = real(a, { "vsco-horn-sus", "vsco-horn-stac", 0.0f, -12.0f, 0.6f, 0.8f, 0.35f });
+        a.real.lowpass = 13000.0f;
+        a.real.release = 0.35f;
+        a.real.strikeDb = 9.0f;
+        a.real.strikeMs = 40.0f;
+        a.real.frontSkipMs = 35.0f;
+        b = secondPlayer(real(b, { "vsco-horn-sus", "vsco-horn-stac", -1.5f, -12.0f, 0.55f, 0.75f, 0.35f }), -2.0f, 2.0f, 7.0f);
+        b.real.lowpass = 12000.0f;
+        b.real.release = 0.35f;
+        b.real.strikeDb = 8.0f;
+        b.real.strikeMs = 40.0f;
+        b.real.frontSkipMs = 35.0f;
+        c = real(c, { "vsco-trombone-sus", "vsco-trombone-stac", -3.0f, -12.0f, 0.2f, 0.4f, 0.25f });
+        c.real.strikeDb = 4.0f;
+        c.real.frontSkipMs = 30.0f;
+        c.real.lowpass = 9000.0f;
+        c.real.release = 0.4f;
         Builder p("Heroic Horns", "Epic, heroic", "Depth");
         p.add(a).add(b).add(c).air(2.0f).poly(12).trim(0.0f);
         put(p);
@@ -738,6 +825,28 @@ std::array<Patch, instrumentCount> build() {
         auto d = hit(character(shift(brass(650.0f, 0.4f, -9.0f), -12.0f)), 0.4f, 0.0f);
         d.attack = 0.07f;
         d.lowKey = 24;
+        // The real brass: the striking low section is the library's trombone (sustain and its
+        // staccato front, bright and biting; at the choir's pitch in the lowest notes), the
+        // warm brass an octave below its tuba, the synthesis a little under them.
+        c = real(c, { "vsco-trombone-sus", "vsco-trombone-stac", 0.0f, -12.0f, 0.55f, 0.75f, 0.35f });
+        c.real.lowpass = 12000.0f;
+        c.real.release = 0.5f;
+        c.real.strikeDb = 9.0f;
+        c.real.strikeMs = 40.0f;
+        c.real.frontSkipMs = 30.0f;
+        // The lowest notes keep more of the synthesis (-6 dB): its strong fundamental carries their
+        // pitch (the real trombone's is in its upper harmonics there, under the choir's).
+        low = real(low, { "vsco-trombone-sus", "vsco-trombone-stac", 0.0f, -6.0f, 0.5f, 0.7f, 0.35f });
+        low.real.lowpass = 11000.0f;
+        low.real.release = 0.5f;
+        low.real.strikeDb = 9.0f;
+        low.real.strikeMs = 40.0f;
+        low.real.frontSkipMs = 30.0f;
+        d = real(d, { "vsco-tuba-sus", "vsco-tuba-stac", -4.0f, -12.0f, 0.1f, 0.3f, 0.25f });
+        d.real.strikeDb = 4.0f;
+        d.real.frontSkipMs = 30.0f;
+        d.real.lowpass = 6000.0f;
+        d.real.release = 0.5f;
         Builder p("Epic Choir and Brass", "Epic, heroic", "Brass");
         p.add(v).add(up).add(drone).add(a).add(b).add(c).add(d).add(low).air(4.5f).chorus(0.1f).trim(0.0f);
         put(p);
@@ -745,6 +854,8 @@ std::array<Patch, instrumentCount> build() {
     for (std::size_t i = 0; i < all.size(); ++i) {
         all[i].trimDb = instrumentTrims[i];
         all[i].standInTrimDb = standInTrims[i];
+        all[i].libraryTrimDb = libraryTrims[i];
+        all[i].libraryStandInTrimDb = libraryStandInTrims[i];
     }
     // Mix and Punch. Punch (dB of gain on hit at Punch 50 %): high on the brass, medium on
     // plucks and harps, low on bowed strings, struck bells and winds, none on pads and
@@ -799,9 +910,20 @@ std::array<Patch, instrumentCount> build() {
 }
 } // namespace
 
+namespace {
+std::array<Patch, instrumentCount>& patches() {
+    static std::array<Patch, instrumentCount> all = build();
+    return all;
+}
+} // namespace
+
 const Patch& patch(int index) noexcept {
-    static const std::array<Patch, instrumentCount> patches = build();
-    return patches[std::size_t(std::clamp(index, 0, instrumentCount - 1))];
+    return patches()[std::size_t(std::clamp(index, 0, instrumentCount - 1))];
+}
+
+void setLibraryTrimForTests(int index, float db, bool standIn) noexcept {
+    auto& p = patches()[std::size_t(std::clamp(index, 0, instrumentCount - 1))];
+    (standIn ? p.libraryStandInTrimDb : p.libraryTrimDb) = db;
 }
 
 int instrumentIndex(int location, int sub) noexcept {

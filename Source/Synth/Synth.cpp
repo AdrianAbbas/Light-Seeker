@@ -784,6 +784,7 @@ void Synth::startLayers(Voice& voice) noexcept {
     // out at their own level while the new one's start at theirs).
     const float trimDb = patchUsesRecordings(p) && !patchSampled(p) ? p.standInTrimDb : p.trimDb;
     const bool library = patchLibraryLoaded(p);
+    const float libraryTrimDb = patchUsesRecordings(p) && !patchSampled(p) ? p.libraryStandInTrimDb : p.libraryTrimDb;
     const int note = voice.note;
     const float velocity = voice.velocity;
     const float graceRing = voice.grace ? 0.7f : 1.0f;
@@ -1083,15 +1084,15 @@ void Synth::startLayers(Voice& voice) noexcept {
         // Level, tone, pan.
         const float velGain = (1.0f - L.velocityGain) + L.velocityGain * std::pow(vel, 1.4f);
         const float fade = keyFade(L, midi - L.cents * 0.01f);
-        lv.gain = dbToGain(L.level + voice.levelDb + trimDb + (L.needs == Needs::Library ? p.libraryTrimDb : 0.0f)) * velGain * fade;
+        lv.gain = dbToGain(L.level + voice.levelDb + trimDb + (L.needs == Needs::Library ? libraryTrimDb : 0.0f)) * velGain * fade;
         lv.cutoff = L.lowpass * std::exp2(-L.velocityTone * (1.0f - vel));
         if (lv.real) {
             // The real part's level and the synthesis's under it (equal power across the
             // range's ends), both with the patch's library trim.
             const auto& R = L.real;
-            const float standIn = lv.gain * dbToGain(p.libraryTrimDb);
+            const float standIn = lv.gain * dbToGain(libraryTrimDb);
             const float realVel = (1.0f - R.velocityGain) + R.velocityGain * std::pow(vel, 1.4f);
-            const float realGain = dbToGain(L.level + R.db + voice.levelDb + trimDb + p.libraryTrimDb) * realVel * fade * std::sqrt(realWeight);
+            const float realGain = dbToGain(L.level + R.db + voice.levelDb + trimDb + libraryTrimDb) * realVel * fade * std::sqrt(realWeight);
             const float blend = dbToGain(R.synthDb);
             const float synthGain = standIn * std::sqrt((1.0f - realWeight) + realWeight * blend * blend);
             lv.gain = std::max(realGain, 1.0e-9f);

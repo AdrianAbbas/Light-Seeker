@@ -140,6 +140,7 @@ struct Patch {
     int layerCount = 0;
     float trimDb = 0;            // level matching (InstrumentTrims.h, calibrated)
     float libraryTrimDb = 0;     // the library brass layers' level, matched to the synthesis they replace (calibrated)
+    float libraryStandInTrimDb = 0;   // the same when the developer's recordings are missing (the voice's stand-in beside it)
     float standInTrimDb = 0;     // the same without the recordings (their stand-ins play)
     float bendRange = 2;         // semitones
     int polyphony = 16;
@@ -160,7 +161,7 @@ struct Patch {
 inline constexpr int instrumentCount = 31;
 const Patch& patch(int index) noexcept;
 // The calibration tool (`LightSeekerTests --calibrate-library`) tries trims in place.
-void setLibraryTrimForTests(int index, float db) noexcept;
+void setLibraryTrimForTests(int index, float db, bool standIn = false) noexcept;
 // Instruments follow the world's place order: Celestial Citadel's four, then three per location.
 int instrumentIndex(int location, int sub) noexcept;
 void instrumentPlace(int index, int& location, int& sub) noexcept;
