@@ -2291,3 +2291,11 @@ trims per note) and `brass-report.txt`.
 - **Memory**: the library adds about 49 MB (16-bit, 338 notes) to the shared sample bank; the
   bundle about 16 MB of FLAC.
 - **The Grand Organ's trumpet stop** stays an organ stop (not brass).
+
+**CI, `10f5e86`: green** (first push). Linux with the developer's recordings, the captured
+spaces and the library brass (fetched from the official repository: "VSCO 2 CE: 1.1.0 2809277
+(CC0 1.0 Universal, licence sha256 checked), 343 brass WAVs", "Prepared: 338 library brass
+notes; 28 sets in all"): **2320 passed, 0 failed** (the `brass` shard included); the real
+brass listening renders (32 files) in `test-logs/real-brass/`. macOS: build, smoke (the
+library required and loaded) + instrument on arm64 and x86_64, auval and the AU harness for
+both plug-ins, the package uploaded.
