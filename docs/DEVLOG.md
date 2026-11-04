@@ -149,7 +149,7 @@ usage limit or a compaction) continues from the first unticked line. Push to `ma
 **Real brass: VSCO 2 Community Edition** (see "Real brass" below; CC0 samples, never committed here)
 
 - [x] V1. Download VSCO 2 CE from its official source, check the licence (CC0 1.0 Universal: go), log it in `docs/LICENSES/VSCO-2-CE.txt` and here (source URL, version, commit, licence hash); push `[skip ci]`
-- [ ] V2. Sample prep (`tools/sample-prep/vsco.py`: the SFZ maps, pitch from the audio, mono, trimmed attacks, loops and release tails, velocity layers kept) and CI (`scripts/ci-fetch-vsco.sh`: sparse fetch of the brass from the official repository at the pinned commit, cached; merged into the bank with or without the developer's recordings; "Prepared" lines); push `[skip ci]`
+- [x] V2. Sample prep (`tools/sample-prep/vsco.py`: the SFZ maps, pitch from the audio, mono, trimmed attacks, loops and release tails, velocity layers kept) and CI (`scripts/ci-fetch-vsco.sh`: sparse fetch of the brass from the official repository at the pinned commit, cached; merged into the bank with or without the developer's recordings; "Prepared" lines); push `[skip ci]`
 - [ ] V3. Engine: library layers (play with the library, synthesis stand-ins without it, independent of the developer's recordings), the brass shaping (presence, bite, drive) on sample layers; push `[skip ci]`
 - [ ] V4. Instruments: Fanfare Trumpets, Soaring Horn, Heroic Horns, Epic Choir and Brass's brass, the Orchestral Chord Pad's horns: horn/trumpet/trombone/tuba sustains + staccato fronts, a little synthesis for weight and shine; level-matched to before; Punch/MIX working; push `[skip ci]`
 - [ ] V5. Tests (`brass` group: in tune across the range, velocity layers smooth, attack-to-sustain and presence up, level-matched with siblings and before, distinct, no clicks or clipping, licence logged), listening renders (each brass before/after, dry and in place; the mini-song), DEVLOG handoff; final push without `[skip ci]`, CI green
@@ -2058,3 +2058,39 @@ The samples never go into this public repository.
   ships them inside the instrument's bundle with the developer's recordings. Fetching from
   the official source needs no token, so every build has the real brass; a build without
   them (the fetch failing, or a local build) plays the synthesis as before.
+
+### V2. Sample prep and CI
+
+`tools/sample-prep/vsco.py` reads the library's own SFZ maps (key and velocity ranges,
+round-robins, per-file `volume`) and writes the bank's format (mono 16-bit FLAC + one map per
+set): eight sets, `vsco-{horn,trumpet,trombone,tuba}-{sus,stac}`, **338 notes, 16 MB of
+FLAC** (about 50 MB in memory as 16-bit). What it found and did:
+
+- **Stereo**: the two channels are a spaced pair (correlation 0.2-0.8; the tuba's sustains
+  -0.5 to +0.5): summed to mono they comb-filter (the tuba lost its lows). Each set uses
+  one microphone for every note, the louder over the set (horn left, trumpet sustains left,
+  trumpet staccatos right, trombone right +5 dB, tuba right).
+- **Pre-roll** before the note speaks: up to 13 ms (tuba sustains), 5 ms (trombone); cut,
+  so the attack lands on the beat with the synthesis layered on it.
+- **Tuning**: measured on every note (YIN near the key centre, refined on four harmonics);
+  sustains within -24..+10 cents (mean 0.3-4.7), staccatos -55..+36 (the tuba's short low
+  notes, steady but flat as played). The sampler plays each at its measured pitch. Five
+  staccatos whose pitch moves more than 20 cents over the note, one with no clear pitch:
+  mapped at their key centres (listed in the report).
+- **Overlapping velocity splits** (horn staccato F4-F5, trombone staccato G#2-B2: the SFZ
+  sounds two samples at once there): the finer split kept, 5 notes left out.
+- **Loops**: every sustain (103) has one (within its first 2.5 s, crossfaded and levelled),
+  with its recorded release after it. Staccatos end 60 dB under their peak (1.6 s at most).
+- **Levels**: a key's velocity layers levelled to each other (the instrument's velocity
+  response makes the dynamics, so a layer change only changes the timbre: no steps), the
+  range evened to a smooth curve (the register's tilt kept), one gain per set.
+
+CI (`scripts/ci-fetch-vsco.sh`, both jobs, after the developer's recordings): a
+blob-filtered sparse clone of tag 1.1.0 (only the eight brass folders, the SFZ files and the
+licence: about 230 MB), the commit and the licence's sha256 checked against
+`docs/LICENSES/VSCO-2-CE.txt` (a changed licence is not used), the prepared notes cached
+(`actions/cache`, keyed by the commit and the prep scripts: a cached build downloads
+nothing), then added to the samples folder and `index.json` ("Prepared: N notes (vsco-...)"
+per set in the log). It needs no token, so builds without the developer's recordings get the
+real brass too; `LS_REQUIRE_LIBRARY` makes the smoke test fail if it is missing in CI. Not
+in `AdrianAbbas/Samples`: nothing there was changed.

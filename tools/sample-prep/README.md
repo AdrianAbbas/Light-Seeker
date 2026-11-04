@@ -96,3 +96,22 @@ time, once with short hits and once with long (held) hits. Per recording:
   every key. `fx: true` also copies the set into `<out>/fx/` with its own `index.json`:
   what the effect's bundle carries (its Atmosphere layer).
 - `scripts/ci-fetch-samples.sh` prints `Prepared: N notes (<set>)` for every set.
+
+**The library brass** (`vsco.py`, the real brass update): the horn, trumpet, tenor trombone
+and tuba of VSCO 2 Community Edition (CC0 1.0; source, version and licence in
+`docs/LICENSES/VSCO-2-CE.txt`), sustains and staccatos with every dynamic layer, from the
+library's own SFZ maps. Never committed: `scripts/ci-fetch-vsco.sh` fetches only those
+folders from the official repository at the pinned commit (licence hash checked), prepares
+them (CI caches the result) and adds the eight `vsco-*` sets to the prepared folder, after
+the developer's recordings. Locally:
+
+    git clone --filter=blob:none --no-checkout --depth 1 --branch 1.1.0 https://github.com/sgossner/VSCO-2-CE ../vsco
+    bash scripts/ci-fetch-vsco.sh build/vsco-cache build/samples     # or: python3 tools/sample-prep/vsco.py --source ../vsco --out build/samples
+
+Per note (see the script's docstring): one microphone of the spaced pair (the louder over
+the set: summed they comb-filter), the pre-roll cut so the attack lands on time, the pitch
+measured from the audio (the sampler is tuned to it), a sustain loop and the recorded
+release appended after it, staccatos trimmed; the velocity layers of a key levelled to each
+other (the dynamics come from the instrument's velocity response, so a layer change is a
+change of timbre, never a step in level) and the range evened to a smooth curve.
+`report-vsco.json`: tuning per note, loops, trims, the warnings.

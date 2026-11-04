@@ -18,6 +18,8 @@ jobs:
       # smoke test checks); without it the build falls back to the stand-ins.
       LS_REQUIRE_CAPTURES: ${{ secrets.SAMPLES_TOKEN != '' }}
       LS_REQUIRE_SAMPLES: ${{ secrets.SAMPLES_TOKEN != '' }}
+      # The library brass comes from a public source: every CI build must have it.
+      LS_REQUIRE_LIBRARY: "true"
       CCACHE_BASEDIR: ${{ github.workspace }}
       CCACHE_SLOPPINESS: time_macros,include_file_mtime,include_file_ctime
     steps:
@@ -41,6 +43,17 @@ jobs:
         env:
           SAMPLES_TOKEN: ${{ secrets.SAMPLES_TOKEN }}
         run: bash scripts/ci-fetch-samples.sh "${{ runner.temp }}/samples-src" "${{ runner.temp }}/samples" "${{ runner.temp }}/irs"
+      # Real brass: the horn, trumpet, trombone and tuba of VSCO 2 Community Edition (CC0 1.0,
+      # docs/LICENSES/VSCO-2-CE.txt), fetched from its official repository at a pinned commit
+      # (licence checked), prepared (tools/sample-prep/vsco.py) and added to the recordings
+      # above; never committed here. The prepared notes are cached; without them, stand-ins.
+      - name: Library brass cache (VSCO 2 CE, prepared)
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/vsco-cache
+          key: vsco2ce-28092772-${{ hashFiles('tools/sample-prep/vsco.py', 'tools/sample-prep/prepare.py') }}
+      - name: Fetch and prepare the library brass (VSCO 2 CE from its official source)
+        run: bash scripts/ci-fetch-vsco.sh "${{ runner.temp }}/vsco-cache" "${{ runner.temp }}/samples"
       # JUCE is fetched once and kept (the configure step otherwise clones its whole history).
       - name: JUCE source cache
         id: juce
@@ -126,6 +139,8 @@ jobs:
     env:
       LS_REQUIRE_CAPTURES: ${{ secrets.SAMPLES_TOKEN != '' }}
       LS_REQUIRE_SAMPLES: ${{ secrets.SAMPLES_TOKEN != '' }}
+      # The library brass comes from a public source: every CI build must have it.
+      LS_REQUIRE_LIBRARY: "true"
       CCACHE_BASEDIR: ${{ github.workspace }}
       CCACHE_SLOPPINESS: time_macros,include_file_mtime,include_file_ctime
     steps:
@@ -143,6 +158,17 @@ jobs:
         env:
           SAMPLES_TOKEN: ${{ secrets.SAMPLES_TOKEN }}
         run: bash scripts/ci-fetch-samples.sh "${{ runner.temp }}/samples-src" "${{ runner.temp }}/samples" "${{ runner.temp }}/irs"
+      # Real brass: the horn, trumpet, trombone and tuba of VSCO 2 Community Edition (CC0 1.0,
+      # docs/LICENSES/VSCO-2-CE.txt), fetched from its official repository at a pinned commit
+      # (licence checked), prepared (tools/sample-prep/vsco.py) and added to the recordings
+      # above; never committed here. The prepared notes are cached; without them, stand-ins.
+      - name: Library brass cache (VSCO 2 CE, prepared)
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/vsco-cache
+          key: vsco2ce-28092772-${{ hashFiles('tools/sample-prep/vsco.py', 'tools/sample-prep/prepare.py') }}
+      - name: Fetch and prepare the library brass (VSCO 2 CE from its official source)
+        run: bash scripts/ci-fetch-vsco.sh "${{ runner.temp }}/vsco-cache" "${{ runner.temp }}/samples"
       - name: Dependencies
         run: sudo apt-get update && sudo apt-get install -y ninja-build libasound2-dev libfreetype6-dev libfontconfig1-dev libx11-dev libxcomposite-dev libxcursor-dev libxext-dev libxinerama-dev libxrandr-dev libxrender-dev libgl1-mesa-dev
       - name: JUCE source cache
