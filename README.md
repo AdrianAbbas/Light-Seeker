@@ -26,6 +26,15 @@ good dry (Intensity 0 %) and in its space. Some play the developer's own recordi
 (classical guitar, kalimba, violin, Korg Minilogue soft pad), the rest are modelled with
 WORLDBUILDER's sound engine (brass, bowed strings, voices, plucked strings, bells, winds).
 
+**The brass is real** (Fanfare Trumpets, Soaring Horn, Heroic Horns, the brass of Epic Choir
+and Brass and the Orchestral Chord Pad's horns): the horn, trumpet, trombone and tuba of
+VSCO 2 Community Edition (Versilian Studios, CC0 1.0 public domain; source, version and
+licence in [`docs/LICENSES/VSCO-2-CE.txt`](docs/LICENSES/VSCO-2-CE.txt)), sustains with
+their staccatos as the attack's front, every dynamic layer, shaped into LIGHT SEEKER's own
+sound (a struck front, presence, bite, a touch of drive, a little of the synthesised brass
+under them for weight and shine). The samples are not in this repository: the build fetches
+them from their official source. A build without them plays the synthesised brass.
+
 | Location (family) | Place → instrument |
 |---|---|
 | Celestial Citadel (radiant brass & strings) | Gates of Dawn → Fanfare Trumpets · Hall of Mirrors → Shimmering Strings · Throne of Light → Orchestral Chord Pad · Spire Summit → Soaring Horn |

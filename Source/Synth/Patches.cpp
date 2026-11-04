@@ -234,17 +234,17 @@ std::array<Patch, instrumentCount> build() {
         // The real brass: the library's trumpet (sustain, staccato front) in both players
         // (the second a neighbouring note's take, 8 ms later), bright and biting; the
         // synthesis a little under them, and the piccolo above stays synthesised (shine).
-        a = real(a, { "vsco-trumpet-sus", "vsco-trumpet-stac", 0.0f, -12.0f, 0.6f, 0.8f, 0.35f });
+        a = real(a, { "vsco-trumpet-sus", "vsco-trumpet-stac", 5.5f, -12.0f, 0.6f, 0.8f, 0.35f });
         a.real.lowpass = 15000.0f;
         a.real.release = 0.3f;
         a.real.strikeDb = 9.0f;
-        a.real.strikeMs = 35.0f;
+        a.real.strikeMs = 25.0f;
         a.real.frontSkipMs = 25.0f;
-        b = secondPlayer(real(b, { "vsco-trumpet-sus", "vsco-trumpet-stac", -2.0f, -12.0f, 0.55f, 0.7f, 0.35f }), 2.0f, -2.0f, 8.0f);
+        b = secondPlayer(real(b, { "vsco-trumpet-sus", "vsco-trumpet-stac", 3.5f, -12.0f, 0.55f, 0.7f, 0.35f }), 2.0f, -2.0f, 8.0f);
         b.real.lowpass = 14000.0f;
         b.real.release = 0.3f;
         b.real.strikeDb = 8.0f;
-        b.real.strikeMs = 35.0f;
+        b.real.strikeMs = 25.0f;
         b.real.frontSkipMs = 25.0f;
         Builder p("Fanfare Trumpets", "Radiant brass and strings", "Piccolo");
         p.add(a).add(b).add(c).air(3.0f).poly(12).trim(0.0f);
@@ -315,17 +315,17 @@ std::array<Patch, instrumentCount> build() {
         // The real brass: the library's horn, round and majestic, its staccato under the
         // attack (softer than the trumpets': it speaks, it does not bark), presence for the
         // mix; the second horn a neighbouring note's take, 12 ms later.
-        a = real(a, { "vsco-horn-sus", "vsco-horn-stac", -2.0f, -13.0f, 0.5f, 0.6f, 0.25f });
+        a = real(a, { "vsco-horn-sus", "vsco-horn-stac", 3.5f, -13.0f, 0.5f, 0.6f, 0.25f });
         a.real.lowpass = 11000.0f;
         a.real.release = 0.5f;
-        a.real.strikeDb = 9.0f;
-        a.real.strikeMs = 45.0f;
+        a.real.strikeDb = 11.0f;
+        a.real.strikeMs = 30.0f;
         a.real.frontSkipMs = 35.0f;
-        b = secondPlayer(real(b, { "vsco-horn-sus", "vsco-horn-stac", -5.0f, -14.0f, 0.4f, 0.45f, 0.25f }), 2.0f, 1.0f, 12.0f);
+        b = secondPlayer(real(b, { "vsco-horn-sus", "vsco-horn-stac", 0.5f, -14.0f, 0.4f, 0.45f, 0.25f }), 2.0f, 1.0f, 12.0f);
         b.real.lowpass = 10000.0f;
         b.real.release = 0.5f;
         b.real.strikeDb = 7.0f;
-        b.real.strikeMs = 45.0f;
+        b.real.strikeMs = 30.0f;
         b.real.frontSkipMs = 35.0f;
         Builder p("Soaring Horn", "Radiant brass and strings", "Second horn");
         p.add(a).add(b).air(1.5f).poly(10).trim(0.0f);
@@ -744,19 +744,19 @@ std::array<Patch, instrumentCount> build() {
         // The real brass: a horn section from the library (two players: a neighbouring note's
         // take 7 ms later), hard-tongued staccato fronts, bright and biting; the depth an
         // octave below on the library's trombone.
-        a = real(a, { "vsco-horn-sus", "vsco-horn-stac", 0.0f, -12.0f, 0.6f, 0.8f, 0.35f });
+        a = real(a, { "vsco-horn-sus", "vsco-horn-stac", 5.5f, -12.0f, 0.6f, 0.8f, 0.35f });
         a.real.lowpass = 13000.0f;
         a.real.release = 0.35f;
         a.real.strikeDb = 9.0f;
-        a.real.strikeMs = 40.0f;
+        a.real.strikeMs = 28.0f;
         a.real.frontSkipMs = 35.0f;
-        b = secondPlayer(real(b, { "vsco-horn-sus", "vsco-horn-stac", -1.5f, -12.0f, 0.55f, 0.75f, 0.35f }), -2.0f, 2.0f, 7.0f);
+        b = secondPlayer(real(b, { "vsco-horn-sus", "vsco-horn-stac", 4.0f, -12.0f, 0.55f, 0.75f, 0.35f }), -2.0f, 2.0f, 7.0f);
         b.real.lowpass = 12000.0f;
         b.real.release = 0.35f;
         b.real.strikeDb = 8.0f;
-        b.real.strikeMs = 40.0f;
+        b.real.strikeMs = 28.0f;
         b.real.frontSkipMs = 35.0f;
-        c = real(c, { "vsco-trombone-sus", "vsco-trombone-stac", -3.0f, -12.0f, 0.2f, 0.4f, 0.25f });
+        c = real(c, { "vsco-trombone-sus", "vsco-trombone-stac", 2.5f, -12.0f, 0.2f, 0.4f, 0.25f });
         c.real.strikeDb = 4.0f;
         c.real.frontSkipMs = 30.0f;
         c.real.lowpass = 9000.0f;
@@ -828,21 +828,21 @@ std::array<Patch, instrumentCount> build() {
         // The real brass: the striking low section is the library's trombone (sustain and its
         // staccato front, bright and biting; at the choir's pitch in the lowest notes), the
         // warm brass an octave below its tuba, the synthesis a little under them.
-        c = real(c, { "vsco-trombone-sus", "vsco-trombone-stac", 0.0f, -12.0f, 0.55f, 0.75f, 0.35f });
+        c = real(c, { "vsco-trombone-sus", "vsco-trombone-stac", 5.5f, -12.0f, 0.55f, 0.75f, 0.35f });
         c.real.lowpass = 12000.0f;
         c.real.release = 0.5f;
-        c.real.strikeDb = 9.0f;
-        c.real.strikeMs = 40.0f;
+        c.real.strikeDb = 11.0f;
+        c.real.strikeMs = 28.0f;
         c.real.frontSkipMs = 30.0f;
         // The lowest notes keep more of the synthesis (-6 dB): its strong fundamental carries their
         // pitch (the real trombone's is in its upper harmonics there, under the choir's).
-        low = real(low, { "vsco-trombone-sus", "vsco-trombone-stac", 0.0f, -6.0f, 0.5f, 0.7f, 0.35f });
+        low = real(low, { "vsco-trombone-sus", "vsco-trombone-stac", 5.5f, -6.0f, 0.5f, 0.7f, 0.35f });
         low.real.lowpass = 11000.0f;
         low.real.release = 0.5f;
-        low.real.strikeDb = 9.0f;
-        low.real.strikeMs = 40.0f;
+        low.real.strikeDb = 11.0f;
+        low.real.strikeMs = 28.0f;
         low.real.frontSkipMs = 30.0f;
-        d = real(d, { "vsco-tuba-sus", "vsco-tuba-stac", -4.0f, -12.0f, 0.1f, 0.3f, 0.25f });
+        d = real(d, { "vsco-tuba-sus", "vsco-tuba-stac", 1.5f, -12.0f, 0.1f, 0.3f, 0.25f });
         d.real.strikeDb = 4.0f;
         d.real.frontSkipMs = 30.0f;
         d.real.lowpass = 6000.0f;
@@ -856,6 +856,7 @@ std::array<Patch, instrumentCount> build() {
         all[i].standInTrimDb = standInTrims[i];
         all[i].libraryTrimDb = libraryTrims[i];
         all[i].libraryStandInTrimDb = libraryStandInTrims[i];
+        all[i].libraryTiltDb = libraryTilts[i];
     }
     // Mix and Punch. Punch (dB of gain on hit at Punch 50 %): high on the brass, medium on
     // plucks and harps, low on bowed strings, struck bells and winds, none on pads and
@@ -919,6 +920,10 @@ std::array<Patch, instrumentCount>& patches() {
 
 const Patch& patch(int index) noexcept {
     return patches()[std::size_t(std::clamp(index, 0, instrumentCount - 1))];
+}
+
+void setLibraryTiltForTests(int index, float dbPerOctave) noexcept {
+    patches()[std::size_t(std::clamp(index, 0, instrumentCount - 1))].libraryTiltDb = dbPerOctave;
 }
 
 void setLibraryTrimForTests(int index, float db, bool standIn) noexcept {

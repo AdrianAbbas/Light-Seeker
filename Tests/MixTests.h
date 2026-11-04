@@ -597,6 +597,14 @@ void testMixPunch(Suite& s) {
     // Mix and Punch, measured with `--brass-report` on that code (a held C major chord at
     // velocity 0.95, dry, synthesised layers): attack peak over sustain (dB, 5 ms frames),
     // the 2-4 kHz share of the first 150 ms (dB of the total) and the sustain (dBFS).
+    // With the real brass (the VSCO 2 CE update) these instruments play the library: these
+    // numbers are the synthesised design's, so they are measured on it (the library left out,
+    // as in a build without it); the real brass is compared with them in the `brass` group.
+    {   // (the library left out for this block only)
+    struct LibraryOff {
+        LibraryOff() { lswb::samples::Bank::bypassLibraryForTests(true); }
+        ~LibraryOff() { lswb::samples::Bank::bypassLibraryForTests(false); }
+    } libraryOff;
     struct BrassBefore { const char* name; double attackToSustain, presence, sustain; };
     const BrassBefore before[] = {
         { "Fanfare Trumpets", 6.1, -15.6, -18.6 }, { "Soaring Horn", 4.9, -26.2, -17.3 }, { "Heroic Horns", 5.5, -19.5, -17.1 },
@@ -628,6 +636,7 @@ void testMixPunch(Suite& s) {
                 fmt(b.attackToSustain, 1) + " -> " + fmt(attackToSustain, 1) + " dB");
         s.check(presence > b.presence + (organ ? 0.5 : 1.0), n + ": more 2-4 kHz presence on the attack than before", fmt(b.presence, 1) + " -> " + fmt(presence, 1) + " dB");
         s.check(std::abs(toDb(sustainHit) - b.sustain) < 0.5, n + ": the same sustain as before", fmt(b.sustain, 1) + " -> " + fmt(toDb(sustainHit), 1) + " dBFS");
+    }
     }
     {   // The fanfare's rise: quicker than 25 ms from 10 to 90 %.
         const auto p = play("Fanfare Trumpets", 0.0f, 0.9f, { 60, 64, 67 }, 0.6);

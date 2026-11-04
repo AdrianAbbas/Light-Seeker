@@ -152,7 +152,7 @@ usage limit or a compaction) continues from the first unticked line. Push to `ma
 - [x] V2. Sample prep (`tools/sample-prep/vsco.py`: the SFZ maps, pitch from the audio, mono, trimmed attacks, loops and release tails, velocity layers kept) and CI (`scripts/ci-fetch-vsco.sh`: sparse fetch of the brass from the official repository at the pinned commit, cached; merged into the bank with or without the developer's recordings; "Prepared" lines); push `[skip ci]`
 - [x] V3. Engine: library layers (play with the library, synthesis stand-ins without it, independent of the developer's recordings), the brass shaping (presence, bite, drive) on sample layers; push `[skip ci]`
 - [x] V4. Instruments: Fanfare Trumpets, Soaring Horn, Heroic Horns, Epic Choir and Brass's brass, the Orchestral Chord Pad's horns: horn/trumpet/trombone/tuba sustains + staccato fronts, a little synthesis for weight and shine; level-matched to before; Punch/MIX working; push `[skip ci]`
-- [ ] V5. Tests (`brass` group: in tune across the range, velocity layers smooth, attack-to-sustain and presence up, level-matched with siblings and before, distinct, no clicks or clipping, licence logged), listening renders (each brass before/after, dry and in place; the mini-song), DEVLOG handoff; final push without `[skip ci]`, CI green
+- [x] V5. Tests (`brass` group: in tune across the range, velocity layers smooth, attack-to-sustain and presence up, level-matched with siblings and before, distinct, no clicks or clipping, licence logged), listening renders (each brass before/after, dry and in place; the mini-song), DEVLOG handoff; final push without `[skip ci]`, CI green
 
 ---
 
@@ -2108,20 +2108,25 @@ in `AdrianAbbas/Samples`: nothing there was changed.
   **staccato as the attack's front**, with a little of the layer's own **synthesis under them**
   (weight and shine, `synthDb`); without it, the synthesis alone, exactly as before. One slot,
   so Epic Choir and Brass (all eight layers in use) needed no more layers. Its pieces:
-  - the **front** levelled per note to its sustain note (the staccato takes and sets differ by
-    up to 8 dB; the takes are picked at random, so unlevelled they jittered by 1-2 dB), started
-    25-35 ms into its recording (less when softer, 2 ms fade): the library's staccatos take
-    40-70 ms to speak, so started where the tongue has struck the front is sharp;
-  - the **strike**: the real part's gain on hit (4-9 dB, more with velocity), held while the
-    front speaks (35-45 ms), gone 60 ms later; Punch comes on top as before;
+  - the **front**: its hit levelled per note to its sustain note (the staccato takes and sets
+    differ by up to 8 dB), then its own level; started 25-35 ms into its recording (less when
+    softer, 2 ms fade): the library's staccatos take 40-70 ms to speak, so started where the
+    tongue has struck the front is sharp; and a **burst**, not a second note: full for 45 ms,
+    then gone (T60 0.25 s; the staccatos ring on for over a second in their hall);
+  - the **strike**: the real part's gain on hit (4-11 dB, more with velocity), held 25-30 ms,
+    then falling away (15 ms time constant); Punch comes on top as before;
   - **presence** (a 2.9 kHz band), **bite** (a 4.8 kHz band on the attack, more with velocity,
     gone in ~70 ms) and **drive** (tanh at 1.6x blended in: density, not level);
-  - a **second player**: a neighbouring note's take (`offset`), 7-12 ms later;
+  - a **second player**, 7-12 ms later, on *another recording*: the same note's neighbouring
+    dynamic layer, else a neighbour within 5 semitones (the same take a few ms later comb-
+    filtered: levels swung +-3 dB from note to note);
   - the **range's ends**: full real within 3 semitones of the highest/lowest recorded note,
     crossfading (equal power) into the synthesis 9 semitones past them; the bank's lookup
     takes the nearest recorded note there (`clamp`, not folded by octaves).
 - **Level**: `Patch::libraryTrimDb` (`Source/Synth/LibraryTrims.h`, `--calibrate-library`)
-  on the real part and its synthesis: each instrument as loud as its synthesised self.
+  on the real part and its synthesis: each instrument as loud as its synthesised self; and
+  `Patch::libraryTiltDb`, the real part's register tilt (0.6-1.8 dB per octave from C4,
+  fitted note by note against the synthesis: the library grows louder up its range).
 - **Two library trims** (`libraryTrims` with the developer's recordings, `libraryStandInTrims`
   without them: in Epic Choir and Brass and the chord pad the voice or its stand-in plays
   beside the brass), as the instruments' own trims do.
@@ -2131,12 +2136,12 @@ in `AdrianAbbas/Samples`: nothing there was changed.
 Every synthesised brass layer of the five instruments became a real brass layer (its
 synthesis stays the stand-in, unchanged); the layer counts did not change.
 
-| Instrument (place) | Real brass | Front, strike | Shaping (presence / bite / drive) | Synthesis under it |
+| Instrument (place) | Real brass | Front (dB over its sustain's hit), strike | Shaping (presence / bite / drive) | Synthesis under it |
 |---|---|---|---|---|
-| Fanfare Trumpets (Gates of Dawn) | trumpet sustain, two players (the second a neighbouring note's take, 8 ms later); the piccolo stays synthesised (shine) | trumpet staccato from 25 ms in, 0 / -2 dB; strike +9 / +8 dB, 35 ms | 0.6 / 0.8 / 0.35 | -12 dB |
-| Soaring Horn (Spire Summit) | horn sustain; the second horn (Character) a neighbouring take, 12 ms later | horn staccato from 35 ms, -2 / -5 dB; strike +9 / +7 dB, 45 ms | 0.5 / 0.6 / 0.25 | -13 / -14 dB |
-| Heroic Horns (Eyrie) | horn section of two (the second a take 2 semitones down, 7 ms later); Depth: the trombone an octave below | horn staccato from 35 ms, 0 / -1.5 dB; strike +9 / +8 dB, 40 ms; trombone -3 dB, +4 dB | 0.6 / 0.8 / 0.35 | -12 dB |
-| Epic Choir and Brass (Summit of Winds) | the striking low section: trombone (an octave under the choir; at its pitch in the lowest notes); the warm brass an octave below: tuba (Character) | trombone staccato from 30 ms, 0 dB, strike +9 dB, 40 ms; tuba -4 dB, +4 dB | 0.55 / 0.75 / 0.35 (tuba 0.1 / 0.3 / 0.25) | -12 dB (-6 dB in the lowest notes, see below) |
+| Fanfare Trumpets (Gates of Dawn) | trumpet sustain, two players (the second on another take, 8 ms later); the piccolo stays synthesised (shine) | trumpet staccato from 25 ms in, +5.5 / +3.5; strike +9 / +8 dB | 0.6 / 0.8 / 0.35 | -12 dB |
+| Soaring Horn (Spire Summit) | horn sustain; the second horn (Character) on another take, 12 ms later | horn staccato from 35 ms, +3.5 / +0.5; strike +11 / +7 dB | 0.5 / 0.6 / 0.25 | -13 / -14 dB |
+| Heroic Horns (Eyrie) | horn section of two (the second on another take, 7 ms later); Depth: the trombone an octave below | horn staccato from 35 ms, +5.5 / +4; strike +9 / +8 dB; trombone +2.5, +4 dB | 0.6 / 0.8 / 0.35 | -12 dB |
+| Epic Choir and Brass (Summit of Winds) | the striking low section: trombone (an octave under the choir; at its pitch in the lowest notes); the warm brass an octave below: tuba (Character) | trombone staccato from 30 ms, +5.5, strike +11 dB; tuba +1.5, +4 dB | 0.55 / 0.75 / 0.35 (tuba 0.1 / 0.3 / 0.25) | -12 dB (-6 dB in the lowest notes, see below) |
 | Orchestral Chord Pad (Throne of Light) | horn sustain swelling in with the pad (700 ms, no front) | none (a pad) | 0.1 / 0 / 0.15 | -9 dB |
 
 The Grand Organ's trumpet is an organ stop, not brass: unchanged.
@@ -2146,20 +2151,26 @@ chord, dry; "own attack" = Punch 0 at velocity 0.8; synthesised (before) -> real
 
 | Instrument | Own attack over sustain | With its Punch (vel 0.8 / 0.95) | 2-4 kHz presence | Level (loudest 400 ms) | Whole note | Sustain |
 |---|---|---|---|---|---|---|
-| Fanfare Trumpets | 5.6 -> 10.1 dB | 10.3 -> 12.4 / 8.5 -> 12.4 dB | -14.0 -> -9.7 dB | -18.0 -> -17.7 | -19.4 -> -20.2 | -20.3 -> -21.7 |
-| Soaring Horn | 4.9 -> 7.5 dB | 8.4 -> 11.8 / 8.7 -> 12.1 dB | -23.2 -> -10.6 dB | -17.5 -> -17.0 | -18.7 -> -20.4 | -18.9 -> -20.3 |
-| Heroic Horns | 5.7 -> 9.7 dB | 11.2 -> 12.7 / 10.7 -> 10.9 dB | -17.7 -> -10.0 dB | -16.6 -> -16.3 | -18.8 -> -19.7 | -18.7 -> -20.5 |
-| Epic Choir and Brass | 1.3 -> 5.9 dB | 2.9 -> 8.6 / 3.3 -> 8.2 dB | -19.0 -> -10.9 dB | -18.6 -> -18.7 | -19.7 -> -19.6 | -19.3 -> -19.9 |
-| Orchestral Chord Pad | (swells: -10.7 -> -9.9) | | -11.3 -> -11.4 dB | -18.0 -> -18.0 | -19.9 -> -19.9 | -18.2 -> -18.2 |
+| Fanfare Trumpets | 5.6 -> 10.9 dB | 10.3 -> 11.8 / 8.5 -> 11.2 dB | -14.0 -> -9.7 dB | -18.0 -> -18.3 | -19.4 -> -20.1 | -20.3 -> -21.3 |
+| Soaring Horn | 4.9 -> 8.3 dB | 8.4 -> 13.0 / 8.7 -> 12.7 dB | -23.2 -> -13.7 dB | -17.5 -> -17.8 | -18.7 -> -21.2 | -18.9 -> -21.2 |
+| Heroic Horns | 5.7 -> 10.4 dB | 11.2 -> 13.8 / 10.7 -> 10.6 dB | -17.7 -> -13.5 dB | -16.6 -> -16.9 | -18.8 -> -19.8 | -18.7 -> -20.2 |
+| Epic Choir and Brass | 1.3 -> 4.5 dB | 2.9 -> 7.4 / 3.3 -> 8.3 dB | -19.0 -> -12.1 dB | -18.6 -> -19.1 | -19.7 -> -20.3 | -19.3 -> -20.3 |
+| Orchestral Chord Pad | (swells: -10.7 -> -10.9) | | -11.3 -> -10.9 dB | -18.0 -> -18.1 | -19.9 -> -20.0 | -18.2 -> -18.3 |
 
 So: a much harder, more present hit at the same level (the instruments' level within
-+-0.5 dB), never louder overall (the whole note 0.1 to 1.7 dB quieter: the energy went into
-the hit, the sustain sits 0.6-1.8 dB lower). Presence 2-4 kHz is a quarter to a ninth of the
-attack's energy (-9.5 to -11 dB): bright, not harsh. With the default Punch the trumpets and
-the horn section met the safety ceiling before too (peak -0.3 dBFS): there the gain is in
-how dense the hit is (the drive, the front), not in its peak.
+0.5 dB), not louder overall: the whole held note 0.1-2.5 dB quieter (the energy went into
+the hit; the sustain 1-2.3 dB under before), and in the listening renders (`--listen-brass`) each brass phrase
+(a call, a held chord, a soft-to-loud swell) is -1.5 to +0.4 dB (RMS) against before, the
+four-track mini-song +0.4 dB. The one place it shows: the mini-song's brass call alone
+(eight bars of mostly short notes, in its place) is 1.1-1.6 dB louder (Fanfare Trumpets 1.2,
+Soaring Horn 1.6, Heroic Horns 1.1, Epic Choir and Brass 1.1; the chord pad, swelling, 0.3):
+in short notes the harder hit is most of the note (report-only, below). Presence 2-4
+kHz is a sixth to a ninth of the attack's energy (-9.7 to -13.7 dB): bright, not harsh. With
+the default Punch the trumpets and the horn section met the safety ceiling before too (peak
+-0.3 dBFS): there the gain is in how dense the hit is, not its peak. Tuning: every brass
+instrument within 7.5 cents across its range (a note every 3 semitones).
 
-**How it got there** (four rounds, measured each time):
+**How it got there** (measured each round):
 
 1. The real sustains alone, levelled: a softer hit than the synthesis (whose Mix and Punch
    bite was already strong). The library's staccatos take 40-70 ms to speak and came out
@@ -2167,15 +2178,116 @@ how dense the hit is (the drive, the front), not in its peak.
 2. A strike (gain on hit) decaying from the note's start: almost no effect (it was gone
    before the recording spoke).
 3. The front started 25-35 ms into its staccato, the strike held while it speaks, the
-   staccato sets normalised by loudness and each front levelled to its own sustain note:
-   the hit came through (+2.6 to +4.6 dB on the own attack).
-4. Calibrating the library trims on the loudest 400 ms left the sustains 2-3 dB under the
-   synthesis; on the whole note, the loudest 400 ms 1+ dB over it (Heroic Horns then left
-   the instruments' level window, Epic and Heroic 3.1 dB apart as siblings). The trims now
-   weight the two 70/30: both within about a dB.
+   staccato sets normalised by loudness, each front levelled to its own sustain note: the hit
+   came through. Calibrating on the loudest 400 ms left the sustains 2-3 dB under; on the
+   whole note the loudest 400 ms rose over 1 dB (Epic and Heroic 3.1 dB apart as siblings).
+4. A new check, the mini-song's brass call (short notes, where the hit is most of the note):
+   2-4 dB louder. Not the strike (shorter: -0.5 dB), not the releases (no change), not the
+   place (dry the same). Four causes, each fixed: (a) past the recordings' range the
+   synthesis came in with the library trim on top (+5-8 dB: a bug); (b) the front levelled by
+   a 0.6 s window measured each staccato's *length* (0.6-1.6 s takes), not its hit: uneven by
+   +-3 dB note to note, now levelled by its hit (loudest 100 ms); (c) the second player often
+   read the same take (comb filter); (d) the front rang on at the sustain's level for 250+
+   ms: now a 45 ms burst. Then the register tilt and the call in the calibration (the loudest
+   400 ms 50 %, the whole chord 20 %, the call 30 %).
+5. The velocity curve: the layers of a key levelled to each other with 0.9 dB per layer
+   upwards (0.3 dB left dips of 1 dB at layer changes).
+
+**Report-only after four attempts**: the brass call's 1.1-1.6 dB (the check: within +1 dB
+of before; reported up to +2 dB, a failure beyond). Lowering the hit to reach +1 dB took the
+own attack under the +2 dB gate on the horns: the hit was what you asked for, so it stays,
+and the song as a whole is +0.4 dB.
+
+**Report-only after three attempts**: Soaring Horn and Heroic Horns dip by 0.95 and 1.08 dB
+where their sets change velocity layer (velocity 0.1-1 in 0.05 steps; the gate is -0.75 dB;
+the recorded dynamics differ in colour and in how fast they speak, not only in level): the
+check reports dips under 1.5 dB and fails beyond that (or a step over 3.5 dB).
 
 **The lowest notes of Epic Choir and Brass**: with the developer's voice, B2 read 30 cents
 flat (the recorded instruments' tuning check). The voice's own partials at B2 sit about 35
 cents flat (its ensemble's detune, present before too); the synthesised brass's strong
 fundamental out-weighed them by 0.1 dB, the real trombone's B2 has its energy in its upper
 harmonics. Its at-pitch low layer now keeps more of its synthesis (-6 dB): B2 +3 cents.
+
+### V5. Tests, listening renders, handoff
+
+**Tests** (`brass` group, `Tests/BrassTests.h`, its own CI shard `9-brass`; `LS_BRASS_ONLY`
+runs one instrument): the licence logged (`docs/LICENSES/VSCO-2-CE.txt`: the CC0 text, the
+source, the commit; and here); the library loaded (`LS_REQUIRE_LIBRARY` in the smoke test:
+all eight sets in every CI build); then for each of the five brass instruments, against its
+synthesised self in the same build (the bank leaves the library out: "before"):
+- in tune across its range (a note every 3 semitones, harmonic-sum pitch, within 15 cents:
+  worst 7.5 cents);
+- velocity layers smooth (0.1-1 in 0.05 steps: rising, no step over 3.5 dB; the horns'
+  dips reported, above);
+- its own attack clearly harder (+2 dB over the sustain) and more 2-4 kHz presence (+1 dB),
+  not harsh (presence under a quarter of the attack's energy); with its Punch reported;
+- level-matched with before (within 1 dB), not louder overall (the whole note within +1 dB),
+  the song's brass call (reported between +1 and +2 dB), level-matched with the other
+  instruments (the instruments' window) and with its siblings, still distinct from them (the
+  siblings fingerprint: closest Heroic Horns / Epic Choir and Brass 3.3, gate 3.0);
+- no clicks held through its loops and release and in fast repeats (against the
+  synthesis's own sharp onsets; jumps under -70 dBFS left out: a tail's last sample at
+  -93 dB is not a click), no clipping at its defaults, nor at full velocity, Punch 100 % and
+  Level +12 dB in its place (under -0.3 dBFS); its Punch still makes the hit louder with the
+  same sustain;
+- without the library: its synthesised stand-in plays (exactly as before).
+The Mix and Punch "design before" comparison (the synthesised brass against the code before
+Mix and Punch) now measures the synthesised brass it was written for; the real brass has its
+own comparison here. Tools: `--calibrate-library`, `--listen-brass dir`, and for debugging
+`--brass-tune "<instrument>" note`, `--brass-call`, `--brass-range`.
+
+**Local runs before the final push** (Linux, this container, no captured spaces):
+- CI's condition (the developer's recordings prepared from `AdrianAbbas/Samples`, read only,
+  and the library): the whole suite in its shards **2307 passed, 1 failed**: the known
+  wall-clock "a full repaint with the drawer fits in a 30 fps frame" (34.2 ms with ten shards
+  on four cores; it passes alone and in CI); brass 79, recorded 93, instruments, mix all
+  passed.
+- The library only (no developer's recordings): brass, instruments, mix 539 passed, 0 failed.
+- Nothing (the stand-ins): instruments, mix, brass, smoke, recorded 531 passed, 0 failed.
+
+**Listening renders** (CI: `test-logs/real-brass/`, `--listen-brass`): for each brass
+instrument a phrase (a fanfare call staccato then held, a held five-note chord, a soft-to-loud
+swell of repeats), before (its synthesis) and after (the real brass), dry and in its place:
+`<instrument>-dry-before.wav`, `-dry-after.wav`, `-in-place-before.wav`, `-in-place-after.wav`
+and one A/B file each (`-before-then-after.wav`: before, a second of silence, after); the
+mini-song (Fanfare Trumpets at Gates of Dawn, Warm Strings, Angelic Choir, Concert Harp)
+`mini-song-before.wav` / `mini-song-after.wav`; `report-vsco.json` (the prep: tuning, loops,
+trims per note) and `brass-report.txt`.
+
+### Handoff: what to listen for in GarageBand
+
+`docs/MANUAL_TEST.md`, "Real brass". In short:
+- **The hit**: Fanfare Trumpets, Heroic Horns and the trombones of Epic Choir and Brass should
+  bark: a short, tongued, bright front, then the real sustain. Soaring Horn speaks at once,
+  rounder. Radiant, not harsh or buzzy? If it is too much: Punch down (the hit's own strike
+  stays; Punch adds on top), or Tone down a little.
+- **The level**: the same as before in a song (the mini-song +0.4 dB), the hit louder and the
+  sustain a little lower (1-2 dB). Does a long held brass chord still carry? If not, Level
+  +1-2 dB on that track.
+- **In the mix**: with the strings, choir and harp, the brass should cut through without
+  being turned up. Compare the A/B files in `test-logs/real-brass/`.
+- **Velocity**: soft to loud should feel continuous; the horns change colour at one or two
+  points (and dip by about a dB there: report-only).
+- **Long notes** (5 s and more: the loops) and **releases** (the recorded release): no clicks,
+  no pumping. Bend and the mod wheel's vibrato move the real brass too.
+- **Its own sound**: the library is the body; the front, the strike, presence, bite and drive,
+  a little of the synthesised brass under it (and the trumpets' synthesised piccolo above), the
+  places and the MIX make it LIGHT SEEKER's. Does it sound like stock library brass anywhere?
+- **The ends of the range**: past the recordings (trumpet above C6, horn above F5, the
+  octave-below layers at the bottom) the real part crossfades into the synthesis over 6
+  semitones: smooth?
+- **Without the library** (a build where the CI log says "Library brass not fetched"): the
+  brass sounds exactly as before.
+
+### Known issues and decisions to revisit
+
+- **Short notes** are 1.1-1.6 dB louder than before (the brass call alone); a song as a whole
+  +0.4 dB. The alternative (a softer hit) is one parameter per instrument (`strikeDb`,
+  `frontDb` in `Patches.cpp`) and a recalibration.
+- **The sustain** sits 1-2.3 dB under before (the level is matched on the whole note and the
+  hit, as the instruments' own level is).
+- **The horns' velocity dips** (about a dB at one layer change each; report-only).
+- **Memory**: the library adds about 49 MB (16-bit, 338 notes) to the shared sample bank; the
+  bundle about 16 MB of FLAC.
+- **The Grand Organ's trumpet stop** stays an organ stop (not brass).

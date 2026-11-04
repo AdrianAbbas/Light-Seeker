@@ -32,12 +32,17 @@ What it does, per SFZ region (horn, trumpet, tenor trombone, tuba; sustain and s
    player stops) appended after the loop: each note is its attack, its loop and its own
    release tail (tools/sample-prep/prepare.py's loop search). **Staccatos**: trimmed at
    60 dB under their peak (1.6 s at most: the room after a short note), faded out.
-5. **Levels**: every note's loudness (K-weighted, its loudest 400 ms). The velocity layers
-   of a key are levelled to each other (the dynamics then come from the instrument's
-   velocity response, continuous across a layer change: only the timbre changes there,
-   so there are no steps), and the notes along the range are evened to a smooth curve
-   (a quadratic in the key: the instrument's natural register tilt stays, the bumps from
-   note to note go). One gain per set, its loudest peak at -1 dBFS.
+5. **Levels**: every note's level (RMS of its loudest 400 ms, unweighted). The velocity
+   layers of a key are levelled to each other, each 0.9 dB over the one under it (the
+   dynamics then come from the instrument's velocity response, continuous across a layer
+   change: the timbre changes there, the level only rises a little), and the notes along
+   the range evened out (a quarter of the register's natural tilt kept, from a quadratic
+   fit in the key: the synthesis beside it is about level across its range). One gain per set: its median note at -20 dB RMS (a staccato set as
+   loud as its sustain set), no peak over -0.5 dBFS.
+   Staccatos are measured by their hit (the loudest 100 ms of their first 400 ms: the takes
+   run 0.6-1.6 s with their hall, so a longer window measured their length). The map's
+   per-note `loudness` is that same level (the instrument levels each staccato front to its
+   sustain note by it).
 6. **Mapping**: key ranges and velocity ranges from the library's SFZ; velocity layers are
    numbered per key from soft to loud (contiguous, as the bank's lookup needs);
    round-robins from `lorand`/`seq_position`.
@@ -196,6 +201,32 @@ def prepare_note(x, sustained):
     return out, (int(ls), int(le)), int(le + len(spacer)), notes
 
 
+def plain_loudness(audio):
+    """A note's level (RMS, not weighted: a louder layer is brighter, so at equal weighted
+    loudness it would measure quieter): the mean in dB of its first 600 ms (the attack, which
+    a soft layer takes longer to reach) and its loudest 400 ms in its first 1.5 s (the
+    sustain), so a layer change steps neither."""
+    y = audio[:int(1.9 * RATE)]
+    win = int(0.4 * RATE)
+    head = float(10 * np.log10(np.mean(y[:int(0.6 * RATE)] ** 2) + 1e-24))
+    if len(y) <= win:
+        return head
+    total = np.cumsum(np.concatenate(([0.0], y ** 2)))
+    power = ((total[win:] - total[:-win]) / win)[:int(1.5 * RATE)]
+    return 0.5 * (head + float(10 * np.log10(max(power.max(), 0.0) + 1e-24)))
+
+
+def hit_level(audio):
+    """A staccato's level: its loudest 100 ms in its first 400 ms (RMS): the hit itself (the
+    takes run 0.6-1.6 s with their hall, so a longer window would measure their length)."""
+    y = audio[:int(0.4 * RATE)]
+    win = int(0.1 * RATE)
+    if len(y) <= win:
+        return float(10 * np.log10(np.mean(y ** 2) + 1e-24))
+    total = np.cumsum(np.concatenate(([0.0], y ** 2)))
+    return float(10 * np.log10(max(((total[win:] - total[:-win]) / win).max(), 0.0) + 1e-24))
+
+
 def fade_end(y):
     fo = min(int(0.03 * RATE), len(y) // 4)
     y = y.copy()
@@ -293,32 +324,42 @@ def process_set(sid, sfz, sustained, name, source, out_dir, report):
         for z in group:
             takes = sorted({q["rrKey"] for q in group if q["layer"] == z["layer"]})
             z["rr"] = takes.index(z["rrKey"])
+    level_of = plain_loudness if sustained else hit_level
     for z in zones:
-        z["loud0"] = prepare.note_loudness(z["audio"])
-    # The layers of a key levelled to each other (their mean), then the keys evened to a
-    # smooth curve along the range.
+        z["loud0"] = level_of(z["audio"])
+    # The layers of a key levelled to each other (their mean), then the keys evened out along
+    # the range.
     for group in by_key.values():
         layer_level = {}
         for z in group:
             layer_level.setdefault(z["layer"], []).append(z["loud0"])
         mean = float(np.mean([np.mean(v) for v in layer_level.values()]))
+        top = max(layer_level)
         for z in group:
-            z["layerTrim"] = mean - float(np.mean(layer_level[z["layer"]]))
+            # Each layer a little louder than the one under it (0.9 dB): rising, never a step.
+            z["layerTrim"] = mean - float(np.mean(layer_level[z["layer"]])) + 0.9 * (z["layer"] - top / 2.0)
             z["keyLevel"] = mean
     keys = sorted(by_key.keys())
     centres = np.array([np.mean([z["root"] for z in by_key[k]]) for k in keys])
     levels = np.array([by_key[k][0]["keyLevel"] for k in keys])
     deg = 2 if len(keys) >= 5 else (1 if len(keys) >= 2 else 0)
     fit = np.polyval(np.polyfit(centres, levels, deg), centres) if deg else levels
-    for k, c, lv, ft in zip(keys, centres, levels, fit):
+    # A quarter of the register's tilt kept (the instrument's synthesis is about level across
+    # its range: at full tilt the top notes would stand 3 dB over the calibrated middle).
+    flat = float(np.mean(levels))
+    target = flat + 0.25 * (fit - flat)
+    for k, c, lv, ft in zip(keys, target, levels, fit):
         for z in by_key[k]:
-            z["keyTrim"] = float(np.clip(ft - lv, -9.0, 9.0))
+            z["keyTrim"] = float(np.clip(c - lv, -12.0, 12.0))
     for z in zones:
         trim = float(np.clip(z["layerTrim"] + z["keyTrim"], -18.0, 18.0))
         z["audio"] = z["audio"] * 10 ** (trim / 20)
         z["trim"] = trim
+    # One gain per set: its median note level at -20 dB RMS (so a staccato and its sustain
+    # sit at the same level), never a peak over -0.5 dBFS.
     peak = max(float(np.abs(z["audio"]).max()) for z in zones)
-    gain = 10 ** (-1 / 20) / max(peak, 1e-9)
+    median = float(np.median([level_of(z["audio"]) for z in zones]))
+    gain = min(10 ** ((-20.0 - median) / 20), 10 ** (-0.5 / 20) / max(peak, 1e-9))
     os.makedirs(os.path.join(out_dir, sid), exist_ok=True)
     layers = max(z["layer"] for z in zones) + 1
     mapping_zones = []
@@ -334,7 +375,7 @@ def process_set(sid, sfz, sustained, name, source, out_dir, report):
               "loVel": round(z["loVel"] / 127.0, 4), "hiVel": round(min(1.0, (z["hiVel"] + 1) / 128.0), 4) if z["hiVel"] < 127 else 1.0,
               "layer": z["layer"], "rr": z["rr"], "length": len(a),
               "rms": round(float(prepare.db(np.sqrt(np.mean(head ** 2) + 1e-30))), 2),
-              "loudness": round(prepare.note_loudness(a), 2), "peak": round(float(prepare.db(np.abs(a).max())), 2),
+              "loudness": round(level_of(a), 2), "peak": round(float(prepare.db(np.abs(a).max())), 2),
               "source": os.path.relpath(z["path"], source)}
         if z["loop"] is not None:
             mz["loopStart"], mz["loopEnd"] = z["loop"]

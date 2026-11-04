@@ -291,3 +291,29 @@ Angelic Choir at Sanctum, Concert Harp at Royal Gardens) playing together:
 - [ ] Punch on the harp and guitar (medium), none on the choir and pads.
 - [ ] An older project opens with every MIX control at 100 % (the effect sounds exactly as before).
 
+
+## Real brass (VSCO 2 Community Edition)
+
+The brass instruments play the library's horn, trumpet, trombone and tuba. Each at its own
+place (Gates of Dawn, Spire Summit, Throne of Light, Eyrie, Summit of Winds), dry
+(Intensity 0 %) and in the place; then in the four-track song (Mix and Punch, above):
+
+- [ ] Fanfare Trumpets: a sharp, tongued, bright hit on every note (fast repeats too), then a
+      real trumpet sustain; cuts through the strings and choir without being louder; radiant,
+      not harsh or buzzy. The piccolo (Character) still shines above.
+- [ ] Soaring Horn: a round, majestic horn that speaks at once (no slow swell), a second horn
+      under it (Character); vibrato only after it has spoken.
+- [ ] Heroic Horns: a hard-hitting horn section, a trombone an octave below (Character:
+      Depth); fortissimo chords hit hard and never clip (Punch 100 %, Level +12 dB).
+- [ ] Epic Choir and Brass: trombones strike under the choir, the tuba an octave below, the
+      choir swelling in over them; the lowest notes (G2-B2) in tune.
+- [ ] Orchestral Chord Pad: the horns swell in with the pad (no hit), warm.
+- [ ] Velocity: soft to loud is one continuous rise (no jump where the recorded dynamics
+      change; at most a change of colour). The horns dip by about a dB at one or two layer
+      changes (report-only): audible?
+- [ ] Notes held for 5+ s (the loops) and let go (the recorded release): no clicks, no
+      pumping. Pitch bend and the mod wheel's vibrato move the real brass too.
+- [ ] Punch 0 / 50 / 100 % and Punch Time on the real brass: as before, more or less hit.
+- [ ] MIX Reverb, Pre-delay and Duck on the brass tracks: as before.
+- [ ] A build without the library (the stand-in: the CI log says "Library brass not
+      fetched"): the brass sounds exactly as before.

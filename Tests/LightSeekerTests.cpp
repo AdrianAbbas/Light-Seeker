@@ -1,5 +1,7 @@
 // Offline tests through the real processBlock. Exit code 0 only if every check passes.
 //   LightSeekerTests                      run everything except the report-only cpu group
+//   LightSeekerTests --calibrate-library Source/Synth/LibraryTrims.h   the library brass's level trims
+//   LightSeekerTests --listen-brass dir   each brass instrument before/after the real brass, the mini-song
 //   LightSeekerTests --only a,b           run only some groups (smoke, locations, travel, shimmer...)
 //   LightSeekerTests --snapshot f.png     also write an image of the editor
 //   LightSeekerTests --painted-snapshots dir   review images of the painted map and places (200 %)
@@ -437,6 +439,16 @@ void testSmoke(Suite& s) {
     const auto required = [](const char* name) { const char* v = std::getenv(name); return v != nullptr && juce::String(v).trim() == "true"; };
     std::cout << "  captured spaces: " << (dc::Vault::capturedSpacesBuiltIn() ? "the captures (compiled in)" : "generated fallbacks (no captures in this build)") << "\n";
     if (required("LS_REQUIRE_CAPTURES")) s.check(dc::Vault::capturedSpacesBuiltIn(), "the captured spaces are built in (CI with the Samples token)");
+    if (required("LS_REQUIRE_LIBRARY")) {
+        // The library brass (VSCO 2 CE) comes from a public source: every CI build has it.
+        lswb::samples::Bank::get().load();
+        lswb::samples::Bank::get().waitUntilLoaded(20000);
+        bool all = true;
+        for (const char* id : { "vsco-horn-sus", "vsco-horn-stac", "vsco-trumpet-sus", "vsco-trumpet-stac", "vsco-trombone-sus", "vsco-trombone-stac",
+                                "vsco-tuba-sus", "vsco-tuba-stac" })
+            all = all && lswb::samples::Bank::get().instrument(id) != nullptr;
+        s.check(all, "the library brass (VSCO 2 CE, eight sets) is prepared and loads (CI)", lswb::samples::Bank::get().message().toStdString());
+    }
     if (required("LS_REQUIRE_SAMPLES")) {
         lswb::samples::Bank::get().load();
         s.check(lswb::samples::Bank::get().waitUntilLoaded(20000), "the recordings are prepared and load (CI with the Samples token)", lswb::samples::Bank::get().message().toStdString());
@@ -2772,6 +2784,7 @@ int paintedSnapshots(const juce::String& directory) {
 #include "MixSong.h"
 #include "MixTests.h"
 #include "SearchTests.h"
+#include "BrassTests.h"
 
 int main(int argc, char** argv) {
     juce::ScopedJuceInitialiser_GUI gui;
@@ -2798,6 +2811,11 @@ int main(int argc, char** argv) {
         else if (arg == "--search-snapshots" && i + 1 < argc) return searchSnapshots(argv[i + 1]);
         else if (arg == "--listen-mix" && i + 1 < argc) return listenMix(argv[i + 1]);
         else if (arg == "--brass-report") return brassReport();
+        else if (arg == "--calibrate-library" && i + 1 < argc) return calibrateLibrary(argv[i + 1]);
+        else if (arg == "--listen-brass" && i + 1 < argc) return listenBrass(argv[i + 1]);
+        else if (arg == "--brass-call") return brassCall();
+        else if (arg == "--brass-range") return brassRange();
+        else if (arg == "--brass-tune" && i + 2 < argc) return brassTune(argv[i + 1], juce::String(argv[i + 2]).getIntValue());
         else if (arg == "--print-distance" && i + 2 < argc) return printDebug(juce::String(argv[i + 1]).getIntValue(), juce::String(argv[i + 2]).getIntValue());
         else if (arg == "--mix-debug" && i + 2 < argc) return mixDebug(juce::String(argv[i + 1]).getIntValue(), juce::String(argv[i + 2]).getIntValue());
         else if (arg == "--mix-snapshots" && i + 1 < argc) return mixSnapshots(argv[i + 1]);
@@ -2834,6 +2852,7 @@ int main(int argc, char** argv) {
     if (run("instruments")) { testInstruments(s); testInstrumentPresets(s); }
     if (run("recorded")) testRecordedInstruments(s);
     if (run("search")) testSearch(s);
+    if (run("brass")) testBrass(s);
     if (only.contains("qa")) testQa(s);   // long (130 journeys): run explicitly
     if (only.contains("cpu")) testCpu(s);   // report only: run explicitly
     std::cout << "\n" << s.passed << " passed, " << s.failed << " failed" << std::endl;

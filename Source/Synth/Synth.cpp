@@ -96,7 +96,27 @@ struct SampleVoice {
     bool start(const lswb::samples::Instrument& inst, float note, float velocity, float pick, float attack, float sampleRate, float skip,
                float decayT60, float even, float zoneOffset = 0.0f, bool clampKeys = false) {
         rate = sampleRate;
-        zone = inst.find(int(std::lround(note + zoneOffset)), velocity, pick, clampKeys);
+        const int key = int(std::lround(note));
+        zone = inst.find(key, velocity, pick, clampKeys);
+        // A second player (zoneOffset): another recording (the same take a few ms later would
+        // comb-filter with the first): the same note's neighbouring dynamic layer (the way the
+        // offset points: up is louder), else the nearest other note within 5 semitones that way,
+        // then the other way; the same take only when there is no other.
+        if (zone != nullptr && std::abs(zoneOffset) >= 0.5f) {
+            const int dir = zoneOffset > 0.0f ? 1 : -1;
+            const auto* main = zone;
+            for (const float dv : { 0.26f * float(dir), -0.26f * float(dir) }) {
+                const auto* other = inst.find(key, std::clamp(velocity + dv, 0.0f, 1.0f), pick, clampKeys);
+                if (other != nullptr && other != main && std::abs(other->root - main->root) < 0.5f) { zone = other; break; }
+            }
+            for (int way : { dir, -dir }) {
+                if (zone != main) break;
+                for (int step = 1; step <= 5 && zone == main; ++step) {
+                    const auto* other = inst.find(key + way * step, velocity, pick, clampKeys);
+                    if (other != nullptr && std::abs(other->root - main->root) >= 0.9f && std::abs(other->root - float(key)) <= 5.0f) zone = other;
+                }
+            }
+        }
         if (zone == nullptr || zone->length < 16) return on = false;
         midi = note;
         rateRatio = inst.rate / rate;
@@ -542,7 +562,8 @@ struct Synth::Voice {
         bool real = false;
         SampleVoice front;
         float frontGain = 0, synthRel = 0, realRelease = 0.35f, frontRelease = 0.7f, strike = 0, strikeDecay = 0;
-        int strikeHold = 0;
+        int strikeHold = 0, frontHold = 0;
+        float frontFade = 1, frontFadeMul = 1;
         Svf presenceBand, biteBand;
         float presenceAmount = 0, biteNow = 0, biteDecay = 0, drive = 0;
         float shape(float y) noexcept {
@@ -1073,8 +1094,11 @@ void Synth::startLayers(Voice& voice) noexcept {
                                    : 0.0f;
                 lv.strike = R.strikeDb > 0.0f ? dbToGain(R.strikeDb * (0.45f + 0.55f * vel)) - 1.0f : 0.0f;
                 lv.strikeHold = int(std::max(0.0f, R.strikeMs) * 0.001f * r) + int(std::max(0.0f, R.delayMs) * 0.001f * r);
-                lv.strikeDecay = std::exp(-1.0f / (0.02f * r));   // a 20 ms time constant: gone in about 60 ms
+                lv.strikeDecay = std::exp(-1.0f / (0.015f * r));   // a 15 ms time constant: gone in about 45 ms (sharp, not long)
                 lv.realRelease = R.release;
+                lv.frontHold = int(std::max(0.0f, R.frontHoldMs + R.delayMs) * 0.001f * r);
+                lv.frontFadeMul = std::exp(-6.9078f / (std::max(0.02f, R.frontDecay * ringScale) * r));
+                lv.frontFade = 1;
                 lv.frontRelease = R.frontRelease;
             } else {
                 lv.sample.on = false;
@@ -1090,10 +1114,13 @@ void Synth::startLayers(Voice& voice) noexcept {
             // The real part's level and the synthesis's under it (equal power across the
             // range's ends), both with the patch's library trim.
             const auto& R = L.real;
-            const float standIn = lv.gain * dbToGain(libraryTrimDb);
+            // Past the recordings' range the synthesis takes over at exactly its stand-in level;
+            // under the real part it is synthDb under the stand-in, with the library trim.
+            const float standIn = lv.gain;
             const float realVel = (1.0f - R.velocityGain) + R.velocityGain * std::pow(vel, 1.4f);
-            const float realGain = dbToGain(L.level + R.db + voice.levelDb + trimDb + libraryTrimDb) * realVel * fade * std::sqrt(realWeight);
-            const float blend = dbToGain(R.synthDb);
+            const float tilt = -p.libraryTiltDb * (float(note + 12 * macros.octave) - 60.0f) / 12.0f;
+            const float realGain = dbToGain(L.level + R.db + voice.levelDb + trimDb + libraryTrimDb + tilt) * realVel * fade * std::sqrt(realWeight);
+            const float blend = dbToGain(R.synthDb + libraryTrimDb);
             const float synthGain = standIn * std::sqrt((1.0f - realWeight) + realWeight * blend * blend);
             lv.gain = std::max(realGain, 1.0e-9f);
             lv.synthRel = synthGain / lv.gain;
@@ -1540,7 +1567,9 @@ void Synth::render(float* outL, float* outR, int n) noexcept {
                             const float strike = 1.0f + lv.strike;
                             if (lv.strikeHold > 0) --lv.strikeHold;
                             else lv.strike *= lv.strikeDecay;
-                            y = y * lv.synthRel + lv.shape(lv.sample.tick() + lv.frontGain * lv.front.tick()) * strike;
+                            if (lv.frontHold > 0) --lv.frontHold;
+                            else lv.frontFade *= lv.frontFadeMul;
+                            y = y * lv.synthRel + lv.shape(lv.sample.tick() + lv.frontGain * lv.frontFade * lv.front.tick()) * strike;
                         }
                         break;
                     }

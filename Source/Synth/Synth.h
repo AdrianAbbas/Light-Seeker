@@ -35,7 +35,7 @@ enum class Engine : uint8_t {
     Bowed,     // BowedVoice (glass, metal): model Modes, p0 rosin, p1 noisiness
     Strings,   // StringVoice: model StringSize, p0 players, p1 spread (cents), p2 bow position, p3 bow noise
     Sample,    // the developer's recordings (or the library brass): sample (bank id), p0 start skip (s), p1 decay T60 (s, 0 none),
-               // p2 evenness, p3 zone offset (semitones: a neighbouring note's recording, played at this pitch: a second
+               // p2 evenness, p3 zone offset (non-zero: another recording, the same note.s neighbouring layer or a near note: a second
                // player), p4 start delay (ms)
     Organ,     // pipe organ: p0..p5 the ranks 16', 8', 4', 2 2/3', 2', mixture; bright = chiff
     Voice,     // the developer's voice (the recordings update): the vowel sweeps morphed by the
@@ -96,18 +96,22 @@ struct Layer {
         const char* front = nullptr;     // bank set (vsco-...-stac), nullptr: none
         // frontDb: the front against its sustain note at equal loudness (each note levelled).
         float db = 0, frontDb = -3, synthDb = -14;
-        float attack = 0, release = 0.35f, frontRelease = 0.7f;
-        float offset = 0, frontOffset = 0;   // zone offsets (semitones: a neighbouring note's take, a second player)
+        // The front is a burst, not a second note: full for frontHoldMs (from when it speaks),
+        // then gone (T60 frontDecay s: the library's staccatos ring on for over a second in
+        // their hall, which the place adds itself; at the sustain's level that ring would make
+        // every short note louder); it lets go in frontRelease.
+        float attack = 0, release = 0.35f, frontRelease = 0.25f, frontHoldMs = 45, frontDecay = 0.25f;
+        float offset = 0, frontOffset = 0;   // a second player (non-zero: its sign the way): another recording (see SampleVoice::start)
         float delayMs = 0;                   // the real part starts this much later (a second player)
         float lowpass = 16000, velocityGain = 0.85f, velocityTone = 0.25f;
         float presence = 0, bite = 0, drive = 0;
-        // The strike: the real part's gain on hit (dB, more with velocity), falling away over
-        // attackMs (exponentially): a hard-tongued front on the library's softer attacks.
+        // The strike: the real part's gain on hit (dB, more with velocity), held strikeMs (from
+        // when the real part speaks), then falling away (a 15 ms time constant): a short, hard-
+        // tongued front on the library's softer attacks (short, so short notes get no louder).
         float strikeDb = 0, strikeMs = 60;
         // The front starts this far into its recording (ms at full velocity, less when softer,
         // faded in over 2 ms): the library's staccatos take 40-70 ms to speak; started where
-        // the tongue has already struck, the front is sharp. The strike holds while it speaks
-        // (strikeMs), then falls away over 60 ms.
+        // the tongue has already struck, the front is sharp.
         float frontSkipMs = 0;
     } real;
     float vibrato = 0, vibratoHz = 5.2f, vibratoDelay = 0.35f;   // semitones
@@ -141,6 +145,9 @@ struct Patch {
     float trimDb = 0;            // level matching (InstrumentTrims.h, calibrated)
     float libraryTrimDb = 0;     // the library brass layers' level, matched to the synthesis they replace (calibrated)
     float libraryStandInTrimDb = 0;   // the same when the developer's recordings are missing (the voice's stand-in beside it)
+    // The real part's register tilt (dB per octave from C4, calibrated): the library brass grows
+    // louder up its range faster than the synthesis it replaces; this brings it back in line.
+    float libraryTiltDb = 0;
     float standInTrimDb = 0;     // the same without the recordings (their stand-ins play)
     float bendRange = 2;         // semitones
     int polyphony = 16;
@@ -162,6 +169,7 @@ inline constexpr int instrumentCount = 31;
 const Patch& patch(int index) noexcept;
 // The calibration tool (`LightSeekerTests --calibrate-library`) tries trims in place.
 void setLibraryTrimForTests(int index, float db, bool standIn = false) noexcept;
+void setLibraryTiltForTests(int index, float dbPerOctave) noexcept;
 // Instruments follow the world's place order: Celestial Citadel's four, then three per location.
 int instrumentIndex(int location, int sub) noexcept;
 void instrumentPlace(int index, int& location, int& sub) noexcept;

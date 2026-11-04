@@ -228,6 +228,17 @@ jobs:
           build/LightSeekerTests_artefacts/Release/LightSeekerTests --listen-mix build/test-logs/mix
           cp docs/listening/mix/*.ogg build/test-logs/mix/
           build/LightSeekerTests_artefacts/Release/LightSeekerTests --brass-report > build/test-logs/mix/brass-report.txt
+      # The real brass (VSCO 2 CE): each brass instrument before (its synthesis) and after (the
+      # library), dry and in its place, as separate files and as one A/B file; the mini-song
+      # (fanfare brass, strings, choir, harp) before and after; the library's prep report.
+      - name: Real brass listening renders (each brass instrument before and after, the mini-song)
+        if: always()
+        env:
+          LIGHTSEEKER_SAMPLES: ${{ runner.temp }}/samples
+        run: |
+          build/LightSeekerTests_artefacts/Release/LightSeekerTests --listen-brass build/test-logs/real-brass
+          cp "${{ runner.temp }}/samples/report-vsco.json" build/test-logs/real-brass/ || true
+          build/LightSeekerTests_artefacts/Release/LightSeekerTests --brass-report > build/test-logs/real-brass/brass-report.txt
       - name: Upload test logs
         if: always()
         uses: actions/upload-artifact@v4
