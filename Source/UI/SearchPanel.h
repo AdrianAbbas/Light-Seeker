@@ -12,6 +12,7 @@
 // is redrawn only when the results, the selection or the hover change.
 #include <juce_gui_basics/juce_gui_basics.h>
 #include "World/Search.h"
+#include "Hover.h"
 
 namespace dc::ui {
 
@@ -86,9 +87,16 @@ private:
         Chip(const juce::String& text) : juce::Button(text) { setClickingTogglesState(true); }
         void paintButton(juce::Graphics&, bool over, bool down) override;
     };
-    class List final : public juce::Component {
+    class List final : public juce::Component, public Hoverable {
     public:
         explicit List(SearchPanel& p) : panel(p) { setBufferedToImage(true); setOpaque(false); }
+        // The hovered row goes when the mouse is not over the list (the hover guard).
+        bool clearHoverUnless(juce::Point<float> screen) override {
+            if (panel.hovered < 0 || detail::over(*this, screen)) return false;
+            panel.setHovered(-1);
+            return true;
+        }
+        bool hoverShown() const override { return panel.hovered >= 0; }
         void paint(juce::Graphics& g) override { panel.paintList(g); }
         void mouseMove(const juce::MouseEvent& e) override { panel.listMouseMove(e); }
         void mouseExit(const juce::MouseEvent&) override { panel.setHovered(-1); }

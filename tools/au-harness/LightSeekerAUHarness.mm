@@ -480,6 +480,49 @@ AudioComponentInstance instantiate(AudioComponent component, bool outOfProcess, 
 }
 
 //==============================================================================
+// GarageBand hotfix, report-only: what the editor receives. The plug-in's hover guard writes
+// every mouse event it gets and every hover it had to clear (LIGHTSEEKER_HOVER_LOG, set in
+// main); here a mouse move, an exit, then a move with no exit after it (a missed exit) are
+// sent to the editor's view as AppKit would, and the log is printed.
+std::string hoverLogPath() {
+    return std::string(NSTemporaryDirectory().UTF8String) + "lightseeker-hover-harness.log";
+}
+
+void hoverProbe(Report& r, NSWindow* window, NSView* view) {
+    NSView* target = view;
+    while (target.subviews.count > 0) target = target.subviews.lastObject;
+    const NSPoint inside = [target convertPoint: NSMakePoint(NSMidX(target.bounds), NSMidY(target.bounds) * 0.3) toView: nil];
+    const auto move = [&](NSPoint at) {
+        NSEvent* e = [NSEvent mouseEventWithType: NSEventTypeMouseMoved location: at modifierFlags: 0 timestamp: NSProcessInfo.processInfo.systemUptime
+                                    windowNumber: window.windowNumber context: nil eventNumber: 0 clickCount: 0 pressure: 0];
+        if ([target respondsToSelector: @selector(mouseMoved:)]) [target mouseMoved: e];
+    };
+    std::remove(hoverLogPath().c_str());
+    move(inside);
+    pump(0.3);
+    NSEvent* exit = [NSEvent enterExitEventWithType: NSEventTypeMouseExited location: NSMakePoint(-40, -40) modifierFlags: 0
+                                           timestamp: NSProcessInfo.processInfo.systemUptime windowNumber: window.windowNumber context: nil
+                                         eventNumber: 0 trackingNumber: 0 userData: nil];
+    if ([target respondsToSelector: @selector(mouseExited:)]) [target mouseExited: exit];
+    pump(0.3);
+    move(inside);   // then no exit: the guard's timer has to find the real mouse elsewhere
+    pump(0.8);
+    const NSPoint mouse = NSEvent.mouseLocation;
+    r.info("hover probe: the real mouse", strf("%.0f, %.0f (the window at %.0f, %.0f, %.0f x %.0f; %s)", mouse.x, mouse.y, window.frame.origin.x, window.frame.origin.y,
+                                               window.frame.size.width, window.frame.size.height, window.isKeyWindow ? "key" : "not key"));
+    FILE* f = std::fopen(hoverLogPath().c_str(), "r");
+    if (f == nullptr) { r.info("hover probe: the editor's hover log", "none written (the guard saw no event)"); return; }
+    char line[512];
+    int n = 0;
+    while (std::fgets(line, sizeof line, f) != nullptr && n < 40) {
+        std::string text(line);
+        while (!text.empty() && (text.back() == '\n' || text.back() == '\r')) text.pop_back();
+        r.info("hover probe: editor log", text);
+        ++n;
+    }
+    std::fclose(f);
+}
+
 // Editor via the AUv2 Cocoa view factory. Must run in the plug-in's process.
 void cocoaViewTest(Report& r, AudioUnit unit, bool useWindow) {
     UInt32 size = 0;
@@ -534,6 +577,8 @@ void cocoaViewTest(Report& r, AudioUnit unit, bool useWindow) {
         pump(1.5);
         r.check(view.window == window && NSWidth(view.frame) > 0, "editor stays alive in a window for 1.5 s",
                 strf("%.0f x %.0f", NSWidth(view.frame), NSHeight(view.frame)));
+        @try { hoverProbe(r, window, view); }
+        @catch (NSException* e) { r.info("hover probe", std::string("skipped: ") + toString(e.reason)); }
         [view removeFromSuperview];
         [window orderOut: nil];
         [window close];
@@ -1301,6 +1346,8 @@ int main(int argc, const char* argv[]) {
             else if (a == "--component" && i + 1 < argc) componentText = argv[++i];
             else { std::fprintf(stderr, "unknown argument %s\n", a.c_str()); return 64; }
         }
+        // The editor's hover guard logs what it receives (report-only, see hoverProbe).
+        setenv("LIGHTSEEKER_HOVER_LOG", hoverLogPath().c_str(), 1);
         if (componentText.size() != 14 || componentText[4] != ':' || componentText[9] != ':') {
             std::fprintf(stderr, "--component expects type:subtype:manufacturer, e.g. aumu:Lski:Veil\n");
             return 64;

@@ -29,6 +29,8 @@ public:
     ~LightSeekerView() override;
     // Asks the editor to change its size (scale of 960 x 560).
     std::function<void(float)> onScaleChosen;
+    // The window's 10 Hz UI timer (the follower): the editor's hover guard runs on it.
+    std::function<void()> onUiTick;
     void paint(juce::Graphics&) override;
     void resized() override;
     // Panels close on Esc and on a click outside them (Hotfix 2).
@@ -68,6 +70,7 @@ public:
     juce::Button& hotspotButton(int index) { return *hotspots[static_cast<std::size_t>(index)]; }
     juce::Button& advancedButton() { return advancedToggle; }
     juce::Button& mapButton() { return mapCrumb; }
+    juce::Button& locationCrumbForTest() { return locationCrumb; }
     juce::Button& journeyButton() { return journeyToggle; }
     juce::Button& undoButtonForTest() { return undoButton; }
     juce::Button& slotButton(int k) { return k == 0 ? slotA : slotB; }
@@ -252,7 +255,10 @@ private:
     class Follower final : public juce::Timer {
     public:
         explicit Follower(LightSeekerView& e) : editor(e) {}
-        void timerCallback() override { editor.followSteering(); }
+        void timerCallback() override {
+            editor.followSteering();
+            if (editor.onUiTick) editor.onUiTick();   // the hover guard (GarageBand hotfix)
+        }
     private:
         LightSeekerView& editor;
     };
@@ -429,9 +435,13 @@ public:
     void setScale(float);
     // Cmd+F anywhere in the window (the instrument panel too) opens search.
     bool keyPressed(const juce::KeyPress&) override;
+    // Hover that never sticks: the real mouse against every hoverable control, on the UI timer.
+    dc::ui::HoverGuard& hoverGuard() noexcept { return *guard; }
+    void focusOfChildComponentChanged(FocusChangeType) override { if (guard != nullptr) guard->tick(); }
 private:
     LightSeekerProcessor& processor;
     LightSeekerView content;
     std::unique_ptr<dc::ui::InstrumentPanel> panel;
+    std::unique_ptr<dc::ui::HoverGuard> guard;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(LightSeekerEditor)
 };

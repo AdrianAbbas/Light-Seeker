@@ -306,4 +306,104 @@ void testWindow(Suite& s) {
         s.check(shownOver && inst.view().hoveredLandmark() == -1 && !inst.view().landmarkHoverShown(dc::RoyalGardens),
                 "hover: a landmark's name plate shows while hovered and goes when the mouse leaves");
     }
+    // ---- GarageBand hotfix: a missed mouseExit with no mouse event after it (the host or the
+    // framework dropped the exit; the mouse left quickly, left the window, or the window is not
+    // focused). The hover guard on the UI timer reads the real mouse and clears every hover.
+    for (const bool instrument : { false, true }) {
+        Window w(instrument);
+        w.go(dc::FairyGlade, 2);   // Map > Fairy Glade > Firefly Hollow, as in the report
+        auto& view = w.view();
+        auto& guard = w.editor->hoverGuard();
+        auto src = juce::Desktop::getInstance().getMainMouseSource();
+        const auto event = [&](juce::Component& c) {
+            return juce::MouseEvent(src, c.getLocalBounds().getCentre().toFloat(), {}, juce::MouseInputSource::defaultPressure, 0.0f, 0.0f, 0.0f, 0.0f,
+                                    &c, &c, juce::Time::getCurrentTime(), c.getLocalBounds().getCentre().toFloat(), juce::Time::getCurrentTime(), 1, false);
+        };
+        const auto enter = [&](juce::Component& c) { c.mouseEnter(event(c)); };
+        const auto centre = [](juce::Component& c) { return c.localPointToGlobal(c.getLocalBounds().getCentre()).toFloat(); };
+        std::optional<juce::Point<float>> mouse;
+        bool down = false, focused = true;
+        guard.setProbeForTest({ [&] { return mouse; }, [&] { return down; }, [&] { return focused; } });
+        const std::string tag = instrument ? " (instrument)" : " (effect)";
+        const int count = dc::subLocationCount(dc::FairyGlade) + 1;
+        // Click a place, the list entry and the breadcrumb lit, the mouse leaves the window
+        // and no exit ever comes.
+        auto& clicked = view.subLocationButton(2);
+        enter(clicked);
+        clicked.onClick();
+        view.settleForTest();
+        view.locationCrumbForTest().setState(juce::Button::buttonOver);
+        view.mapButton().setState(juce::Button::buttonOver);
+        const bool lit = view.placeHoverShown(2);
+        mouse = juce::Point<float>(-400.0f, -400.0f);
+        guard.tick();
+        int left = 0;
+        for (int k = 0; k < count; ++k) left += view.placeHoverShown(k) ? 1 : 0;
+        left += view.locationCrumbForTest().getState() == juce::Button::buttonOver ? 1 : 0;
+        left += view.mapButton().getState() == juce::Button::buttonOver ? 1 : 0;
+        s.check(lit && left == 0 && dc::ui::countHovers(*w.editor) == 0, "hover guard" + tag + ": a missed exit (the mouse left the window, no event) is cleared on the UI timer",
+                std::to_string(left) + " still lit");
+        s.check(guard.stats().outsideClears >= 1, "hover guard" + tag + ": it counts the mouse leaving the editor");
+        s.check(view.subLocationButton(2).getToggleState(), "hover guard" + tag + ": the selected place (the gold diamond) stays selected");
+        // The mouse moved quickly onto another entry: the old one goes, the new one is left to
+        // its own enter.
+        enter(clicked);
+        auto& other = view.subLocationButton(0);
+        mouse = centre(other);
+        guard.tick();
+        s.check(!view.placeHoverShown(2), "hover guard" + tag + ": a quick move to another entry clears the entry left behind");
+        enter(other);
+        guard.tick();
+        s.check(view.placeHoverShown(0), "hover guard" + tag + ": the entry under the mouse keeps its hover");
+        // Never during a click or a drag.
+        mouse = juce::Point<float>(-400.0f, -400.0f);
+        down = true;
+        guard.tick();
+        s.check(view.placeHoverShown(0), "hover guard" + tag + ": nothing is cleared while a mouse button is held");
+        down = false;
+        // The window loses focus with the mouse still over it: every hover goes.
+        mouse = centre(other);
+        guard.tick();
+        focused = false;
+        guard.tick();
+        s.check(!view.placeHoverShown(0) && guard.stats().focusClears >= 1, "hover guard" + tag + ": every hover clears when the window loses focus");
+        focused = true;
+        // Every hoverable control of the window (map, landmarks, list, hotspots, breadcrumb,
+        // toolbar, MIX, instrument panel): lit, then the mouse gone with no exit.
+        std::vector<juce::Button*> all;
+        std::function<void(juce::Component&)> collect = [&](juce::Component& c) {
+            for (auto* child : c.getChildren()) {
+                if (auto* b = dynamic_cast<juce::Button*>(child)) all.push_back(b);
+                collect(*child);
+            }
+        };
+        view.setMixOpen(true);
+        collect(*w.editor);
+        for (auto* b : all) {
+            b->setState(juce::Button::buttonOver);
+            if (auto* h = dynamic_cast<dc::ui::HoverButton*>(b)) h->setHot(true);
+        }
+        mouse = juce::Point<float>(-400.0f, -400.0f);
+        guard.tick();
+        s.check(all.size() > 30 && dc::ui::countHovers(*w.editor) == 0, "hover guard" + tag + ": all " + std::to_string(all.size()) + " buttons (map, list, breadcrumb, toolbar, MIX, panel) cleared",
+                std::to_string(dc::ui::countHovers(*w.editor)) + " still lit");
+        view.setMixOpen(false);
+        // Search results: a hovered row, the mouse gone.
+        view.openSearch();
+        auto& search = view.searchPanelForTest();
+        search.setQuery("harp");
+        for (int row = 0; row < 8 && dc::ui::countHovers(*w.editor) == 0; ++row) search.hoverRowForTest(row);
+        const bool rowLit = dc::ui::countHovers(*w.editor) > 0;
+        guard.tick();
+        s.check(rowLit && dc::ui::countHovers(*w.editor) == 0, "hover guard" + tag + ": a hovered search result clears when the mouse has gone");
+        view.closeSearch();
+        // The map: a landmark's name plate.
+        view.mapButton().onClick();
+        view.settleForTest();
+        auto& mark = view.locationButton(dc::RoyalGardens);
+        enter(mark);
+        const bool plate = view.hoveredLandmark() == dc::RoyalGardens;
+        guard.tick();
+        s.check(plate && view.hoveredLandmark() == -1, "hover guard" + tag + ": a landmark's name plate goes when the mouse has gone without an exit");
+    }
 }

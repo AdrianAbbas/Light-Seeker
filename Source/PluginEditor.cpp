@@ -1862,6 +1862,8 @@ LightSeekerEditor::LightSeekerEditor(LightSeekerProcessor& p) : AudioProcessorEd
         content.onMixChanged = [this](bool open) { if (panel != nullptr) panel->setMixShown(open); };
     }
     content.onScaleChosen = [this](float scale) { setScale(scale); };
+    guard = std::make_unique<dc::ui::HoverGuard>(*this);
+    content.onUiTick = [this] { guard->tick(); };
     setResizable(true, true);
     const int h = baseHeight();
     setResizeLimits(defaultWidth / 2, h / 2, defaultWidth * 2, h * 2);
