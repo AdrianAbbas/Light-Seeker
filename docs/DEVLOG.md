@@ -2493,6 +2493,12 @@ hovered search result; a landmark's name plate. The selected place stays selecte
   `map-before-after.jpg`, `royal-gardens-before-after.jpg`, `forest-before-after.jpg`,
   `dragons-peak-crystal-palace-before-after.jpg`); `docs/snapshots/map.jpg` updated.
 
+### Local run before the final push
+
+Linux, this container, with the recordings prepared (CI's condition without the captured
+spaces): the whole suite in its shards, **2325 passed, 0 failed** (the new `attack` shard
+included; the CPU group report-only as before). The map's full render: 11 minutes on 4 cores.
+
 ### Handoff: what to check in GarageBand
 
 - **Celesta** (Crystal Palace > Diamond Vault): chords at full velocity: a clean, bell-like
