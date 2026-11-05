@@ -37,6 +37,10 @@ def main():
     backlight(meta, args.scene)   # contre-jour: the key light from the painted sun
     width, height = int(round(1920 * args.scale)), int(round(1120 * args.scale))
     blib.configure(width, height, args.samples)
+    # Hotfix: a scene of many alpha-cut leaf cards (the map's woods) asks for more
+    # transparent bounces, so rays through a crown never stop on a card's clear part.
+    if blib.bpy.context.scene.get("transparent_bounces"):
+        blib.bpy.context.scene.cycles.transparent_max_bounces = int(blib.bpy.context.scene["transparent_bounces"])
 
     anchors = []
     for a in meta.get("anchors", []):

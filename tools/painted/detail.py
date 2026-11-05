@@ -1603,3 +1603,189 @@ def woven_nest(cx, cy, z, radius, height, layer, seed, twigs=220):
         return z + height * (0.25 + 0.6 * q * q)
     grass(bowl, cx - radius * 0.8, cx + radius * 0.8, cy - radius * 0.8, cy + radius * 0.8, 9000, layer, seed + 1, height=(1.0, 2.6), width=0.12,
           base=(0.5, 0.36, 0.12), tip=(0.95, 0.8, 0.42), name="nestgrass")
+
+
+# ---- Hotfix (GarageBand notes): real trees at map scale -------------------------------
+# The map's woods were grove(): a few smooth icosphere lobes per tree with a thin fringe
+# of cards, which read as blobs ("lollipops") from above. map_trees() builds each tree as
+# the scenes' trees look from far away: a visible trunk, and a crown of many small clusters
+# of the same textured leaf cards (sprigs with alpha) so its outline is broken and its
+# surface has leaf texture; three species (round broadleaf, conifers in tiers, blossom),
+# sizes varied, lit by the same sun (the cards are translucent: backlit rims), the shade
+# side cooler; and a soft contact shadow under each.
+
+CONIFER_GREENS = np.array([[0.07, 0.2, 0.1], [0.09, 0.24, 0.12], [0.06, 0.17, 0.1], [0.11, 0.27, 0.13]], np.float32)
+
+
+def _shadow_texture():
+    """A soft round shadow (alpha falls off from the middle), for the trees' contact shadows."""
+    name = "contact-shadow"
+    if name in bpy.data.images:
+        return bpy.data.images[name]
+    _os.makedirs(TEXTURES, exist_ok=True)
+    path = _os.path.abspath(_os.path.join(TEXTURES, name + ".png"))
+    if not _os.path.exists(path):
+        from PIL import Image
+        n = 128
+        yy, xx = np.mgrid[0:n, 0:n].astype(np.float32)
+        r = np.hypot(xx - n / 2 + 0.5, yy - n / 2 + 0.5) / (n / 2)
+        a = np.clip(1.0 - r, 0, 1) ** 1.6
+        img = np.dstack([np.full((n, n), 0.05), np.full((n, n), 0.07), np.full((n, n), 0.12), a])
+        Image.fromarray((np.clip(img, 0, 1) * 255 + 0.5).astype(np.uint8), "RGBA").save(path)
+    im = bpy.data.images.load(path)
+    im.name = name
+    im.alpha_mode = "STRAIGHT"
+    return im
+
+
+def mat_contact_shadow(strength=0.55):
+    """The contact shadow: a dark, cool, soft-edged patch (a little lavender, never black)."""
+    key = ("contactshadow", strength)
+    if key in _mats:
+        return _mats[key]
+    m, nt, out, bsdf = _principled("contactshadow")
+    L = nt.links.new
+    tex = nt.nodes.new("ShaderNodeTexImage"); tex.image = _shadow_texture(); tex.interpolation = "Linear"
+    uv = nt.nodes.new("ShaderNodeUVMap"); uv.uv_map = "UVMap"
+    L(uv.outputs["UV"], tex.inputs["Vector"])
+    bsdf.inputs["Base Color"].default_value = (0.03, 0.05, 0.08, 1.0)
+    bsdf.inputs["Roughness"].default_value = 1.0
+    fac = nt.nodes.new("ShaderNodeMath"); fac.operation = "MULTIPLY"; fac.inputs[1].default_value = strength
+    L(tex.outputs["Alpha"], fac.inputs[0])
+    clear = nt.nodes.new("ShaderNodeBsdfTransparent")
+    cut = nt.nodes.new("ShaderNodeMixShader")
+    L(fac.outputs[0], cut.inputs["Fac"]); L(clear.outputs[0], cut.inputs[1]); L(bsdf.outputs[0], cut.inputs[2])
+    L(cut.outputs[0], out.inputs["Surface"])
+    _mats[key] = m
+    return m
+
+
+def map_trees(fn, x0, x1, y0, y1, count, layer, seed, size=(22, 40), blossom=0.12, conifer=0.25, name="maptrees", clump=0.85,
+              avoid=(), min_z=None, sun=(0.36, 0.84, 0.41), positions=None, palette=None, trunk=True):
+    """Trees at map scale, clumped into woods (or at `positions`, (x, y) pairs). Each tree:
+    a tapered trunk (visible under broadleaf and blossom crowns), a crown of 5-10 leafy
+    clusters (broadleaf, blossom) or 6-9 drooping tiers (conifer), every cluster a few dozen
+    textured leaf cards on a jittered shell, brighter and warmer towards the sun and the
+    top, cooler and darker inside and in the shade; a soft contact shadow on the ground."""
+    rng = np.random.default_rng(seed)
+    sun_v = np.asarray(sun, np.float32); sun_v /= np.linalg.norm(sun_v)
+    if positions is None:
+        centres = rng.uniform((x0, y0), (x1, y1), (max(1, int(count * (1 - clump) / 6) + 3), 2))
+        pts = []
+        for _ in range(count):
+            if rng.random() < clump:
+                c = centres[rng.integers(len(centres))]
+                pts.append((c[0] + rng.normal(0, (x1 - x0) * 0.03), c[1] + rng.normal(0, (y1 - y0) * 0.03)))
+            else:
+                pts.append((rng.uniform(x0, x1), rng.uniform(y0, y1)))
+    else:
+        pts = list(positions)
+    TV, TT = [], []
+    tn = 0
+    cards = {"leaf": ([], [], [], [], []), "blossom": ([], [], [], [], []), "conifer": ([], [], [], [], [])}
+    SB, SS = [], []
+
+    def add_cards(kind, pos, dirs, sizes, cols):
+        b, a, x_, s_, c_ = cards[kind]
+        side = np.cross(dirs, rng.normal(0, 1, dirs.shape)); side /= np.linalg.norm(side, axis=1, keepdims=True) + 1e-6
+        b.append(pos); a.append(dirs); x_.append(side); s_.append(sizes); c_.append(cols)
+
+    def light(dirs, rel):
+        # Towards the sun and up: brighter and warmer; away and below: cooler (coloured shade).
+        facing = dirs @ sun_v
+        v = np.clip(0.62 + 0.28 * facing + 0.38 * rel + rng.normal(0, 0.06, len(dirs)), 0.35, 1.3)[:, None]
+        warm = np.clip(facing, 0, 1)[:, None]
+        tint = np.concatenate([1.0 + 0.10 * warm, 1.0 + 0.04 * warm, 1.0 - 0.10 * warm + 0.12 * (1 - v)], 1)
+        return v, tint
+
+    for (x, y) in pts:
+        z = fn(x, y)
+        if any(math.hypot(x - ax, y - ay) < ar for ax, ay, ar in avoid) or (min_z is not None and z < min_z):
+            continue
+        r_ = rng.random()
+        kind = "blossom" if r_ < blossom else ("conifer" if r_ < blossom + conifer else "leaf")
+        s = rng.uniform(*size) * (1.15 if kind == "conifer" else 1.0)
+        lean = rng.normal(0, s * 0.025, 2)
+        # Trunk: a tapered hexagonal prism up into the crown.
+        clear = {"leaf": rng.uniform(0.3, 0.42), "blossom": rng.uniform(0.34, 0.46), "conifer": 0.12}[kind] if trunk else 0.02
+        tw = s * (0.035 if kind != "conifer" else 0.03)
+        ring = np.array([[math.cos(a), math.sin(a)] for a in np.linspace(0, 2 * np.pi, 6, endpoint=False)], np.float32)
+        top_h = s * (clear + 0.25) if kind != "conifer" else s * 0.7
+        if trunk:
+            lo = np.column_stack([ring * tw * 1.35, np.zeros(6)]); hi = np.column_stack([ring * tw * 0.55 + lean, np.full(6, top_h)])
+            TV.append(np.concatenate([lo, hi]) + (x, y, z))
+            TT.append(np.array([[i, (i + 1) % 6, 6 + (i + 1) % 6] for i in range(6)] + [[i, 6 + (i + 1) % 6, 6 + i] for i in range(6)], np.int32) + tn)
+            tn += 12
+        # Contact shadow: a flat soft patch under the crown, pushed a little away from the sun.
+        sr = s * (0.42 if kind != "conifer" else 0.3)
+        off = -sun_v[:2] / (np.linalg.norm(sun_v[:2]) + 1e-6) * s * 0.12
+        SB.append((x + off[0] - sr, y + off[1], z + 0.25)); SS.append(sr)
+        if kind == "conifer":
+            tiers = rng.integers(6, 10)
+            radius = s * rng.uniform(0.2, 0.26)
+            for t in range(tiers):
+                f = t / (tiers - 1)
+                h = s * (0.14 + 0.84 * f)
+                rr = radius * (1.0 - f) ** 1.1 + s * 0.02
+                n = max(5, int(26 * (1 - f) + 6))
+                ang = rng.uniform(0, 2 * np.pi) + np.linspace(0, 2 * np.pi, n, endpoint=False) + rng.normal(0, 0.15, n)
+                out_ = np.column_stack([np.cos(ang), np.sin(ang), np.full(n, -0.45)])
+                out_ /= np.linalg.norm(out_, axis=1, keepdims=True)
+                base = np.column_stack([np.cos(ang) * rr * 0.25, np.sin(ang) * rr * 0.25, np.full(n, h)]) + (x + lean[0] * f, y + lean[1] * f, z)
+                sizes = np.full(n, rr * rng.uniform(0.9, 1.25)) * rng.uniform(0.8, 1.1, n)
+                v, tint = light(out_, f)
+                pal = CONIFER_GREENS[rng.integers(0, len(CONIFER_GREENS), n)]
+                add_cards("conifer", base, out_, sizes, pal * v * tint)
+            # The leader at the top.
+            add_cards("conifer", np.array([[x + lean[0], y + lean[1], z + s * 0.95]]), np.array([[0.0, 0.0, 1.0]]), np.array([s * 0.12]),
+                      CONIFER_GREENS[:1] * 1.1)
+            continue
+        # Broadleaf and blossom: a crown of leafy clusters inside an ellipsoid.
+        cw, ch = s * rng.uniform(0.34, 0.42), s * rng.uniform(0.28, 0.34)
+        cz = s * (clear + ch / s + 0.05)
+        clusters = rng.integers(7, 11) if kind == "leaf" else rng.integers(8, 12)
+        pal_all = (np.asarray(palette, np.float32) if palette is not None and kind == "blossom" else
+                   (BLOSSOM_PINKS if kind == "blossom" else LEAF_GREENS))
+        hue = pal_all[rng.integers(0, len(pal_all))]
+        for c in range(clusters):
+            d = rng.normal(0, 1, 3); d /= np.linalg.norm(d) + 1e-6
+            d[2] = abs(d[2]) * 0.8 - 0.1
+            cr = s * rng.uniform(0.14, 0.2) * (1.15 if c == 0 else 1.0)
+            cc = np.array([x + lean[0] + d[0] * cw * 0.62, y + lean[1] + d[1] * cw * 0.62, z + cz + d[2] * ch * 0.62], np.float32)
+            n = rng.integers(26, 38)
+            dirs = rng.normal(0, 1, (n, 3)); dirs[:, 2] = dirs[:, 2] * 0.8 + 0.25
+            dirs /= np.linalg.norm(dirs, axis=1, keepdims=True)
+            pos = cc + dirs * cr * rng.uniform(0.35, 1.0, (n, 1))
+            outward = pos - np.array([x, y, z + cz]); outward /= np.linalg.norm(outward, axis=1, keepdims=True) + 1e-6
+            facing = (outward * 0.7 + dirs * 0.3); facing /= np.linalg.norm(facing, axis=1, keepdims=True)
+            rel = np.clip((pos[:, 2] - z - clear * s) / (s * (1 - clear)), 0, 1)
+            v, tint = light(facing, rel)
+            sizes = cr * rng.uniform(0.95, 1.45, n)
+            if kind == "blossom":
+                green = rng.random(n) < 0.14
+                cols = np.where(green[:, None], LEAF_GREENS[rng.integers(0, len(LEAF_GREENS), n)] * 1.05, hue * rng.uniform(0.92, 1.05, (n, 1))) * v * tint
+                add_cards("blossom", pos[~green], dirs[~green], sizes[~green], cols[~green])
+                add_cards("leaf", pos[green], dirs[green], sizes[green] * 0.8, cols[green])
+            else:
+                jitter = LEAF_GREENS[rng.integers(0, len(LEAF_GREENS), n)] * 0.35 + hue * 0.65
+                sunny = rng.random(n) < 0.08
+                jitter[sunny] *= np.array([1.15, 1.08, 0.7], np.float32)
+                add_cards("leaf", pos, dirs, sizes, jitter * v * tint)
+        # A darker, denser core so light does not pass through the middle of the crown.
+        n = 30
+        dirs = rng.normal(0, 1, (n, 3)); dirs /= np.linalg.norm(dirs, axis=1, keepdims=True)
+        pos = np.array([x + lean[0], y + lean[1], z + cz]) + dirs * np.array([cw, cw, ch]) * 0.4
+        add_cards("blossom" if kind == "blossom" else "leaf", pos, dirs, np.full(n, s * 0.22), (hue * 0.5)[None].repeat(n, 0))
+    if TV:
+        big_mesh(name + "_trunks", np.concatenate(TV), np.concatenate(TT), layer, mat_bark(), colours=None, smooth=True)
+    for kind, (b, a, x_, s_, c_) in cards.items():
+        if not b:
+            continue
+        mat = mat_leafcard("blossom", 0.5) if kind == "blossom" else mat_leafcard("leaf", 0.45 if kind == "leaf" else 0.3)
+        cards_mesh(name + "_" + kind, np.concatenate(b), np.concatenate(a), np.concatenate(x_), np.concatenate(s_), np.concatenate(c_), layer, mat)
+    if SB:
+        # Shadows: flat quads (two units: along x, across y) on the ground.
+        base = np.array(SB, np.float32); sz = np.array(SS, np.float32) * 2.0
+        n = len(base)
+        cards_mesh(name + "_shadows", base, np.tile([1.0, 0.0, 0.0], (n, 1)),
+                   np.tile([0.0, 1.0, 0.0], (n, 1)), sz, np.ones((n, 3), np.float32), layer, mat_contact_shadow(), aspect=1.0)

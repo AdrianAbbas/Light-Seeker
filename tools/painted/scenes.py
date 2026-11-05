@@ -1854,6 +1854,199 @@ def v2_winds():
 
 
 # ========================================================================= MAP (v2)
+# ---- Hotfix (GarageBand notes): the map's landmarks built from their own scenes ------------
+ROSES = ((0.85, 0.12, 0.22), (0.98, 0.55, 0.68), (0.99, 0.95, 0.92), (0.95, 0.3, 0.45))   # rose bushes' blooms
+ROSE_BEDS = (((0.85, 0.12, 0.22), (0.9, 0.3, 0.3)), ((0.98, 0.55, 0.68), (0.98, 0.7, 0.6)), ((0.99, 0.95, 0.92), (0.98, 0.85, 0.5)))
+
+
+def _flat(land, x0, x1, y0, y1, n=9):
+    """The highest ground over a rectangle (a terrace sits on it, its edge shows as a wall)."""
+    return max(land(x0 + (x1 - x0) * i / (n - 1), y0 + (y1 - y0) * j / (n - 1)) for i in range(n) for j in range(n))
+
+
+def map_royal_gardens(land, x, y, b, rng):
+    """Royal Gardens from its three scenes, at map size: a raised formal terrace with a white
+    marble edge; gravel paths in a cross and round the edge; four parterres of clipped box
+    hedge (borders, a diamond and a ring in each) filled with roses and flower beds; dark
+    topiary cones at the corners; the Fountain Court's tiered fountain with water and jets in
+    the middle; the Marble Colonnade at the back: a curved white colonnade with a lintel and a
+    domed pavilion with a gilt finial; blossom trees along the main walk."""
+    W, H = 190, 130
+    z0 = _flat(land, x - W / 2, x + W / 2, y - H / 2, y + H / 2) + 0.6
+    marble_ = D.mat_marble("gardenmarble", colour=(0.9, 0.87, 0.82), vein=(0.72, 0.7, 0.7))
+    lawn = B.mat_stone("gardenlawn", (0.27, 0.52, 0.13), rough=0.95, bump=0.4, scale=3.0)
+    gravel = B.mat_stone("gardengravel", (0.86, 0.8, 0.68), rough=0.9, bump=0.5, scale=5.0)
+    hedge = B.mat_stone("boxhedge", (0.05, 0.2, 0.05), rough=0.9, bump=1.2, scale=1.1)
+    topiary = B.mat_stone("topiary", (0.04, 0.17, 0.05), rough=0.9, bump=1.2, scale=0.9)
+    # The terrace: a lawn on a marble plinth (its edge a low white wall where the land falls).
+    B.box((x, y, z0 - 5), (W + 6, H + 6, 5), "mid", marble_, name="terrace")
+    B.box((x, y, z0), (W, H, 0.4), "mid", lawn, name="lawn")
+    # Paths: the main walk (north-south), the cross walk, the edge walk, the fountain's ring.
+    for (cx, cy, sx, sy) in [(x, y, 12, H), (x, y, W, 9), (x, y - H / 2 + 5, W, 6), (x, y + H / 2 - 5, W, 6),
+                             (x - W / 2 + 5, y, 6, H), (x + W / 2 - 5, y, 6, H)]:
+        B.box((cx, cy, z0 + 0.4), (sx, sy, 0.3), "mid", gravel, name="path")
+    B.cylinder((x, y, z0 + 0.4), 25, 0.32, "mid", gravel, sides=48, name="fountainring")
+    # The four parterres.
+    qw, qh = (W - 12 - 12) / 2 - 6, (H - 9 - 12) / 2 - 6
+    bed_pts = []
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            qx, qy = x + sx * (6 + 6 + qw / 2), y + sy * (4.5 + 6 + qh / 2)
+            # Border hedge, open at the corner nearest the fountain.
+            for (hx, hy, lx, ly) in [(qx, qy - qh / 2, qw, 3.4), (qx, qy + qh / 2, qw, 3.4), (qx - qw / 2, qy, 3.4, qh), (qx + qw / 2, qy, 3.4, qh)]:
+                B.box((hx, hy, z0 + 0.4), (lx, ly, 4.4), "mid", hedge, name="hedge")
+            # A diamond of hedge and a ring inside it.
+            d = min(qw, qh) * 0.42
+            for k in range(4):
+                a = math.pi / 4 + k * math.pi / 2
+                B.box((qx + math.cos(a) * d * 0.5, qy + math.sin(a) * d * 0.5, z0 + 0.4), (d * 1.42, 2.8, 3.4), "mid", hedge,
+                      rotation=(0, 0, a + math.pi / 2), name="diamond")
+            ring_n = 24
+            for k in range(ring_n):
+                a = k * 2 * math.pi / ring_n
+                B.box((qx + math.cos(a) * d * 0.3, qy + math.sin(a) * d * 0.3, z0 + 0.4), (d * 0.3 * 2 * math.pi / ring_n * 1.15, 2.4, 3.0), "mid", hedge,
+                      rotation=(0, 0, a + math.pi / 2), name="ring")
+            # Roses and flower beds between the hedges.
+            for _ in range(9):
+                px, py = qx + rng.uniform(-qw / 2 + 3, qw / 2 - 3), qy + rng.uniform(-qh / 2 + 3, qh / 2 - 3)
+                if abs(abs(px - qx) + abs(py - qy) - d * 0.71) < 2.0:
+                    continue
+                bed_pts.append((px, py))
+            D.flowers(lambda xx, yy: z0 + 0.4, qx - qw / 2 + 2, qx + qw / 2 - 2, qy - qh / 2 + 2, qy + qh / 2 - 2, 260, "mid", 900 + sx * 3 + sy,
+                      size=1.1, kinds=ROSE_BEDS + (D.PINK, D.DAISY), stem=0.3)
+            # Topiary cones at the outer corners.
+            for (tx, ty) in [(qx + sx * qw / 2, qy + sy * qh / 2), (qx - sx * qw / 2, qy + sy * qh / 2)]:
+                B.cone((tx, ty, z0 + 0.4), 3.6, 13, "mid", topiary, sides=14, name="topiary")
+    D.map_trees(lambda xx, yy: z0 + 0.4, 0, 0, 0, 0, 0, "mid", 910, size=(4, 5.5), blossom=1.0, conifer=0.0, name="rosebushes",
+                positions=bed_pts, palette=ROSES, trunk=False)
+    # The fountain (Fountain Court): three basins, water in each, jets, a gilt crown.
+    for k, (r, zz) in enumerate([(18, 0), (9, 7), (4.2, 13)]):
+        b.prism("stone", x, y, z0 + zz, r, r * 0.9, 2.2, sides=40)
+        b.prism("gold", x, y, z0 + zz + 2.2, r * 0.93, r * 0.93, 0.35, sides=40)
+        b.prism("stone", x, y, z0 + zz, r * 0.22, r * 0.16, 6.5 if k < 2 else 4.5, sides=16)
+    G.pinnacle(b, x, y, z0 + 17.5, 1.0, 7, rng, 0)
+    for r, zz in [(16.4, 2.25), (8.0, 9.25), (3.6, 15.25)]:
+        B.cylinder((x, y, z0 + zz - 0.3), r, 0.3, "mid", water((0.55, 0.78, 0.95)), sides=40, name="pool")
+    spray = B.mat_emission((0.85, 0.95, 1.0), 1.4, "mapspray")
+    for k in range(16):
+        a = k * 2 * math.pi / 16
+        D.arc(lambda t, a=a: (x + math.cos(a) * 3 * t * 3.2, y + math.sin(a) * 3 * t * 3.2, z0 + 20 + 6 * math.sin(t * math.pi) - 8 * t), 8, 0.28, "mid", spray, "mapjet")
+    D.sparkles((x, y, z0 + 12), (26, 26, 12), 90, "mid", 911, size=0.5)
+    # The Marble Colonnade: a curved exedra of columns at the back, a lintel on them, and a
+    # domed pavilion (eight columns) at its middle.
+    cy = y + H / 2 - 14
+    n = 17
+    for k in range(n):
+        if 7 <= k <= 9:
+            continue   # the pavilion stands there
+        a = math.pi * (0.12 + 0.76 * k / (n - 1))
+        px, py = x + math.cos(a) * 70, cy - 30 + math.sin(a) * 34
+        column((px, py, z0 + 0.4), 2.0, 24, "mid", marble_)
+        if k < n - 1 and k + 1 not in (7, 8, 9):
+            a2 = math.pi * (0.12 + 0.76 * (k + 1) / (n - 1))
+            qx_, qy_ = x + math.cos(a2) * 70, cy - 30 + math.sin(a2) * 34
+            mx, my = (px + qx_) / 2, (py + qy_) / 2
+            ang = math.atan2(qy_ - py, qx_ - px)
+            B.box((mx, my, z0 + 0.4 + 2.6 + 24), (math.hypot(qx_ - px, qy_ - py) + 1.6, 6.0, 3.0), "mid", marble_, rotation=(0, 0, ang), name="lintel")
+            b.box("gold", mx, my, z0 + 0.4 + 2.6 + 27, math.hypot(qx_ - px, qy_ - py) + 1.6, 6.2, 0.5, rot=ang)
+    px, py = x, cy + 1
+    B.cylinder((px, py, z0 + 0.4), 15, 2.0, "mid", marble_, sides=40, name="podium")
+    for k in range(8):
+        a = k * math.pi / 4
+        column((px + math.cos(a) * 11.5, py + math.sin(a) * 11.5, z0 + 2.4), 1.7, 22, "mid", marble_)
+    B.cylinder((px, py, z0 + 27.2), 13.2, 2.8, "mid", marble_, sides=40, name="drum")
+    B.lathe((px, py, z0 + 30.0), [(12.8, 0), (12.0, 4.0), (9.5, 8.0), (5.5, 10.8), (0.0, 11.8)], "mid", marble_, sides=40, name="dome")
+    b.prism("gold", px, py, z0 + 41.6, 1.2, 0.2, 6.0, sides=12)
+    b.prism("gold", px, py, z0 + 30.0, 13.0, 13.0, 0.6, sides=40)
+    # Blossom trees along the main walk and flanking the colonnade.
+    walk = [(x + sx * 20, y - H / 2 - 6) for sx in (-1, 1)] + [(x - 86, cy - 8), (x + 86, cy - 8), (x - 88, y - 34), (x + 88, y - 34)]
+    D.map_trees(land, 0, 0, 0, 0, 0, "mid", 912, size=(20, 26), blossom=1.0, conifer=0.0, name="gardenblossom", positions=walk)
+    return z0
+
+
+def map_sky_temple(land, x, y, z, b, rng):
+    """Sky Temple (Cloud Steps, Sanctum, Bell Garden): the white tiered tower on a bank of
+    cloud, rising from round marble terraces (the cloud steps), a ring of bell arches round
+    the terrace with golden bells."""
+    D.cumulus((x, y, z + 40), (190, 130, 60), "mid", 302, density=0.02, name="fogcloud_temple")
+    base = z + 58
+    for k, r in enumerate((44, 34, 25)):
+        b.prism("stone", x, y, base + k * 4.5, r, r * 0.97, 4.5, sides=48)
+        b.prism("gold", x, y, base + k * 4.5 + 4.5, r * 0.97, r * 0.97, 0.35, sides=48)
+    G.tower(b, x, y, base + 13.5, 15, 45, rng, tiers=2, spire_ratio=1.6, depth=1)
+    bell = D.mat_gold("bellgold", 0.2)
+    for k in range(10):
+        a = k * 2 * math.pi / 10
+        px, py = x + math.cos(a) * 39, y + math.sin(a) * 39
+        for dx in (-3.2, 3.2):
+            b.prism("stone", px + dx * math.sin(a), py - dx * math.cos(a), base + 4.5, 0.8, 0.7, 11, sides=8)
+        b.box("stone", px, py, base + 15.5, 2.0, 2.0, 1.4, rot=a + math.pi / 2)
+        B.lathe((px, py, base + 10.5), [(0.0, 0.0), (2.0, 0.2), (1.6, 1.6), (0.9, 3.4), (0.0, 3.8)], "mid", bell, sides=16, name="bell")
+
+
+def map_elven_sanctuary(land, x, y, z, rng):
+    """Elven Sanctuary (Moonwell, Leaf Halls, Starlit Canopy): great trees round a clearing,
+    the Moonwell in it: a white marble basin of water ringed by slender pointed arches."""
+    D.map_trees(land, x - 100, x + 100, y - 70, y + 70, 60, "mid", 303, size=(42, 72), blossom=0.15, conifer=0.1, name="elvenwood", clump=0.15,
+                avoid=[(x, y - 70, 34)])
+    wx, wy = x, y - 70
+    wz = land(wx, wy)
+    marble_ = D.mat_marble("wellmarble", colour=(0.9, 0.88, 0.86))
+    B.lathe((wx, wy, wz), [(16, 0), (16, 2.4), (14.4, 2.6), (14.2, 0.6), (0.0, 0.6)], "mid", marble_, sides=48, name="moonwell")
+    B.cylinder((wx, wy, wz + 1.9), 14.2, 0.3, "mid", water((0.55, 0.75, 0.95)), sides=48, name="well")
+    pillars = [(wx + math.cos(k * math.pi / 3) * 20, wy + math.sin(k * math.pi / 3) * 20) for k in range(6)]
+    for k, (px, py) in enumerate(pillars):
+        B.cylinder((px, py, wz), 0.7, 14, "mid", marble_, sides=10, name="wellpillar")
+        qx, qy = pillars[(k + 1) % 6]
+        # A pointed arch from this pillar's top to the next one's.
+        D.arc(lambda t, px=px, py=py, qx=qx, qy=qy: (px + (qx - px) * t, py + (qy - py) * t, wz + 14 + 7 * (1 - abs(2 * t - 1)) ** 0.6), 12, 0.5,
+              "mid", marble_, "wellarch")
+    D.sparkles((wx, wy, wz + 8), (24, 24, 10), 60, "mid", 913, size=0.45)
+
+
+def map_crystal_palace(land, x, y, z, b, rng):
+    """Crystal Palace (Prism Hall, Mirror Lake, Diamond Vault): a palace of crystal spires on
+    the mirror lake, crystals clustered at its foot."""
+    B.cylinder((x, y + 10, z + 0.8), 95, 0.4, "mid", water((0.55, 0.72, 0.92)), sides=64, name="mirrorlake")
+    glass = B.mat_crystal((0.78, 0.88, 1.0), 0.3)
+    # The palace: a tall central spire, two rings of lower ones, in crystal.
+    B.crystal((x, y + 20, z), 150, 13, "mid", glass, sides=6)
+    for k in range(6):
+        a = k * math.pi / 3 + 0.3
+        B.crystal((x + math.cos(a) * 26, y + 20 + math.sin(a) * 18, z), 95 + 12 * (k % 2), 8, "mid", glass, sides=6)
+    for k in range(10):
+        a = k * math.pi / 5
+        B.crystal((x + math.cos(a) * 48, y + 20 + math.sin(a) * 32, z), 55 + 10 * (k % 3), 6, "mid", glass, sides=6)
+    b.box("stone", x, y - 20, z + 0.9, 70, 12, 3)
+    D.crystal_cluster(x - 60, y - 30, z, 40, 8, "mid", 304)
+    D.crystal_cluster(x + 62, y - 26, z, 36, 7, "mid", 314)
+
+
+def map_fairy_glade(land, x, y, z):
+    """Fairy Glade (Mushroom Ring, Firefly Hollow, Fairy Court): a ring of pastel mushrooms
+    of different sizes in a glade, trees round it, fireflies."""
+    n = 8
+    for k in range(n):
+        a = k * 2 * math.pi / n + 0.2
+        px, py = x + math.cos(a) * 46, y + math.sin(a) * 30
+        D.mushroom2(px, py, land(px, py), 30 + 16 * ((k * 5) % 3), "mid", 320 + k, cap=CAPS[k % 3])
+    D.mushroom2(x, y + 4, land(x, y + 4), 58, "mid", 329, cap=CAPS[2])
+    D.map_trees(land, x - 100, x + 100, y - 40, y + 100, 34, "mid", 321, size=(22, 36), blossom=0.3, conifer=0.1, name="fairywood", clump=0.2,
+                avoid=[(x, y, 62)])
+    D.sparkles((x, y, z + 20), (70, 50, 20), 120, "mid", 914, size=0.5)
+
+
+def map_dragons_peak(land, x, y, z, b, rng):
+    """Dragon's Peak (Eyrie, Golden Nest, Summit of Winds): the snowy peak on rocky crags,
+    the eyrie's tower near its top and the golden nest on a ledge."""
+    D.peak(x, y, z - 40, 160, 300, "mid", 330, snow_line=0.7, name="dragonpeak")
+    stone = rock(1.0)
+    for k, (dx, dy, r, h) in enumerate([(-120, -40, 55, 120), (110, -50, 50, 100), (-60, -110, 40, 70), (70, -120, 38, 60)]):
+        B.crag((x + dx, y + dy, z - 10), r, h, 340 + k, "mid", stone, spikes=0.5)
+    G.tower(b, x, y, z + 215, 10, 40, rng, tiers=2, spire_ratio=1.6, depth=1)
+    D.woven_nest(x + 55, y - 70, z + 95, 18, 7, "mid", 341, twigs=90)
+
+
 @scene("map")
 def v2_map():
     """The bright world from high above: a patchwork of sunlit fields and woods, a river
@@ -1884,8 +2077,11 @@ def v2_map():
     D.big_mesh("river", np.array(V), np.array(T), "mid", water((0.5, 0.72, 0.9)))
     L = [(0, 1100), (520, 1300), (-560, 700), (700, 650), (-200, 350), (300, 500), (-420, 1450), (120, 400), (-520, 1030), (900, 1500)]
     # Woods everywhere (clumped), not on the landmarks or in the sea.
-    D.grove(land, -1600, 1600, -200, 2000, 2200, "mid", 41, size=(22, 40), blossom=0.12, name="mapwood", clump=0.85,
-            avoid=[(x, y, 120) for x, y in L], min_z=-30)
+    # Hotfix: real trees at map scale (map_trees: broken leafy crowns, conifers, blossom,
+    # trunks, contact shadows) instead of the smooth-lobed grove.
+    bpy.context.scene["transparent_bounces"] = 32
+    D.map_trees(land, -1600, 1600, -200, 2000, 2200, "mid", 41, size=(22, 40), blossom=0.12, conifer=0.22, name="mapwood", clump=0.85,
+                avoid=[(x, y, 150 if i == 7 else 120) for i, (x, y) in enumerate(L)], min_z=-30)
     # The north (final touches): wooded foothills on the land's layer (no shadow seam),
     # then, far off across the haze, a middle range and the great snowy range, each
     # paler and cooler with distance (the light pass and the map's air pass).
@@ -1904,16 +2100,13 @@ def v2_map():
             D.mesa(x, y, z - 30, 100, 120, "mid", 300)
             G.citadel(b, x, y, z + 90, 0.85, 301)
         elif i == 1:
-            D.cumulus((x, y, z + 40), (190, 130, 60), "mid", 302, density=0.02, name="fogcloud_temple")
-            G.tower(b, x, y, z + 60, 18, 45, rng, tiers=2, spire_ratio=1.6, depth=1)
-            b.prism("stone", x, y, z + 52, 36, 36, 8, sides=32)
+            map_sky_temple(land, x, y, z, b, rng)
         elif i == 2:
-            D.grove(land, x - 90, x + 90, y - 60, y + 60, 70, "mid", 303, size=(40, 70), blossom=0.0, name="elvenwood", clump=0.2)
-            B.cylinder((x, y - 70, z + 2), 20, 2, "mid", water((0.5, 0.7, 0.85)), sides=48, name="well")
+            map_elven_sanctuary(land, x, y, z, rng)
         elif i == 3:
-            D.crystal_cluster(x, y, z, 140, 16, "mid", 304)
+            map_crystal_palace(land, x, y, z, b, rng)
         elif i == 4:
-            D.grove(land, x - 90, x + 90, y - 40, y + 40, 40, "mid", 305, size=(18, 30), blossom=1.0, name="blossomwood", clump=0.3)
+            D.map_trees(land, x - 90, x + 90, y - 40, y + 40, 40, "mid", 305, size=(18, 30), blossom=1.0, conifer=0.0, name="blossomwood", clump=0.3)
             D.flowers(land, x - 100, x + 100, y - 60, y + 60, 6000, "mid", 5, size=1.4, kinds=BLOOM, stem=0.5)
         elif i == 5:
             G.tower(b, x, y, z, 22, 100, rng, tiers=3, spire_ratio=2.2, depth=1)
@@ -1923,18 +2116,11 @@ def v2_map():
             for k in range(3):
                 D.isle2(x + (k - 1) * 130, y + 40 * k, z + 120 + 50 * k, 60, 90, "mid", 306 + k, trees=2)
         elif i == 7:
-            hedge = B.mat_stone("maphedge", (0.1, 0.26, 0.07), rough=0.9, bump=0.8, scale=0.5)
-            for k in range(-3, 4):
-                B.box((x + k * 22, y, z + 3), (16, 70, 6), "mid", hedge, name="parterre")
-            b.prism("stone", x, y - 50, z, 16, 14, 5, sides=32)
-            G.pinnacle(b, x, y - 50, z + 5, 1.6, 16, rng, 0)
+            map_royal_gardens(land, x, y, b, rng)
         elif i == 8:
-            for k in range(5):
-                D.mushroom2(x + (k - 2) * 34, y + 10 * (k % 2), z, 44, "mid", 320 + k, cap=CAPS[k % 3])
-            D.grove(land, x - 80, x + 80, y + 30, y + 90, 25, "mid", 321, size=(20, 34), name="fairywood")
+            map_fairy_glade(land, x, y, z)
         elif i == 9:
-            D.peak(x, y, z - 40, 160, 300, "mid", 330, snow_line=0.7, name="dragonpeak")
-            G.tower(b, x, y, z + 215, 10, 40, rng, tiers=2, spire_ratio=1.6, depth=1)
+            map_dragons_peak(land, x, y, z, b, rng)
         anchors.append({"kind": "landmark", "index": i, "world": (x, y, z + 80)})
     b.flush("mid", G.materials(), "maplandmarks")
     # (The cloud banks and the valley mist between the ranges are painted by map_air.py.)
