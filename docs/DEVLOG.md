@@ -154,6 +154,18 @@ usage limit or a compaction) continues from the first unticked line. Push to `ma
 - [x] V4. Instruments: Fanfare Trumpets, Soaring Horn, Heroic Horns, Epic Choir and Brass's brass, the Orchestral Chord Pad's horns: horn/trumpet/trombone/tuba sustains + staccato fronts, a little synthesis for weight and shine; level-matched to before; Punch/MIX working; push `[skip ci]`
 - [x] V5. Tests (`brass` group: in tune across the range, velocity layers smooth, attack-to-sustain and presence up, level-matched with siblings and before, distinct, no clicks or clipping, licence logged), listening renders (each brass before/after, dry and in place; the mini-song), DEVLOG handoff; final push without `[skip ci]`, CI green
 
+**Hotfixes from GarageBand: celesta clang, sticky hover, map trees and landmarks** (see "Hotfixes" below; no other sound changes)
+
+- [x] H1a. Celesta clang: attack peak measured before the Punch session vs now (Celesta, with and without the piano layer); cause found
+- [x] H1b. Fix: Punch off/low by default on struck/mallet instruments, no overshoot on an already-sharp transient, the piano-body layer's attack checked; old sessions get the new default only where Punch was left at its default
+- [x] H1c. Every struck/bell/mallet/plucked instrument checked and fixed; attack-peak test (velocities 0.3/0.7/1.0, no peak far above its own sustain envelope, no clipping); push `[skip ci]`
+- [x] H2a. Hover: what the AU harness and the editor get (mouseExit / mouseMove, quick exits, leaving the window, unfocused); logged
+- [x] H2b. Hover can't stick: the UI timer checks the real mouse position against every hoverable control, focus loss / leaving the editor clears all; selected stays separate; every hoverable control in both plug-ins; missed-mouseExit regression test; push `[skip ci]`
+- [x] H3a. Map trees: real tree forms at map scale (broken crowns, leaf texture, species, trunks, contact shadows, scene light)
+- [x] H3b. Royal Gardens landmark rebuilt from its scenes (hedges, parterre, roses, fountain, marble colonnade, paths)
+- [x] H3c. Every other landmark checked against its scenes and fixed; atmosphere, labels, clicks kept; snapshots before/after (map, Royal Gardens and forest close-ups); push `[skip ci]`
+- [ ] H4. Whole suite green, DEVLOG handoff (what to check in GarageBand); final push without `[skip ci]`, CI green
+
 ---
 
 ## Lessons carried over from DUNGEON CRAWLER (read first)
@@ -2299,3 +2311,204 @@ notes; 28 sets in all"): **2320 passed, 0 failed** (the `brass` shard included);
 brass listening renders (32 files) in `test-logs/real-brass/`. macOS: build, smoke (the
 library required and loaded) + instrument on arm64 and x86_64, auval and the AU harness for
 both plug-ins, the package uploaded.
+
+---
+
+## Hotfixes from GarageBand: the celesta's clang, sticky hover, the map's trees and landmarks (2026-11-05)
+
+### 1. The celesta's clang (and every other struck or plucked instrument)
+
+**Measured, not guessed.** `LightSeekerTests --attack-report` (new) strikes each struck,
+bell, mallet and plucked instrument dry at velocities 0.3 / 0.7 / 1.0, a single C5 and a C4-E4-G4
+chord, and measures the loudest sample, the loudest 1 ms frame of the first 25 ms (the attack),
+the note's own decay fitted from 150-400 ms (after any Punch has settled) and extrapolated back
+to the attack, and how much the safety limiters took. The same report was built against the
+code *before* the Mix and Punch session (`4f9ad9f`), against the end of that session (`7ae48c2`)
+and against this one, with the developer's recordings prepared (so the piano under the celesta
+plays, as in CI and GarageBand).
+
+| Celesta, dry | sample peak | attack over its decay |
+|---|---|---|
+| C5, velocity 1.0, before Mix and Punch | -10.8 dBFS | 1.2 dB |
+| ... with its Punch (+2.5 dB) | -8.8 dBFS | 3.7 dB |
+| C4-E4-G4, velocity 0.7, before | -6.8 dBFS | 8.7 dB |
+| ... with its Punch | -4.9 dBFS | 10.6 dB |
+| C4-E4-G4, velocity 1.0, before | -3.3 dBFS | 8.6 dB |
+| ... with its Punch | **-0.8 dBFS** | **11.0 dB** |
+| now (every row) | exactly as before | exactly as before |
+
+**The cause: Punch.** Its overshoot starts on the note's first sample, and on a struck
+instrument the first milliseconds *are* the strike, already the sharpest and loudest moment of
+the note. Punch made the strike 2.5 dB louder relative to the ring (11 dB over its own decay on
+a chord) and, in the Diamond Vault with its bright crystal modes, drove chords into the output's
+safety limiter, an instant-attack peak limiter (no look-ahead): the strike's first peaks were
+flattened, which is heard as a clang. Every struck/plucked instrument had the same: Celesta and
+Harp +3 dB, the glockenspiel, music box, crystal bells and wind chimes +2 dB (the "+2.0 dB"
+GarageBand showed), the harpsichord +3, the harps, kalimba, pizzicato, pluck, lyre and guitar
++3.5 dB. In their places, at velocity 1.0, Celesta and Harp, Concert Harp (86 samples at the
+ceiling), Harpsichord, Rising Harp Glissando, Bouncy Pizzicato and Elven Lyre all reached the
+limiter with their Punch and not without it.
+
+**Not the cause: the piano-body layer.** With and without the recordings (the piano under the
+bars plays only with them) the celesta's attack differs by 0.5 dB and its attack-over-decay is
+*lower* with the piano (3.7 vs 4.6 dB on C5 at velocity 1.0): the piano adds body, not a sharper
+strike. Left as it is.
+
+A measuring lesson: an in-place render started 0.4 s after travelling there from the first
+place still carried that place's instrument settings (the trumpets' duck and pre-delay) and read
+1-1.5 dB louder than the same render in a settled place. The report settles for 6 s in a place.
+
+**The fix** (`Source/Synth/Patches.cpp`, `Synth.cpp`, `PluginProcessor.cpp`):
+- **Punch is off by default on every struck and plucked instrument** (the 15 instruments
+  without a sustain: Celesta, Celesta and Harp, Twinkling Glockenspiel, Music Box, Crystal Bells,
+  Wind Chimes and Bells, Harpsichord, Fairy Harp, Concert Harp, Rising Harp Glissando, Bouncy
+  Kalimba, Bouncy Pizzicato, Shimmering Pluck, Elven Lyre, Warm Acoustic Guitar). A small
+  default (1.5 dB) on the plucks was tried first; it still lifted the 10-25 ms where chords
+  peak by up to 1.5 dB, so they are off too. The brass, strings, winds and organ keep theirs.
+- **The overshoot is never applied on top of the strike**: on these instruments, turned up,
+  Punch rises in after the strike (0 dB at the first sample, full after 12 ms, a raised cosine)
+  and settles over the rest of Punch Time: it gives the body weight and leaves the strike as it
+  is (Punch 100 % changes the first 3 ms by 0.0 dB). Sustained instruments keep the curve they
+  had.
+- **Old sessions**: a session saved before (no `punchDesign` in its state) with Punch left at
+  its default (50 %) simply gets the new default (off). Where the user had moved Punch, the
+  control is re-expressed so it gives the same dB on the instrument it was saved with (e.g. 70 %
+  on the Celesta was +6.3 dB and still is). User presets go through the same path. Factory
+  presets are at the default.
+- **The Fairy Harp** clanged without Punch too: its strike stood 14-15 dB over its own ring
+  (the sharpest of all) and its chords reached the limiter from velocity 0.7 even before Mix and
+  Punch. Its string rings a little longer (1.2 -> 1.8, more body, so its level trim came down
+  1.5 dB: 2.0 -> 0.5 dB) and a chord's plucks no longer add their first peaks together (odd notes
+  start with the pluck's pulse the other way up: a single note sounds the same). Dry: chord at
+  0.7 -0.3 dBFS (limited) -> -2.8 dBFS; attack over its decay 14.6 -> 10.6 dB.
+
+**Still reported, not changed** (the places' own sound, as before Mix and Punch): in the Fairy
+Court the Fairy Harp's chords still reach the output limiter from velocity 0.7, *after* the
+strike (16-70 ms: the court's harp resonance building up on the chord), as they did before (52-64
+samples above -1 dBFS then, about 70 now). Dry at velocity 1.0, chords of the Music Box (-1.0 dB),
+Elven Lyre (-1.1 dB), Bouncy Kalimba (-0.4 dB) and Crystal Bells (-0.1 dB) touch the output limiter,
+all exactly as before Mix and Punch; never below velocity 1. Celesta and Harp sits 1 dB louder
+in its chapel than before Mix and Punch: its drier reverb share (80 %), a Mix and Punch design
+choice, not the strike.
+
+**Tests** (`attack` group, `Tests/AttackTests.h`, its own shard `9-attack`): the 15 instruments
+are exactly the ones without a sustain; Punch off by default on each; for each, at 0.3 / 0.7 /
+1.0, note and chord: never clips (peak <= -0.3 dBFS) and below velocity 1 the output limiter is
+never needed; the attack no more than 13 dB over its own decay and no sharper than at Punch 0;
+the default Punch adds nothing to the attack (<= 0.5 dB); Punch 100 % leaves the strike's first
+3 ms unchanged (0.2 dB); the migration (default -> new default; moved -> same dB; a session saved
+now reopens unchanged). The worst attack-over-decay, the default's share and the limiter at
+velocity 1 are printed as metrics. The Mix group's Punch-curve tests moved from the guitar to a
+sustained instrument (the Grand Organ), and its "medium Punch on the plucks" expectation is now
+"off" (that is this fix).
+
+### 2. The hover that stays lit: our code and the host
+
+**Plainly: both.** Our code relied only on mouse events: a hover was cleared by the control's
+mouseExit, or by a sweep that ran on the next mouse event anywhere in the window. If no event
+came after the mouse left, nothing ran and the highlight stayed until the control was hovered
+again: exactly what was seen. And the events do go missing:
+- **The framework** (JUCE 8.0.16, `juce_NSViewComponentPeer_mac.mm`, read here): a
+  `mouseExited:` is dropped while a mouse button is held (`[NSEvent pressedMouseButtons] != 0`:
+  click a place and move off before the button is fully up), and dropped when it belongs to a
+  tracking area the view has since replaced (AppKit rebuilds the view's tracking area when the
+  view is relaid or resized: a click on a place relays the list and the breadcrumb).
+- **The host**: GarageBand shows AUv2 views out of process; whether its remote view forwards an
+  exit when the mouse leaves the plug-in's window quickly or when the window is not key cannot be
+  tested on this Linux machine (no GarageBand). The editor now logs what it receives (below), so
+  this can be seen in GarageBand itself.
+
+**The fix** (`Source/UI/Hover.h`, `HoverGuard`; the editor owns one):
+- On the window's existing 10 Hz UI timer (the follower), the guard reads the **real mouse
+  position** from the system (not the last event) and, when no button is held:
+  - the mouse outside the editor -> every hover is cleared, and the framework is sent the exit
+    it missed (through the window's peer, so sliders, combo boxes and text buttons forget the
+    mouse too, not only our own buttons);
+  - the mouse inside -> any control showing a hover it is no longer over is cleared, and if the
+    framework believes the mouse is over another component it is sent a move to the real place;
+  - the window **loses focus** -> every hover is cleared.
+  Cheap: one system call and, only when something is lit or the framework thinks the mouse is in
+  the editor, a walk over the window's few dozen controls.
+- An out-of-process view can report a different screen origin: the guard calibrates itself
+  from every real mouse event (system position minus event position).
+- `HoverButton` also takes its hover from mouse moves (a hover cleared under a resting mouse
+  comes back with the next move); it paints "down" only while the button is really down.
+- The search results' hovered row is cleared the same way (`Hoverable`).
+- The **selected place keeps its own state** (its toggle: the gold diamond and rule), never
+  touched by hover.
+- Every hoverable control in both plug-ins is covered: the map's landmarks (and their name
+  plate), the place list, the hotspots, the breadcrumb, the toolbar and its preset buttons, the
+  MIX section, the Advanced drawer and Journey panel, the search panel and its results, the
+  instrument panel. The preset browser's menu is the framework's own pop-up window (its own
+  hover handling).
+
+**The log**: set `LIGHTSEEKER_HOVER_LOG=1` in the environment, or create the empty file
+`~/Library/Logs/LightSeeker/hover-log-on`, and the editor writes every enter, exit and move it
+receives (moves at most 10 a second) and every hover the guard had to clear (and why) to
+`~/Library/Logs/LightSeeker/hover.log`. **The AU harness** (CI, report-only) sets it, opens the
+editor in a window in its own process, sends the editor's view a mouse move, an exit and then a
+move with no exit after it, waits, and prints the log: `hover probe` lines in the macOS job.
+
+**Tests** (`editor` group): in both plug-ins, at Map > Fairy Glade > Firefly Hollow: a place
+clicked, the list entry and the breadcrumb lit, the mouse gone with no exit -> cleared on the
+timer; a quick move to another entry clears the one left behind and keeps the one under the
+mouse; nothing is cleared while a button is held; focus lost clears all; all 30+ buttons of the
+window lit at once (map, list, breadcrumb, toolbar, MIX, panel) and the mouse gone -> none lit; a
+hovered search result; a landmark's name plate. The selected place stays selected.
+
+### 3. The map: real trees, and every landmark from its own scenes
+
+- **Trees** (`tools/painted/detail.py`, `map_trees`): the map's woods were `grove()`, a few
+  smooth icosphere lobes per tree with a thin fringe of cards: blobs from above. Now each tree is
+  built as the scenes' trees look from far away: a tapered trunk (visible under broadleaf and
+  blossom crowns), a crown of 7-11 leafy clusters of the scenes' own textured leaf cards
+  (alpha-cut sprigs, translucent: rims when backlit) so the outline is broken and the surface has
+  leaf texture; round broadleaf, conifers (6-9 drooping tiers, darker blue-green) and blossom;
+  sizes varied; lit by the painted sun's direction (warmer and brighter towards it and at the top,
+  cooler and darker in the shade); a soft contact shadow under each. The map asks Cycles for 32
+  transparent bounces (no dark specks through dense crowns).
+- **Royal Gardens** (`map_royal_gardens`), rebuilt from Rose Garden, Fountain Court and Marble
+  Colonnade: a raised formal terrace with a white marble edge; gravel walks in a cross and round
+  the edge; four parterres of clipped box hedge (borders, a diamond and a ring each) with rose
+  bushes and rose and flower beds; dark topiary cones at the corners; the three-tier fountain
+  with water, jets and a gilt crown in the middle; at the back a curved white colonnade with a
+  gilded lintel and a domed pavilion with a gold finial; blossom trees flanking it.
+- **The other landmarks**, each checked against its scenes:
+  - Celestial Citadel, Golden Cathedral, Floating Isles: already their scenes (the citadel on
+    its rock, the cathedral's spires, the isles); kept.
+  - Sky Temple: the flat stone disc under its tower -> round marble terraces on the cloud (the
+    Cloud Steps) and a ring of bell arches with golden bells (the Bell Garden).
+  - Elven Sanctuary: a flat disc in a grove -> great trees round a clearing with the Moonwell: a
+    marble basin of water ringed by slender pointed arches.
+  - Crystal Palace: a blob of shards -> a palace of crystal spires (a tall centre, two rings)
+    on its mirror lake, crystals clustered at its foot.
+  - Blossom Meadow: the blossom grove now real blossom trees over the flowers.
+  - Fairy Glade: a row of five mushrooms -> a ring of pastel mushrooms of different sizes round
+    a big one, in a glade with trees and fireflies.
+  - Dragon's Peak: the smooth peak -> on rocky crags, with the golden nest on a ledge.
+- Kept: the air pass (mist, cloud banks, haze, rays), the drifting cloud shadows and motes,
+  the labels (readable: same plates and places) and the landmarks' click areas (anchors where
+  they were). The map's far layer and sky were re-rendered with it (unchanged code).
+- Snapshots: `docs/snapshots/hotfix-map/` (`map-before.jpg`, `map-after.jpg`,
+  `map-before-after.jpg`, `royal-gardens-before-after.jpg`, `forest-before-after.jpg`,
+  `dragons-peak-crystal-palace-before-after.jpg`); `docs/snapshots/map.jpg` updated.
+
+### Handoff: what to check in GarageBand
+
+- **Celesta** (Crystal Palace > Diamond Vault): chords at full velocity: a clean, bell-like
+  strike, no clang. Punch reads "Off" now. Then the others: Celesta and Harp, Twinkling
+  Glockenspiel ("Off", was +2.0 dB), Music Box, Crystal Bells, Wind Chimes and Bells,
+  Harpsichord, the harps, Kalimba, Pizzicato, Shimmering Pluck, Elven Lyre, the guitar. Turn
+  Punch up on one: the body should get heavier, the strike itself stay as it is.
+- **Fairy Harp**: cleaner chords; its ring a little longer. In the Fairy Court its loud chords
+  still swell into the court's resonance (reported above): too much?
+- **An old project** where Punch was never touched: the struck instruments now play without it.
+  One where it had been moved: the same dB as before on that instrument.
+- **Hover**: click a place in the list (and in the breadcrumb), move off quickly, out of the
+  plug-in window, onto GarageBand's window, with the plug-in window not focused: the highlight
+  goes within a tenth of a second. The selected place keeps its gold diamond. If anything still
+  sticks: `touch ~/Library/Logs/LightSeeker/hover-log-on`, reopen the plug-in window, reproduce,
+  and send `~/Library/Logs/LightSeeker/hover.log` (delete `hover-log-on` afterwards).
+- **The map**: the woods (real trees, conifers, blossom, shadows), Royal Gardens (hedges,
+  roses, fountain, colonnade and pavilion), and the other landmarks: do they look like the
+  places you get when you click them?

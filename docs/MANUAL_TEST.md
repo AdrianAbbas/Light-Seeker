@@ -317,3 +317,14 @@ place (Gates of Dawn, Spire Summit, Throne of Light, Eyrie, Summit of Winds), dr
 - [ ] MIX Reverb, Pre-delay and Duck on the brass tracks: as before.
 - [ ] A build without the library (the stand-in: the CI log says "Library brass not
       fetched"): the brass sounds exactly as before.
+
+## Hotfixes: the celesta's clang, sticky hover, the map
+
+- Celesta (Diamond Vault) and every struck or plucked instrument: full-velocity chords strike
+  clean, no clang; Punch reads "Off" by default; turned up, it weights the body, not the strike.
+- Click a place in the list or the breadcrumb and move off quickly (out of the window, onto
+  another window, with the plug-in window unfocused): no highlight stays. The selected place
+  keeps its gold diamond. If one sticks: `touch ~/Library/Logs/LightSeeker/hover-log-on`,
+  reproduce, send `~/Library/Logs/LightSeeker/hover.log`.
+- The map: real trees (broadleaf, conifers, blossom, shadows); Royal Gardens with hedges,
+  roses, fountain, colonnade and pavilion; every landmark like its own scenes.
