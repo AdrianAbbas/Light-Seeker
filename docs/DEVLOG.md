@@ -2515,6 +2515,17 @@ hover probe's log). Linux with the recordings, the library brass and the capture
   the Harpsichord is report-only in that check (named, with its numbers); the gate is unchanged
   for the other 30 instruments.
 
+### CI, second push (the Harpsichord report-only): only wall-clock timing left
+
+macOS green (79 passed on arm64 and x86_64 each; auval and the AU harness for both plug-ins,
+the hover probe in its log). Linux 2410 passed, 1 failed ("a full repaint with the drawer fits
+in a 30 fps frame", 48.5 ms); re-run once as agreed: 2409 passed, 2 failed, both wall-clock
+timing checks on the shared runner ("a full repaint with the drawer", 36.0 ms; "Eco costs less
+than Standard", 40.0 vs 40.0 ms). Reported, not changed: measured alone here the repaint with
+the drawer is 11.9 ms (12.0 ms before this work), the map's 11.6 ms; nothing in these hotfixes
+touches painting (the hover guard runs on the 10 Hz timer, outside paint). Every functional
+check is green.
+
 ### Handoff: what to check in GarageBand
 
 - **Celesta** (Crystal Palace > Diamond Vault): chords at full velocity: a clean, bell-like
