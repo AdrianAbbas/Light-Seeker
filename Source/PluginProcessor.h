@@ -172,6 +172,9 @@ public:
     // Mix and Punch: the reverbs' duck gain now (1 = none; tests and the MIX section's meter).
     float reverbDuckGain() const noexcept { return duckShown.load(std::memory_order_relaxed); }
     // The playing instrument's own Punch in dB (the Punch parameter's 50 %).
+    // GarageBand hotfix: a Punch control saved before the struck instruments' new defaults,
+    // re-expressed so it gives the same dB on that instrument (50 %, the default, stays).
+    static float migratedPunch(float control, int instrument) noexcept;
     float punchDesignDb() const noexcept;
     // Calibration only (tests): the chain's raw level, without trims or level matcher.
     void setLevelMatching(bool on) noexcept { world.setLevelMatching(on); }
@@ -195,6 +198,8 @@ public:
     int instrumentVoices() const noexcept { return voicesNow.load(std::memory_order_relaxed); }
     // Tests: the synth itself.
     const ls::inst::Synth& synthForTest() const noexcept { return *synth; }
+    // Tests: the most the output's safety limiter has taken (gain, 1 = never acted).
+    float outputLimiterLowestForTest() const noexcept { return limiter.lowest; }
 
     // ---- Search (both plug-ins) ----
     // The last searches and results the search panel remembers ("q:text", "e:key"; newest

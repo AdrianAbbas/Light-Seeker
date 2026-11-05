@@ -515,7 +515,7 @@ void testMix(Suite& s) {
 // Punch, the brass, the instruments' defaults and the windows (also alone: `--only mix-punch`).
 void testMixPunch(Suite& s) {
     using namespace mixtest;
-    // ---- Punch.
+    // ---- Punch (on a sustained instrument: on a struck one it rises in after the strike, see the attack group).
     {
         // The overshoot it is set to, settled in its time (envelope ratio to Punch 0, 5 ms frames).
         const auto ratio = [](const Played& a, const Played& b, double seconds) {
@@ -527,10 +527,10 @@ void testMixPunch(Suite& s) {
         const std::vector<int> chord { 60, 64, 67 };
         // At Level -12 dB: well below the safety limiter (it is checked on its own below).
         constexpr float quiet = -12.0f;
-        const auto base = play("Warm Acoustic Guitar", 0.0f, 1.0f, chord, 1.0, 200.0f, quiet);
+        const auto base = play("Grand Organ", 0.0f, 1.0f, chord, 1.0, 200.0f, quiet);
         for (const float control : { 0.5f, 1.0f }) {
-            const auto punched = play("Warm Acoustic Guitar", control, 1.0f, chord, 1.0, 200.0f, quiet);
-            const double want = dc::dsp::punchDb(control, ls::inst::patch(mixsong::instrumentNamed("Warm Acoustic Guitar")).punchDb);
+            const auto punched = play("Grand Organ", control, 1.0f, chord, 1.0, 200.0f, quiet);
+            const double want = dc::dsp::punchDb(control, ls::inst::patch(mixsong::instrumentNamed("Grand Organ")).punchDb);
             const auto r = ratio(punched, base, 0.6);
             double most = 0;
             for (std::size_t k = 0; k < 8; ++k) most = std::max(most, r[k]);
@@ -543,27 +543,27 @@ void testMixPunch(Suite& s) {
             s.check(mid > 0.3 * want && mid < 0.7 * want, "... half of it half way (raised cosine)", fmt(mid, 2) + " dB at 100 ms");
         }
         {   // Punch Time sets the settling.
-            const auto slow = play("Warm Acoustic Guitar", 1.0f, 1.0f, chord, 1.0, 400.0f, quiet), slowBase = play("Warm Acoustic Guitar", 0.0f, 1.0f, chord, 1.0, 400.0f, quiet);
+            const auto slow = play("Grand Organ", 1.0f, 1.0f, chord, 1.0, 400.0f, quiet), slowBase = play("Grand Organ", 0.0f, 1.0f, chord, 1.0, 400.0f, quiet);
             const auto r = ratio(slow, slowBase, 0.6);
             s.check(r.size() > 90 && r[60] > 1.0 && std::abs(r[88]) < 0.3, "Punch Time 400 ms: still punching at 300 ms, settled at 440 ms",
                     fmt(r.size() > 60 ? r[60] : 0.0, 2) + " / " + fmt(r.size() > 88 ? r[88] : 0.0, 2) + " dB");
         }
         {   // Velocity-sensitive: a soft note punches less.
-            const auto soft = play("Warm Acoustic Guitar", 1.0f, 0.4f, chord, 1.0, 200.0f, quiet), softBase = play("Warm Acoustic Guitar", 0.0f, 0.4f, chord, 1.0, 200.0f, quiet);
-            const auto hard = play("Warm Acoustic Guitar", 1.0f, 1.0f, chord, 1.0, 200.0f, quiet);
+            const auto soft = play("Grand Organ", 1.0f, 0.4f, chord, 1.0, 200.0f, quiet), softBase = play("Grand Organ", 0.0f, 0.4f, chord, 1.0, 200.0f, quiet);
+            const auto hard = play("Grand Organ", 1.0f, 1.0f, chord, 1.0, 200.0f, quiet);
             const auto rs = ratio(soft, softBase, 0.1), rh = ratio(hard, base, 0.1);
             double ms = 0, mh = 0;
             for (std::size_t k = 0; k < 8; ++k) { ms = std::max(ms, rs[k]); mh = std::max(mh, rh[k]); }
             s.check(ms < mh - 3.0, "Punch is velocity-sensitive (a soft note punches less)", fmt(ms, 1) + " vs " + fmt(mh, 1) + " dB");
         }
         {   // Click-free: no step beyond the gain it adds; Punch 0 is the instrument exactly.
-            const auto punched = play("Warm Acoustic Guitar", 1.0f, 1.0f, chord, 1.0, 20.0f, quiet);
-            const auto plain = play("Warm Acoustic Guitar", 0.0f, 1.0f, chord, 1.0, 20.0f, quiet);
+            const auto punched = play("Grand Organ", 1.0f, 1.0f, chord, 1.0, 20.0f, quiet);
+            const auto plain = play("Grand Organ", 0.0f, 1.0f, chord, 1.0, 20.0f, quiet);
             const double gain = dc::dsp::dbToGain(dc::dsp::punchMaxDb);
             const double stepPunched = maxSecondDifference(punched, punched.onset, punched.onset + 9600), stepPlain = maxSecondDifference(plain, plain.onset, plain.onset + 9600);
             s.check(stepPunched < 1.2 * gain * stepPlain, "Punch 100 % at 20 ms: no clicks (no step beyond the gain it adds)",
                     fmt(stepPunched / std::max(1.0e-9, stepPlain), 2) + "x for " + fmt(gain, 2) + "x gain");
-            const auto again = play("Warm Acoustic Guitar", 0.0f, 1.0f, chord, 1.0, 120.0f, quiet);
+            const auto again = play("Grand Organ", 0.0f, 1.0f, chord, 1.0, 120.0f, quiet);
             double diff = 0;
             for (std::size_t i = 0; i < std::min(again.l.size(), plain.l.size()); ++i) diff = std::max(diff, std::abs(double(again.l[i]) - plain.l[i]));
             s.check(diff == 0.0, "Punch 0 %: Punch Time changes nothing (no Punch at all)");
@@ -572,24 +572,25 @@ void testMixPunch(Suite& s) {
             const auto loud = play("Heroic Horns", 1.0f, 1.0f, { 48, 55, 60, 64, 67, 72 }, 1.0, 300.0f, 12.0f, false);
             s.check(peakOf(loud) <= 0.9661, "Punch 100 % on loud brass at +12 dB: no clipping (below -0.3 dBFS)", fmt(toDb(peakOf(loud)), 2) + " dBFS");
             s.check(loud.limiterLowest < 1.0f, "... the Punch limiter took the overshoot back", fmt(toDb(loud.limiterLowest), 1) + " dB");
-            const auto below = play("Warm Acoustic Guitar", 1.0f, 1.0f, chord, 1.0, 120.0f, -18.0f);
+            const auto below = play("Grand Organ", 1.0f, 1.0f, chord, 1.0, 120.0f, -18.0f);
             s.check(below.limiterLowest == 1.0f && peakOf(below) < 0.9, "below the ceiling (Level -18 dB, Punch 100 %) the limiter does nothing",
                     fmt(toDb(peakOf(below)), 1) + " dBFS peak");
-            const auto normal = play("Warm Acoustic Guitar", 0.5f, 0.8f, chord, 1.0);
-            std::cout << "  [report] Warm Acoustic Guitar, a chord at velocity 0.8, its own Punch, Level 0 dB: the limiter took "
+            const auto normal = play("Grand Organ", 0.5f, 0.8f, chord, 1.0);
+            std::cout << "  [report] Grand Organ, a chord at velocity 0.8, its own Punch, Level 0 dB: the limiter took "
                       << fmt(-toDb(normal.limiterLowest), 1) << " dB at most\n";
         }
     }
-    // Punch defaults: high on the brass, medium on plucks and harps, off or low on pads and choirs.
+    // Punch defaults: high on the brass, off or low on pads and choirs; off on the plucks and
+    // harps since the GarageBand hotfix (their strike carries the hit; see the attack group).
     {
         const auto design = [](const char* name) { return ls::inst::patch(mixsong::instrumentNamed(name)).punchDb; };
         bool brass = true, plucks = true, pads = true;
         for (const char* n : { "Fanfare Trumpets", "Heroic Horns", "Soaring Horn" }) brass &= design(n) >= 6.0f;
         for (const char* n : { "Concert Harp", "Fairy Harp", "Rising Harp Glissando", "Warm Acoustic Guitar", "Shimmering Pluck", "Bouncy Kalimba", "Elven Lyre" })
-            plucks &= design(n) >= 2.5f && design(n) <= 5.0f;
+            plucks &= design(n) == 0.0f;
         for (const char* n : { "Angelic Choir", "Radiant Choir", "Cloud Pad", "Orchestral Chord Pad", "Glass Harmonica Pad" }) pads &= design(n) <= 1.0f;
         s.check(brass, "Punch defaults high on the brass (6 dB or more)");
-        s.check(plucks, "... medium on the plucks and harps (2.5-5 dB)");
+        s.check(plucks, "... off on the plucks and harps (their strike is the hit)");
         s.check(pads, "... off or low on the pads and choirs (1 dB or less)");
     }
 

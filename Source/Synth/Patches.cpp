@@ -717,8 +717,13 @@ std::array<Patch, instrumentCount> build() {
         put(p);
     }
     {   // Fairy Court: a tiny fairy harp.
-        auto a = shift(pluck(BodyNone, 0.25f, 0.45f, 1.2f, 0.6f), 12.0f);
+        // GarageBand hotfix: its strike stood 14-15 dB over its own ring (the sharpest of
+        // all) and its chords reached the safety limiter even before Punch: the string rings
+        // a little longer (1.2 -> 1.8: more body, so its level trim came down 1.5 dB) and its
+        // chords' plucks no longer add their first peaks (alternatePolarity).
+        auto a = shift(pluck(BodyNone, 0.25f, 0.45f, 1.8f, 0.6f), 12.0f);
         a.release = 0.6f;
+        a.alternatePolarity = true;
         auto b = shift(bell(ModesHarmonic, 0.7f, 1.0f, -14.0f), 12.0f, 0.0f, 0.3f);
         b.release = 1.0f;
         Builder p("Fairy Harp", "Twinkly", "Magic");
@@ -858,9 +863,12 @@ std::array<Patch, instrumentCount> build() {
         all[i].libraryStandInTrimDb = libraryStandInTrims[i];
         all[i].libraryTiltDb = libraryTilts[i];
     }
-    // Mix and Punch. Punch (dB of gain on hit at Punch 50 %): high on the brass, medium on
-    // plucks and harps, low on bowed strings, struck bells and winds, none on pads and
-    // choirs. Reverb (how much of the place's reverbs the instrument takes): the
+    // Mix and Punch. Punch (dB of gain on hit at Punch 50 %): high on the brass, low on bowed
+    // strings and winds, none on pads and choirs. GarageBand hotfix: none on the struck and
+    // plucked instruments (bells, mallets, celesta, harpsichord, harps, plucks): their strike
+    // is already the sharpest part of the note, and the overshoot on top of it drove chords
+    // into the safety limiters (a clang). Turned up, their Punch rises in after the strike
+    // (Synth::startLayers). "was" is the Mix and Punch default, kept as punchLegacyDb. Reverb (how much of the place's reverbs the instrument takes): the
     // instruments mostly played in a mix (brass, strings, plucks, harps, guitars) sit a
     // little drier by default; MIX Reverb at 150 % brings back the place's whole space. The
     // brass also puts its dry hit first: the reverbs start 20 ms later and dip under its
@@ -871,37 +879,58 @@ std::array<Patch, instrumentCount> build() {
         { "Shimmering Strings", 1.5f, 0.75f, 0.0f, 0.0f },
         { "Orchestral Chord Pad", 0.0f, 1.0f, 0.0f, 0.0f },
         { "Soaring Horn", 6.0f, 0.75f, 20.0f, 0.25f },
-        { "Rising Harp Glissando", 3.5f, 0.75f, 0.0f, 0.0f },
+        { "Rising Harp Glissando", 0.0f, 0.75f, 0.0f, 0.0f },   // was 3.5
         { "Angelic Choir", 0.0f, 1.0f, 0.0f, 0.0f },
-        { "Wind Chimes and Bells", 2.0f, 1.0f, 0.0f, 0.0f },
+        { "Wind Chimes and Bells", 0.0f, 1.0f, 0.0f, 0.0f },   // was 2.0
         { "Glass Harp", 1.0f, 1.0f, 0.0f, 0.0f },
-        { "Elven Lyre", 3.5f, 0.75f, 0.0f, 0.0f },
+        { "Elven Lyre", 0.0f, 0.75f, 0.0f, 0.0f },   // was 3.5
         { "Airy Flute", 1.5f, 1.0f, 0.0f, 0.0f },
-        { "Crystal Bells", 2.0f, 1.0f, 0.0f, 0.0f },
+        { "Crystal Bells", 0.0f, 1.0f, 0.0f, 0.0f },   // was 2.0
         { "Glass Harmonica Pad", 0.0f, 1.0f, 0.0f, 0.0f },
-        { "Celesta", 2.5f, 1.0f, 0.0f, 0.0f },
-        { "Warm Acoustic Guitar", 3.5f, 0.7f, 0.0f, 0.0f },
-        { "Bouncy Kalimba", 3.5f, 0.8f, 0.0f, 0.0f },
+        { "Celesta", 0.0f, 1.0f, 0.0f, 0.0f },   // was 2.5
+        { "Warm Acoustic Guitar", 0.0f, 0.7f, 0.0f, 0.0f },   // was 3.5
+        { "Bouncy Kalimba", 0.0f, 0.8f, 0.0f, 0.0f },   // was 3.5
         { "Pastoral Oboe", 1.5f, 1.0f, 0.0f, 0.0f },
         { "Grand Organ", 2.5f, 1.0f, 10.0f, 0.0f },
         { "Radiant Choir", 0.0f, 1.0f, 0.0f, 0.0f },
-        { "Celesta and Harp", 3.0f, 0.8f, 0.0f, 0.0f },
+        { "Celesta and Harp", 0.0f, 0.8f, 0.0f, 0.0f },   // was 3.0
         { "Cloud Pad", 0.0f, 1.0f, 0.0f, 0.0f },
         { "Breathy Wind Flute", 1.0f, 1.0f, 0.0f, 0.0f },
-        { "Shimmering Pluck", 3.5f, 0.75f, 0.0f, 0.0f },
-        { "Concert Harp", 3.5f, 0.75f, 0.0f, 0.0f },
-        { "Music Box", 2.0f, 1.0f, 0.0f, 0.0f },
-        { "Harpsichord", 3.0f, 0.8f, 0.0f, 0.0f },
-        { "Bouncy Pizzicato", 3.5f, 0.75f, 0.0f, 0.0f },
-        { "Twinkling Glockenspiel", 2.0f, 1.0f, 0.0f, 0.0f },
-        { "Fairy Harp", 3.5f, 0.75f, 0.0f, 0.0f },
+        { "Shimmering Pluck", 0.0f, 0.75f, 0.0f, 0.0f },   // was 3.5
+        { "Concert Harp", 0.0f, 0.75f, 0.0f, 0.0f },   // was 3.5
+        { "Music Box", 0.0f, 1.0f, 0.0f, 0.0f },   // was 2.0
+        { "Harpsichord", 0.0f, 0.8f, 0.0f, 0.0f },   // was 3.0
+        { "Bouncy Pizzicato", 0.0f, 0.75f, 0.0f, 0.0f },   // was 3.5
+        { "Twinkling Glockenspiel", 0.0f, 1.0f, 0.0f, 0.0f },   // was 2.0
+        { "Fairy Harp", 0.0f, 0.75f, 0.0f, 0.0f },   // was 3.5
         { "Heroic Horns", 8.0f, 0.7f, 20.0f, 0.3f },
         { "Warm Strings", 1.5f, 0.75f, 0.0f, 0.0f },
         { "Epic Choir and Brass", 4.0f, 0.85f, 15.0f, 0.2f },
     };
+    // The Punch of the Mix and Punch release where the hotfix changed it.
+    static constexpr std::pair<const char*, float> punchBefore[] = {
+        { "Rising Harp Glissando", 3.5f },
+        { "Wind Chimes and Bells", 2.0f },
+        { "Elven Lyre", 3.5f },
+        { "Crystal Bells", 2.0f },
+        { "Celesta", 2.5f },
+        { "Warm Acoustic Guitar", 3.5f },
+        { "Bouncy Kalimba", 3.5f },
+        { "Celesta and Harp", 3.0f },
+        { "Shimmering Pluck", 3.5f },
+        { "Concert Harp", 3.5f },
+        { "Music Box", 2.0f },
+        { "Harpsichord", 3.0f },
+        { "Bouncy Pizzicato", 3.5f },
+        { "Twinkling Glockenspiel", 2.0f },
+        { "Fairy Harp", 3.5f },
+    };
     for (auto& p : all)
         for (const auto& d : defaults)
-            if (std::string_view(p.name) == d.name) { p.punchDb = d.punchDb; p.space = d.space; p.spacePreDelayMs = d.preDelayMs; p.spaceDuck = d.duck; }
+            if (std::string_view(p.name) == d.name) { p.punchDb = p.punchLegacyDb = d.punchDb; p.space = d.space; p.spacePreDelayMs = d.preDelayMs; p.spaceDuck = d.duck; }
+    for (auto& p : all)
+        for (const auto& [name, db] : punchBefore)
+            if (std::string_view(p.name) == name) p.punchLegacyDb = db;
     for (auto& p : all) {
         p.sustaining = !p.tremoloMod;
         for (int k = 0; k < p.layerCount; ++k)

@@ -46,12 +46,13 @@ struct LevelMatcher {
 // 80 ms release. Transparent while the signal stays below the ceiling.
 struct SafetyLimiter {
     float gain = 1, release = 0.001f, ceiling = 0.966f;   // -0.3 dBFS
-    void prepare(double sampleRate) { release = dsp::timeCoefficient(0.08, sampleRate); gain = 1; }
+    float lowest = 1;   // tests: the most it ever took (gain)
+    void prepare(double sampleRate) { release = dsp::timeCoefficient(0.08, sampleRate); gain = 1; lowest = 1; }
     void reset() noexcept { gain = 1; }
     void process(float& l, float& r) noexcept {
         const float peak = std::max(std::abs(l), std::abs(r));
         const float needed = peak > ceiling ? ceiling / peak : 1.0f;
-        if (needed < gain) gain = needed;
+        if (needed < gain) { gain = needed; lowest = std::min(lowest, gain); }
         else {
             // Audit fix: VEIL's release could rise past `needed` and let a peak through.
             gain = std::min(needed, gain + release * (1.0f - gain));

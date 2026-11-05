@@ -18,6 +18,7 @@ mkdir -p "$logs"
 "$tests" --only instrument,instruments > "$logs/7-instruments.txt" 2>&1 &
 "$tests" --only recorded > "$logs/8-recorded.txt" 2>&1 &
 "$tests" --only brass > "$logs/9-brass.txt" 2>&1 &
+"$tests" --only attack > "$logs/9-attack.txt" 2>&1 &
 wait
 "$tests" --only cpu > "$logs/4-cpu.txt" 2>&1
 

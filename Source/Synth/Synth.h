@@ -120,6 +120,10 @@ struct Layer {
     const char* sample = nullptr;
     int lowKey = 0, highKey = 127;   // the keys this layer plays (after transposing)
     bool character = false;      // its level follows the Character macro
+    // GarageBand hotfix (Pluck): odd notes start with the pluck's pulse the other way up.
+    // One note sounds the same; a chord's notes, plucked on the same sample, no longer add
+    // their first peaks together (the Fairy Harp's chords reached the safety limiter).
+    bool alternatePolarity = false;
     // A run of grace notes before the note (a harp's glissando, Direction Update 2): how
     // many (at Character 0.5) and the time between them. The run sweeps up through the
     // notes held (chord tones and their octaves; one note alone: its octaves and fifth)
@@ -163,6 +167,9 @@ struct Patch {
     // (the dry hit first: the brass), and its own Punch (dB of gain on hit at Punch 50 %).
     float space = 1.0f, spacePreDelayMs = 0, spaceDuck = 0;
     float punchDb = 0;
+    // GarageBand hotfix: the Punch this instrument had in the Mix and Punch release (older
+    // sessions with a Punch the user had moved keep their dB, see the processor's state).
+    float punchLegacyDb = 0;
 };
 
 inline constexpr int instrumentCount = 31;

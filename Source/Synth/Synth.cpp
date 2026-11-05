@@ -555,6 +555,7 @@ struct Synth::Voice {
         PanGains pan { 0.7071f, 0.7071f };
         float gain = 1, cutoff = 18000, release = 0.3f, fade = 1, fadeMul = 1, vibrato = 0, hz = 440;
         bool character = false, stretchRelease = true;
+        float polarity = 1;   // the Pluck's (Layer::alternatePolarity)
         // The library brass's shaping (Sample layers with presence, bite or drive).
         bool shaped = false;
         // The real brass of a brass layer (Layer::real): its sustain (`sample`) and front, the
@@ -586,7 +587,7 @@ struct Synth::Voice {
     // Punch: the gain on hit (dB at its start), where it is in its settling, the gain now
     // and its step per sample (set once per chunk).
     float punchDb = 0, punchGain = 1, punchStep = 0;
-    int punchPos = 0, punchLength = 0;
+    int punchPos = 0, punchLength = 0, punchRise = 0;
     int note = -1, patch = 0, delay = 0, layerMask = 0;
     int sweep = -1, sweepIndex = 0, sweepCount = 0;   // a grace note: its sweep, place in it
     float velocity = 0, semis = 0, levelDb = 0, kill = 1, killStep = 0;
@@ -893,6 +894,7 @@ void Synth::startLayers(Voice& voice) noexcept {
                 shape.pickNoise = L.p[4];
                 lv.pluck.start(hz, L.ring * ringScale * graceRing, clamp01(L.bright * (1.15f - 0.3f * macros.attack)), vel, 0.0f, r, noiseAt, shape);
                 lv.body.setPluck(L.model, r);
+                lv.polarity = L.alternatePolarity && (note & 1) != 0 ? -1.0f : 1.0f;
                 break;
             }
             case Engine::Bell: {
@@ -1141,12 +1143,18 @@ void Synth::startLayers(Voice& voice) noexcept {
     // back to its own level over Punch Time (a raised cosine: smooth at both ends). The note
     // starts from silence, so the overshoot never clicks. Notes moved to a new instrument by
     // travel are not struck again.
+    // GarageBand hotfix: on a struck or plucked instrument the strike is already the sharpest,
+    // loudest moment of the note; an overshoot on top of it made a clang (chords pushed into
+    // the safety limiters). There the overshoot rises in after the strike (over its first
+    // 12 ms, a raised cosine from 0 dB) and settles back over the rest of Punch Time: it
+    // gives the note's body weight and leaves the strike as it is.
     const float db = voice.moved ? 0.0f : dc::dsp::punchDb(macros.punch, p.punchDb) * (0.35f + 0.65f * std::pow(clamp01(velocity), 1.3f));
     voice.punchDb = db;
     voice.punchPos = 0;
     voice.punchStep = 0;
-    voice.punchLength = db > 0.05f ? std::max(1, int(macros.punchSeconds * r)) : 0;
-    voice.punchGain = voice.punchLength > 0 ? dbToGain(db) : 1.0f;
+    voice.punchRise = p.sustaining ? 0 : int(0.012f * r);
+    voice.punchLength = db > 0.05f ? std::max(voice.punchRise + 1, int(macros.punchSeconds * r)) : 0;
+    voice.punchGain = voice.punchLength > 0 && voice.punchRise == 0 ? dbToGain(db) : 1.0f;
 }
 
 void Synth::startNote(int note, float velocity, bool sustained, bool moved) noexcept {
@@ -1163,6 +1171,7 @@ void Synth::startNote(int note, float velocity, bool sustained, bool moved) noex
         v->grace = grace;
         v->moved = moved;
         v->punchLength = 0;
+        v->punchRise = 0;
         v->punchGain = 1;
         v->punchStep = 0;
         v->note = note;
@@ -1417,8 +1426,13 @@ void Synth::updateChunk() noexcept {
             if (v.punchPos >= v.punchLength) { v.punchLength = 0; v.punchGain = 1; v.punchStep = 0; }
             else {
                 v.punchPos += chunk;
-                const float t = std::min(1.0f, float(v.punchPos) / float(v.punchLength));
-                const float next = t >= 1.0f ? 1.0f : dbToGain(v.punchDb * 0.5f * (1.0f + std::cos(3.14159265f * t)));
+                float shape = 0.0f;   // of the overshoot, at the end of this chunk
+                if (v.punchPos < v.punchRise) shape = 0.5f * (1.0f - std::cos(3.14159265f * float(v.punchPos) / float(v.punchRise)));
+                else if (v.punchPos < v.punchLength) {
+                    const float t = float(v.punchPos - v.punchRise) / float(std::max(1, v.punchLength - v.punchRise));
+                    shape = 0.5f * (1.0f + std::cos(3.14159265f * t));
+                }
+                const float next = shape <= 0.0f ? 1.0f : dbToGain(v.punchDb * shape);
                 v.punchStep = (next - v.punchGain) / float(chunk);
             }
         }
@@ -1573,7 +1587,7 @@ void Synth::render(float* outL, float* outR, int n) noexcept {
                         }
                         break;
                     }
-                    case Engine::Pluck: y = lv.body.process(lv.pluck.tick(noise)) * 2.0f; break;
+                    case Engine::Pluck: y = lv.body.process(lv.pluck.tick(noise)) * (2.0f * lv.polarity); break;
                     case Engine::Bell: y = lv.bell.tick() * lv.fade; lv.fade *= lv.fadeMul; break;
                     case Engine::Tine: y = lv.tine.tick(); break;
                     case Engine::Fm: y = lv.fm.tick(); break;

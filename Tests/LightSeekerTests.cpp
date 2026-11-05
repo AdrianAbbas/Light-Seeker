@@ -2785,6 +2785,7 @@ int paintedSnapshots(const juce::String& directory) {
 #include "MixTests.h"
 #include "SearchTests.h"
 #include "BrassTests.h"
+#include "AttackTests.h"
 
 int main(int argc, char** argv) {
     juce::ScopedJuceInitialiser_GUI gui;
@@ -2811,6 +2812,7 @@ int main(int argc, char** argv) {
         else if (arg == "--search-snapshots" && i + 1 < argc) return searchSnapshots(argv[i + 1]);
         else if (arg == "--listen-mix" && i + 1 < argc) return listenMix(argv[i + 1]);
         else if (arg == "--brass-report") return brassReport();
+        else if (arg == "--attack-report") return attackReport();
         else if (arg == "--calibrate-library" && i + 1 < argc) return calibrateLibrary(argv[i + 1]);
         else if (arg == "--listen-brass" && i + 1 < argc) return listenBrass(argv[i + 1]);
         else if (arg == "--brass-call") return brassCall();
@@ -2853,6 +2855,7 @@ int main(int argc, char** argv) {
     if (run("recorded")) testRecordedInstruments(s);
     if (run("search")) testSearch(s);
     if (run("brass")) testBrass(s);
+    if (run("attack")) testAttack(s);
     if (only.contains("qa")) testQa(s);   // long (130 journeys): run explicitly
     if (only.contains("cpu")) testCpu(s);   // report only: run explicitly
     std::cout << "\n" << s.passed << " passed, " << s.failed << " failed" << std::endl;

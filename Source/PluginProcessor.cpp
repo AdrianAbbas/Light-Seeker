@@ -70,6 +70,12 @@ LightSeekerProcessor::LightSeekerProcessor(bool instrumentEdition)
     markPresetBaseline();   // a new instance is "Init", unmodified
 }
 
+float LightSeekerProcessor::migratedPunch(float control, int instrument) noexcept {
+    const auto& p = ls::inst::patch(instrument);
+    if (std::abs(control - 0.5f) < 1.0e-4f || std::abs(p.punchLegacyDb - p.punchDb) < 1.0e-4f) return control;
+    return dc::dsp::punchControl(dc::dsp::punchDb(control, p.punchLegacyDb), p.punchDb);
+}
+
 float LightSeekerProcessor::punchDesignDb() const noexcept {
     return instrumentMode ? ls::inst::patch(shownInstrument.load(std::memory_order_relaxed)).punchDb : 0.0f;
 }
@@ -766,6 +772,9 @@ juce::AudioProcessorEditor* LightSeekerProcessor::createEditor() { return new Li
 void LightSeekerProcessor::getStateInformation(juce::MemoryBlock& data) {
     auto state = parameters.copyState();
     state.setProperty("version", 4, nullptr);
+    // GarageBand hotfix: the Punch design (2: the struck instruments' new defaults). States
+    // without it come from before; see setStateInformation.
+    state.setProperty("punchDesign", 2, nullptr);
     state.setProperty("editorScale", static_cast<double>(editorScale.load()), nullptr);
     state.setProperty("presetName", presetName, nullptr);
     state.setProperty("presetModified", presetModified(), nullptr);
@@ -810,6 +819,26 @@ void LightSeekerProcessor::setStateInformation(const void* data, int size) {
                 if (!std::isfinite(v)) return;
                 value = parameter->getNormalisableRange().snapToLegalValue(v);
             }
+    }
+    // GarageBand hotfix: the struck and plucked instruments' Punch defaults changed. A
+    // session from before with Punch left at its default (50 %) simply gets the new default;
+    // one where Punch had been moved keeps the dB it had on the instrument it was saved
+    // with (the control is re-expressed against the new default).
+    if (instrumentMode && !incoming.hasProperty("punchDesign")) {
+        float location = 0, sub = 0, locked = 0, *punchValue = nullptr;
+        for (auto& [parameter, value] : values) {
+            if (parameter->getParameterID() == dc::ids::location) location = value;
+            else if (parameter->getParameterID() == dc::ids::subLocation) sub = value;
+            else if (parameter->getParameterID() == dc::ids::instLock) locked = value;
+            else if (parameter->getParameterID() == dc::ids::punch) punchValue = &value;
+        }
+        if (punchValue != nullptr) {
+            // The instrument it played: the locked one, else its place's.
+            const int index = locked >= 0.5f && incoming.hasProperty("lockedInstrument")
+                                  ? juce::jlimit(0, ls::inst::instrumentCount - 1, static_cast<int>(incoming.getProperty("lockedInstrument")))
+                                  : ls::inst::instrumentIndex(juce::roundToInt(location), juce::roundToInt(sub));
+            *punchValue = migratedPunch(*punchValue, index);
+        }
     }
     for (auto& [parameter, value] : values) parameter->setValueNotifyingHost(parameter->convertTo0to1(value));
     // The window's scale and the preset name (version 4).
