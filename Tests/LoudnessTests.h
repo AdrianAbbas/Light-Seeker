@@ -231,24 +231,40 @@ struct Render {
     double outputLimiterDb = 0, punchLimiterDb = 0;
 };
 
-// The trims before the rebalance, for one render (restored after).
+// Everything the rebalance changed, as it shipped before it (restored after): the instruments'
+// trims, the library brass's trims (re-fitted at the new levels) and the Fairy Harp's share of
+// its court's sympathetic strings. The same code otherwise: "before" is the shipped state.
 struct BeforeTrims {
-    std::array<float, 31> saved {}, savedStandIn {};
+    struct Saved { float trim, standIn, library, libraryStandIn, character; };
+    std::array<Saved, 31> saved {};
     bool on;
+    // The library trims as they shipped (Source/Synth/LibraryTrims.h before the rebalance).
+    static float libraryBefore(const char* name) {
+        const std::string n(name);
+        return n == "Fanfare Trumpets" || n == "Epic Choir and Brass" ? 8.1f : n == "Orchestral Chord Pad" ? 7.7f
+             : n == "Soaring Horn" || n == "Heroic Horns" ? 8.6f : 0.0f;
+    }
     explicit BeforeTrims(bool enable) : on(enable) {
         if (!on) return;
         for (int i = 0; i < ls::inst::instrumentCount; ++i) {
-            saved[std::size_t(i)] = ls::inst::patch(i).trimDb;
-            savedStandIn[std::size_t(i)] = ls::inst::patch(i).standInTrimDb;
+            const auto& p = ls::inst::patch(i);
+            saved[std::size_t(i)] = { p.trimDb, p.standInTrimDb, p.libraryTrimDb, p.libraryStandInTrimDb, p.spaceCharacter };
             ls::inst::setTrimForTests(i, ls::inst::legacyTrimDb(i, false), false);
             ls::inst::setTrimForTests(i, ls::inst::legacyTrimDb(i, true), true);
+            ls::inst::setLibraryTrimForTests(i, libraryBefore(p.name), false);
+            ls::inst::setLibraryTrimForTests(i, libraryBefore(p.name), true);
+            ls::inst::setSpaceCharacterForTests(i, 1.0f);
         }
     }
     ~BeforeTrims() {
         if (!on) return;
         for (int i = 0; i < ls::inst::instrumentCount; ++i) {
-            ls::inst::setTrimForTests(i, saved[std::size_t(i)], false);
-            ls::inst::setTrimForTests(i, savedStandIn[std::size_t(i)], true);
+            const auto& v = saved[std::size_t(i)];
+            ls::inst::setTrimForTests(i, v.trim, false);
+            ls::inst::setTrimForTests(i, v.standIn, true);
+            ls::inst::setLibraryTrimForTests(i, v.library, false);
+            ls::inst::setLibraryTrimForTests(i, v.libraryStandIn, true);
+            ls::inst::setSpaceCharacterForTests(i, v.character);
         }
     }
 };
@@ -375,7 +391,7 @@ int calibrateLoudness(const juce::String& path) {
     std::cout << "recordings: " << lswb::samples::Bank::get().message() << "\n";
     std::array<float, 31> trims {}, standIns {};
     for (int pass = 0; pass < 2; ++pass) {
-        lswb::samples::Bank::bypassForTests(pass == 1);
+        lswb::samples::Bank::bypassRecordingsForTests(pass == 1);
         auto& out = pass == 0 ? trims : standIns;
         std::array<bool, 31> todo {};
         for (int i = 0; i < ls::inst::instrumentCount; ++i) {
@@ -405,7 +421,23 @@ int calibrateLoudness(const juce::String& path) {
         }
         for (int i = 0; i < ls::inst::instrumentCount; ++i) ls::inst::setTrimForTests(i, out[std::size_t(i)], pass == 1);
     }
-    lswb::samples::Bank::bypassForTests(false);
+    // How much louder each instrument's own part is now than before the rebalance (in each
+    // condition): an older session where Level had been moved opens that much lower.
+    std::array<float, 31> shift {}, standInShift {};
+    for (int pass = 0; pass < 2; ++pass) {
+        lswb::samples::Bank::bypassRecordingsForTests(pass == 1);
+        std::array<double, 31> now {}, then {};
+        forEachInstrument([&](int i) { now[std::size_t(i)] = loudnessOf(playPart(i, roleOf(i).part)).integrated; });
+        {
+            BeforeTrims before(true);
+            forEachInstrument([&](int i) { then[std::size_t(i)] = loudnessOf(playPart(i, roleOf(i).part)).integrated; });
+        }
+        for (int i = 0; i < ls::inst::instrumentCount; ++i) {
+            (pass == 0 ? shift : standInShift)[std::size_t(i)] = float(std::round((now[std::size_t(i)] - then[std::size_t(i)]) * 10.0) / 10.0);
+            std::cout << (pass == 0 ? "" : "stand-in ") << instrumentName(i) << ": " << fmt(then[std::size_t(i)]) << " -> " << fmt(now[std::size_t(i)]) << " LUFS\n";
+        }
+    }
+    lswb::samples::Bank::bypassRecordingsForTests(false);
     const auto list = [](const auto& a) {
         juce::String s;
         for (std::size_t i = 0; i < a.size(); ++i) s << (i ? ", " : "") << juce::String(a[i], 1) << "f";
@@ -429,7 +461,12 @@ int calibrateLoudness(const juce::String& path) {
          << "// The trims before the loudness rebalance (a dry held chord's loudest 400 ms): kept so a\n"
          << "// session saved before it, where Level had been moved, opens at the loudness it had.\n"
          << "inline constexpr std::array<float, 31> legacyInstrumentTrims { " << list(legacy) << " };\n"
-         << "inline constexpr std::array<float, 31> legacyStandInTrims { " << list(legacyStandIn) << " };\n}\n";
+         << "inline constexpr std::array<float, 31> legacyStandInTrims { " << list(legacyStandIn) << " };\n"
+         << "// How much louder each instrument's own part (in its place, at the defaults) is than before\n"
+         << "// the rebalance (LU; the trims, the library brass's re-fitted trims, the Fairy Harp's share of\n"
+         << "// its court): an older session where Level had been moved opens that much lower.\n"
+         << "inline constexpr std::array<float, 31> levelShift { " << list(shift) << " };\n"
+         << "inline constexpr std::array<float, 31> standInLevelShift { " << list(standInShift) << " };\n}\n";
     return juce::File::getCurrentWorkingDirectory().getChildFile(path).replaceWithText(text) ? 0 : 1;
 }
 
@@ -560,12 +597,12 @@ void testLoudness(Suite& s) {
 
     // Without the recordings: the stand-ins, on the same gate.
     {
-        lswb::samples::Bank::bypassForTests(true);
+        lswb::samples::Bank::bypassRecordingsForTests(true);
         std::array<double, 31> level {};
         forEachInstrument([&](int i) {
             if (ls::inst::patchUsesRecordings(ls::inst::patch(i))) level[std::size_t(i)] = loudnessOf(playPart(i, roleOf(i).part)).integrated;
         });
-        lswb::samples::Bank::bypassForTests(false);
+        lswb::samples::Bank::bypassRecordingsForTests(false);
         for (int i = 0; i < ls::inst::instrumentCount; ++i) {
             if (!ls::inst::patchUsesRecordings(ls::inst::patch(i))) continue;
             const std::string detail = fmt(level[std::size_t(i)]) + " LUFS";
@@ -664,8 +701,9 @@ void testLoudness(Suite& s) {
         const int strings = mixsong::instrumentNamed("Shimmering Strings");
         const auto& p = ls::inst::patch(strings);
         const float moved = LightSeekerProcessor::migratedLevel(-13.0f, strings);
-        s.check(std::abs(moved - (-13.0f + ls::inst::legacyTrimDb(strings) - p.trimDb)) < 1.0e-3f,
-                "an older session's moved Level is re-expressed against the new trim (Shimmering Strings at -13 dB)", fmt(moved, 2) + " dB");
+        s.check(std::abs(moved - (-13.0f - ls::inst::levelShiftDb(strings))) < 1.0e-3f && ls::inst::levelShiftDb(strings) < -4.0f,
+                "an older session's moved Level is lowered by how much louder the instrument now is (Shimmering Strings at -13 dB)", fmt(moved, 2) + " dB");
+        juce::ignoreUnused(p);
         s.check(LightSeekerProcessor::migratedLevel(12.0f, mixsong::instrumentNamed("Concert Harp")) <= 12.0f
                     && LightSeekerProcessor::migratedLevel(-24.0f, strings) >= -24.0f, "... within the Level range");
         // Through the state: a session saved before (no levelDesign) on the strings at -13 dB.
@@ -702,6 +740,22 @@ void testLoudness(Suite& s) {
             k.p->setStateInformation(data.getData(), static_cast<int>(data.getSize()));
             const auto* again = k.p->parameters.getParameter(dc::ids::instLevel);
             s.check(std::abs(again->convertFrom0to1(again->getValue()) + 13.0f) < 1.0e-3f, "a session saved now reopens with its Level as it was");
+            // The same for the Soaring Horn (its library brass re-fitted too) at +6 dB.
+            {
+                const int horn = mixsong::instrumentNamed("Soaring Horn");
+                double was = 0;
+                {
+                    BeforeTrims legacy(true);
+                    Options o;
+                    o.level = 6.0f;
+                    was = loudnessOf(playPart(horn, Melody, o)).integrated;
+                }
+                Options o;
+                o.level = LightSeekerProcessor::migratedLevel(6.0f, horn);
+                const double is = loudnessOf(playPart(horn, Melody, o)).integrated;
+                s.check(std::abs(is - was) <= 0.3, "an older session's moved Level on the Soaring Horn plays as loud as it did",
+                        fmt(was, 2) + " -> " + fmt(is, 2) + " LUFS (Level +6.0 -> " + fmt(o.level, 2) + " dB)");
+            }
             // A session from before the Punch hotfix too (neither design): both migrate.
             xml->removeAttribute("punchDesign");
             juce::MemoryBlock older;

@@ -186,6 +186,9 @@ void setLibraryTiltForTests(int index, float dbPerOctave) noexcept;
 // their loudness, see the processor's state; the "before" listening renders).
 void setTrimForTests(int index, float db, bool standIn = false) noexcept;
 float legacyTrimDb(int index, bool standIn = false) noexcept;
+// How much louder an instrument's own part is than before the rebalance (LU).
+float levelShiftDb(int index, bool standIn = false) noexcept;
+void setSpaceCharacterForTests(int index, float share) noexcept;
 // Instruments follow the world's place order: Celestial Citadel's four, then three per location.
 int instrumentIndex(int location, int sub) noexcept;
 void instrumentPlace(int index, int& location, int& sub) noexcept;

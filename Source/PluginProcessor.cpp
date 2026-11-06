@@ -79,13 +79,12 @@ float LightSeekerProcessor::migratedPunch(float control, int instrument) noexcep
 float LightSeekerProcessor::migratedLevel(float levelDb, int instrument) noexcept {
     if (std::abs(levelDb) < 1.0e-4f) return levelDb;   // left at its default: the new level
     const auto& p = ls::inst::patch(instrument);
-    // The trim it was saved against: the stand-in's when its recordings are not there.
+    // How much louder it is now (its stand-in's when its recordings are not there).
     auto& bank = lswb::samples::Bank::get();
     bank.load();
     bank.waitUntilLoaded(3000);
     const bool standIn = ls::inst::patchUsesRecordings(p) && bank.state() != lswb::samples::Bank::Loading && !ls::inst::patchSampled(p);
-    const float now = standIn ? p.standInTrimDb : p.trimDb;
-    return juce::jlimit(-24.0f, 12.0f, levelDb + ls::inst::legacyTrimDb(instrument, standIn) - now);
+    return juce::jlimit(-24.0f, 12.0f, levelDb - ls::inst::levelShiftDb(instrument, standIn));
 }
 
 float LightSeekerProcessor::punchDesignDb() const noexcept {

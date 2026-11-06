@@ -171,7 +171,7 @@ usage limit or a compaction) continues from the first unticked line. Push to `ma
 - [x] L1. Loudness meter (ITU-R BS.1770: K-weighting, gated integrated, short-term max) and the standard test set (4-note legato chords 2 bars each for 16 bars, a melody of short and long notes, an 8th-note arpeggio; velocity 80; each instrument's own register), rendered in each instrument's own place at the shipped defaults (Intensity, MIX, Shimmer, Punch, Atmosphere); `--loudness-report`; the "before" table; push `[skip ci]`
 - [x] L2. Rebalance: each instrument's role (chords / melody / arpeggio), trims calibrated in place to a common target (+-1.5 LU), recordings, stand-ins and library brass; pads' build-up (more notes held, long holds) and the space/shimmer's share on sustained material checked; old sessions: new level only where Level was left at its default; push `[skip ci]`
 - [x] L3. Family pairs in the same place, the brass with its Punch, no clipping with every instrument's default Punch; push `[skip ci]`
-- [ ] L4. `loudness` group is the level-match test in CI (old dry-chord gates replaced), listening render (short mix, every instrument at default, before vs after) in test-logs, DEVLOG table and handoff; final push without `[skip ci]`, CI green
+- [x] L4. `loudness` group is the level-match test in CI (old dry-chord gates replaced), listening render (short mix, every instrument at default, before vs after) in test-logs, DEVLOG table and handoff; final push without `[skip ci]`, CI green
 
 ---
 
@@ -2654,3 +2654,202 @@ the chord pad, organ and glass harmonica +4.8), Concert Harp -2.8: Shimmering St
 sat 7.9 LU over Concert Harp's arpeggio here, at the same velocity (the developer's 13 dB in
 their song also had their own velocities, registers and voicings). Soaring Horn's solo was 4 LU
 under the trumpets'.
+
+### L2. The rebalance
+
+- **Target**: -20 LUFS integrated for every instrument's own part (about where the plucked
+  instruments already were, so the sustained ones came down rather than everything up:
+  headroom for the mix). Gate: +-1.5 LU.
+- **Calibration** (`LightSeekerTests --calibrate-instruments Source/Synth/InstrumentTrims.h`,
+  rewritten): each instrument's role part in its own place at the defaults, the trim moved by
+  the miss, until every miss is under 0.1 LU (two rounds: the chain is linear in the trim, the
+  place's level matcher follows the instrument); then the same without the developer's
+  recordings (`standInTrims`, the library brass present as in a build without the private
+  token). It also writes the trims before the rebalance (`legacy*Trims`, for the "before"
+  renders) and how much louder each instrument's own part now is (`levelShift`,
+  `standInLevelShift`, measured, for old sessions).
+- **Pads with long tails and stacked voices** are compensated by measuring them where their
+  tails and voices pile up: legato chords, 16 bars, in their place. Checked that nothing keeps
+  building (numbers below): bars 9-16 against bars 1-8 within -0.6..-0.1 LU; a chord held 24 s,
+  21-24 s against 3-6 s, within -0.7..+0.5 LU; eight notes held against four grow no more than
+  the same eight notes add up to played alone (their powers summed, each in its own register):
+  at most +0.8 LU beyond (Epic Choir and Brass +0.8, the Orchestral Chord Pad +0.7, the Grand Organ
+  +0.7; the others within +-0.4), the Cloud Pad and Radiant Choir less than that (-2.8 and -0.5:
+  their shared stages hold back).
+- **The space and the shimmer on sustained material** add little: on the chords, in place
+  against dry (Intensity 0) at most +0.4 LU (the place's level matcher keeps the sustain where
+  the instrument is; the tails ring on under it); Shimmer 100 % against 0 % at most +0.3 LU.
+- **The library brass** was re-fitted at the new levels (`--calibrate-library`, now with
+  `LS_KEEP_TILTS=1`: only its trims, not its register tilts): the brass shaping's drive depends
+  on the level reaching it, and the Soaring Horn came up 4 dB, so its real brass read 1.5 dB
+  under its synthesised self (the brass group's "level-matched with before"). Trims: Fanfare
+  Trumpets 8.1 -> 7.7 dB, Soaring Horn 8.6 -> 10.2 dB (Heroic Horns 8.6, Epic Choir and Brass
+  8.1, the chord pad 7.7: unchanged). A full re-fit (tilts too) moved the Soaring Horn's tilt
+  from 0.6 to 0.0 dB/octave and put its song call 2.2 dB over its synthesised self (the gate
+  is +2): kept the shipped tilts.
+- **The Fairy Harp** (`Patch::spaceCharacter`, new: how much of the place's signature an
+  instrument takes, times MIX Character, as `space` is for the reverbs): the Fairy Harp, an
+  octave up, plays right on the Fairy Court's sympathetic strings (three combs on C5, E5, G5,
+  feedback 0.92). Raised 1.8 dB to its arpeggio's target, its four-note C and G chords at
+  velocity 80 rang those strings 3.5 dB into the output's safety limiter (an instant peak
+  limiter: a flattened strike). A softer or longer pluck changed nothing (the loudness and the
+  peaks moved together); the court's strings are the cause (MIX Character 0: no limiting). It
+  takes 40 % of them by default: chords -0.6 dB at the limiter at most, the arpeggio 0.1 LU
+  quieter (taken up by the trim), the court's ring still there on every note. MIX Character
+  150 % gives it 60 %.
+- **Old sessions** (`levelDesign` 1 in the state, new): Level left at its default (0 dB) gets
+  the new level. A Level the user had moved is lowered by how much louder the instrument's own
+  part now is (`levelShift`, measured, not the trim's change: for the brass and the Fairy Harp
+  the two differ by 0.2-1.6 LU), on the instrument it was saved with (locked, else its place's;
+  the stand-in's shift when its recordings are missing), within the Level range. E.g. the
+  developer's Shimmering Strings at -13 dB opens at -7.9 dB and sounds as before. Sessions from
+  before the Punch hotfix migrate both. Factory presets leave Level at its default.
+
+### L3. Siblings, the brass, clipping
+
+- **Siblings in the same place**: every pair of instruments of one location, both played
+  (locked) in each one's place, each on its own part: furthest apart 0.7 LU (gate
+  3 LU, twice the tolerance: two instruments each within 1.5 LU of the target).
+- **The brass with its Punch** (on its own part; Punch 0 -> its default): Fanfare Trumpets -22.9 -> -20.0 LUFS
+  (+3.0 LU: its melody's short notes are mostly hit), Soaring Horn -21.2 -> -20.0 (+1.2), Heroic
+  Horns -20.4 -> -19.9 (+0.5), Epic Choir and Brass -20.1 -> -20.0 (the choir carries its chords).
+  The brass is matched *with* its Punch: the hits are part of how loud a fanfare sounds. The
+  brass group's checks all hold (real brass level-matched with its synthesised self, not
+  louder overall, its song call within the report band: +1.1 to +1.8 dB).
+- **Clipping at every instrument's default Punch**: on all three parts of all 31 instruments
+  at velocity 80, the sample peak stays at or under -0.3 dBFS and the output's safety limiter
+  takes at most 1 dB (worst: the Fairy Harp's chords, -0.6 dB; everything else 0). Punch's own
+  ceiling (it only takes back what Punch added, above -0.4 dBFS inside the synth) shaves up to
+  1.0 dB off the Heroic Horns' +8 dB hits on their four-note chords and 2.0 dB off the Fanfare
+  Trumpets' on chords (not their part: their melody 0 dB); gated at 1.5 dB on each instrument's
+  own part.
+
+### The table: before and after
+
+Each instrument in its own place at the shipped defaults, velocity 80, with the recordings,
+the library brass and the captured spaces (`--loudness-report` and `--loudness-report before`;
+the "before" puts back everything this changed: the trims, the library brass's trims, the Fairy
+Harp's full share of its court). Integrated LUFS (BS.1770); target -20 LUFS on each
+instrument's own part; every one now within 0.1 LU of it (gate +-1.5).
+
+| Instrument (place) | role (register) | before: its part, LUFS (vs target) | after | after: chords / melody / arpeggio, integrated / short-term max | trim before -> after (dB) |
+|---|---|---|---|---|---|
+| Fanfare Trumpets (Gates of Dawn) | melody (as written) | -18.8 (+1.2) | -20.0 (+0.0) | -19.6 / -18.1 · -20.0 / -18.2 · -18.7 / -17.6 | -16.9 -> -17.7 |
+| Shimmering Strings (Hall of Mirrors) | chords (as written) | -14.9 (+5.1) | -20.0 (+0.0) | -20.0 / -18.9 · -24.4 / -23.4 · -25.8 / -24.5 | -11.9 -> -17.0 |
+| Orchestral Chord Pad (Throne of Light) | chords (as written) | -15.2 (+4.8) | -20.0 (+0.0) | -20.0 / -18.3 · -27.3 / -25.2 · -36.4 / -35.1 | -11.7 -> -16.5 |
+| Soaring Horn (Spire Summit) | melody (-12) | -24.0 (-4.0) | -20.0 (+0.0) | -17.7 / -16.6 · -20.0 / -18.5 · -19.4 / -17.9 | -16.9 -> -14.5 |
+| Rising Harp Glissando (Cloud Steps) | arpeggio (as written) | -19.7 (+0.3) | -20.0 (+0.0) | -22.3 / -22.2 · -23.1 / -21.5 · -20.0 / -18.9 | -3.4 -> -3.7 |
+| Angelic Choir (Sanctum) | chords (+12) | -16.2 (+3.8) | -20.0 (+0.0) | -20.0 / -18.2 · -31.3 / -27.8 · -32.4 / -30.6 | 2.8 -> -1.0 |
+| Wind Chimes and Bells (Bell Garden) | arpeggio (+12) | -19.8 (+0.2) | -20.0 (+0.0) | -17.5 / -16.1 · -22.5 / -19.9 · -20.0 / -18.9 | -11.4 -> -11.6 |
+| Glass Harp (Moonwell) | melody (as written) | -22.5 (-2.5) | -20.0 (-0.0) | -13.4 / -12.7 · -20.0 / -17.5 · -21.6 / -20.5 | -1.3 -> 1.2 |
+| Elven Lyre (Leaf Halls) | arpeggio (as written) | -21.9 (-1.9) | -20.0 (-0.0) | -18.3 / -18.8 · -23.1 / -22.0 · -20.0 / -18.5 | 7.8 -> 9.7 |
+| Airy Flute (Starlit Canopy) | melody (+12) | -20.2 (-0.2) | -20.0 (+0.0) | -14.7 / -13.3 · -20.0 / -19.0 · -20.9 / -20.2 | -16.3 -> -16.1 |
+| Crystal Bells (Prism Hall) | arpeggio (+12) | -18.9 (+1.1) | -20.0 (-0.0) | -20.9 / -21.6 · -22.3 / -20.8 · -20.0 / -18.8 | -10.6 -> -11.7 |
+| Glass Harmonica Pad (Mirror Lake) | chords (+12) | -15.2 (+4.8) | -20.0 (-0.0) | -20.0 / -18.0 · -28.6 / -25.1 · -36.4 / -34.7 | -9.1 -> -13.9 |
+| Celesta (Diamond Vault) | arpeggio (+12) | -19.8 (+0.2) | -20.0 (-0.0) | -15.2 / -16.7 · -21.0 / -17.1 · -20.0 / -18.4 | -5.2 -> -5.4 |
+| Warm Acoustic Guitar (Sunlit Meadow) | arpeggio (as written) | -20.7 (-0.7) | -20.0 (-0.0) | -18.7 / -18.5 · -24.6 / -23.6 · -20.0 / -18.6 | 7.8 -> 8.5 |
+| Bouncy Kalimba (Butterfly Glade) | arpeggio (+12) | -22.0 (-2.0) | -20.0 (+0.0) | -19.5 / -20.0 · -22.3 / -20.1 · -20.0 / -18.8 | -0.3 -> 1.7 |
+| Pastoral Oboe (Wildflower Hill) | melody (as written) | -22.1 (-2.1) | -20.0 (-0.0) | -13.4 / -11.8 · -20.0 / -18.9 · -20.4 / -19.0 | -21.7 -> -19.6 |
+| Grand Organ (Nave of Light) | chords (as written) | -15.2 (+4.8) | -20.0 (+0.0) | -20.0 / -18.7 · -24.9 / -23.5 · -25.3 / -24.1 | -16.2 -> -21.0 |
+| Radiant Choir (Choir Loft) | chords (as written) | -15.0 (+5.0) | -20.0 (-0.0) | -20.0 / -18.3 · -29.8 / -27.0 · -36.8 / -34.7 | -5.9 -> -10.9 |
+| Celesta and Harp (Stained Glass Chapel) | arpeggio (as written) | -21.2 (-1.2) | -20.0 (-0.0) | -18.9 / -20.8 · -23.4 / -21.5 · -20.0 / -18.9 | -6.2 -> -5.0 |
+| Cloud Pad (Cloud Bridge) | chords (as written) | -14.8 (+5.2) | -20.0 (-0.0) | -20.0 / -17.8 · -28.8 / -26.3 · -29.2 / -27.3 | -7.3 -> -12.5 |
+| Breathy Wind Flute (Windswept Isle) | melody (+12) | -20.8 (-0.8) | -20.0 (+0.0) | -14.0 / -12.4 · -20.0 / -17.1 · -20.6 / -17.2 | -16.0 -> -15.2 |
+| Shimmering Pluck (Sky Harbour) | arpeggio (as written) | -19.8 (+0.2) | -20.0 (-0.0) | -21.9 / -20.3 · -21.1 / -19.6 · -20.0 / -19.1 | -3.1 -> -3.3 |
+| Concert Harp (Rose Garden) | arpeggio (as written) | -22.8 (-2.8) | -20.0 (-0.0) | -19.2 / -19.5 · -24.8 / -21.7 · -20.0 / -18.7 | -4.9 -> -2.1 |
+| Music Box (Fountain Court) | arpeggio (+12) | -19.6 (+0.4) | -20.0 (-0.0) | -21.1 / -24.0 · -21.2 / -20.0 · -20.0 / -17.2 | -2.3 -> -2.7 |
+| Harpsichord (Marble Colonnade) | arpeggio (as written) | -21.2 (-1.2) | -20.0 (-0.0) | -17.4 / -17.0 · -22.7 / -21.0 · -20.0 / -18.7 | -1.3 -> -0.1 |
+| Bouncy Pizzicato (Mushroom Ring) | arpeggio (+12) | -18.0 (+2.0) | -20.0 (+0.0) | -18.5 / -20.1 · -23.1 / -21.4 · -20.0 / -18.8 | 0.9 -> -1.1 |
+| Twinkling Glockenspiel (Firefly Hollow) | arpeggio (+24) | -17.8 (+2.2) | -20.0 (+0.0) | -20.8 / -22.5 · -22.2 / -21.0 · -20.0 / -19.3 | -6.7 -> -8.9 |
+| Fairy Harp (Fairy Court) | arpeggio (+12) | -21.8 (-1.8) | -20.1 (-0.1) | -18.1 / -20.2 · -25.6 / -23.9 · -20.1 / -18.2 | 0.5 -> 2.5 |
+| Heroic Horns (Eyrie) | chords (as written) | -19.0 (+1.0) | -19.9 (+0.1) | -19.9 / -19.0 · -20.8 / -19.3 · -20.1 / -18.8 | -17.4 -> -18.1 |
+| Warm Strings (Golden Nest) | chords (+12) | -14.4 (+5.6) | -20.0 (-0.0) | -20.0 / -18.9 · -26.0 / -24.9 · -28.0 / -27.0 | -9.0 -> -14.6 |
+| Epic Choir and Brass (Summit of Winds) | chords (as written) | -17.6 (+2.4) | -20.0 (-0.0) | -20.0 / -18.9 · -27.2 / -26.3 · -27.9 / -26.7 | -12.0 -> -14.4 |
+
+The other two parts are printed to show what each instrument does off its role: a pad's
+arpeggio is far quieter (its slow attack never opens on eighths), a harp's chords louder than
+its arpeggio (four strikes at once). They are not matched: matching a harp's chords to a pad's
+would leave the harp's arpeggios 2-5 LU under the pad, the problem this fixes.
+
+### L4. Tests, CI, listening render
+
+- **`loudness` group** (`Tests/LoudnessTests.h`, 239 checks), the permanent level-match test:
+  the meter against the standard's reference points (EBU Tech 3341 / BS.2217: a 1 kHz sine at
+  -23 dBFS reads -23.0 LUFS at 48 and 44.1 kHz, one channel -26.0, the -36/-23/-36 dBFS gate case
+  -23.0, K-weighting); every instrument has its role; **each of the 31 within +-1.5 LU of the
+  target on its own part** (and every stand-in, without the recordings); no clipping on any part
+  at the default Punch; the sustained instruments' build-up, space and shimmer; the siblings in
+  each other's places; old sessions' Level (default -> new level; moved -> as loud as before,
+  checked by rendering, on Shimmering Strings and the Soaring Horn; a session saved now
+  reopens unchanged); the brass's Punch report. Builds without the captured spaces or the library
+  report the instruments affected instead of gating them (CI has both: `LS_REQUIRE_*`).
+- **The old gates replaced**: the `instruments` group's "level-matched" (a dry chord's loudest
+  400 ms, -18 +-2 dB) and its stand-in twin, the `recorded` group's "level-matched with its
+  siblings" and the `brass` group's "level-matched with the other instruments" and "level-matched
+  siblings" now point at the loudness group (the dry-chord number is still printed as a report).
+  The `mix` group's "the same sustain as before" (the brass's dry sustain against the numbers
+  before Mix and Punch) now expects that number moved by exactly the trim's change.
+- **CI**: `scripts/run-tests-parallel.sh` runs `--only loudness` after the ten shards, alone (it
+  renders on all four cores itself: as an eleventh concurrent process it would slow the
+  wall-clock checks, the Hotfixes' lesson). About 5 minutes here; the whole suite 20 minutes.
+  A new Linux step writes the listening render and both tables to the test-logs artifact
+  (`loudness/`).
+- **Listening render** (`--listen-loudness`, CI artifact `LightSeeker-linux-test-logs/loudness/`):
+  a 16-bar mix at 120 bpm on the test set's chords, five instances in their own places, every
+  control at its default, no fader moved, summed 6 dB down: Concert Harp arpeggios, a Shimmering
+  Strings pad, a Fanfare Trumpets call, Angelic Choir (upper chord tones, an octave up), an Airy
+  Flute melody. `mix-before.wav`, `mix-after.wav`, `mix-before-then-after.wav`, and each track
+  alone (`before-*.wav`, `after-*.wav`). Here:
+
+```
+before: Concert Harp -22.8 LUFS (short-term max -21.5)
+before: Shimmering Strings -14.9 LUFS (short-term max -13.8)
+before: Fanfare Trumpets -19.3 LUFS (short-term max -18.5)
+before: Angelic Choir -17.5 LUFS (short-term max -16.1)
+before: Airy Flute -20.2 LUFS (short-term max -19.2)
+before: the mix -17.4 LUFS, peak -5.5 dBFS
+after: Concert Harp -20.0 LUFS (short-term max -18.7)
+after: Shimmering Strings -20.0 LUFS (short-term max -18.9)
+after: Fanfare Trumpets -20.5 LUFS (short-term max -19.7)
+after: Angelic Choir -21.3 LUFS (short-term max -19.9)
+after: Airy Flute -20.0 LUFS (short-term max -19.0)
+after: the mix -19.7 LUFS, peak -8.3 dBFS
+13 listening files written to /home/user/deps/listen
+```
+
+  Before, the strings sat 7.9 LU over the harp and the choir 5.3 over it; after, the five are
+  within 1.3 LU (the choir's part here is three upper voices, not its four-note chord: -1.3; the
+  trumpets' call is shorter than its test melody: -0.5).
+- **Local run before the final push** (Linux, this container, with the recordings, the library
+  brass and the captured spaces, CI's condition): the whole suite as CI runs it, **2599 passed,
+  0 failed** (the loudness group 239 of them).
+
+### Handoff: what to listen for in GarageBand
+
+- **Your seven-part piece, every fader and Level back at 0 dB**: the strings pad, the choir and
+  the harp arpeggios should now sit together without moving anything; the pads and choirs came
+  down about 5 dB (Shimmering Strings -5.1, Warm Strings -5.6, Cloud Pad -5.2, the chord pad, the
+  organ and the glass harmonica -4.8, Radiant Choir -5.0, Angelic Choir -3.8), the Soaring Horn
+  up 4, the Concert Harp up 2.8, Glass Harp +2.5, the kalimba and oboe about +2. If something
+  still sits wrong, which part was it playing (chords, a line, an arpeggio) and how many dB?
+- **An old project where you had turned Level down** on the strings: it opens with Level
+  raised by what the strings came down (-13 dB -> -7.9 dB) and sounds exactly as it did. Where
+  Level was never touched, the new level.
+- **The Fairy Harp in the Fairy Court**: chords no longer drive the court's sympathetic strings
+  into the limiter; the court's ring is still on every note (40 % of it). Too little? MIX
+  Character up brings more.
+- **The brass**: as loud as the others with its Punch; Punch 0 makes the trumpets' melody about
+  3 LU quieter (their hits are much of their loudness).
+
+### Known issues and decisions to revisit
+
+- The role parts are one choice per instrument (`roles` in `Tests/LoudnessTests.h`): the Glass
+  Harp is matched as a solo line (rubbed glasses), the Heroic Horns as a section's chords, the
+  Fanfare Trumpets as a melody. Played otherwise they differ by what their sound does (the
+  table's other columns).
+- Integrated loudness is gated: a harp's quiet decays between strikes count less than a pad's
+  steady sustain, by design of the standard (it matches what listeners call equally loud).
+- The Fanfare Trumpets' Punch ceiling shaves 2 dB of their hits on four-note chords (not their
+  part); the Heroic Horns' 1 dB on theirs. Punch's own design (it never touches the note itself).
+- The Fairy Court's strings are tuned to C major (C5 E5 G5): other harps and plucks an octave
+  up in C may ring them hard too; none reached the limiter in the test set.

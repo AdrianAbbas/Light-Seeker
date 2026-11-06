@@ -965,6 +965,15 @@ void setTrimForTests(int index, float db, bool standIn) noexcept {
     (standIn ? p.standInTrimDb : p.trimDb) = db;
 }
 
+void setSpaceCharacterForTests(int index, float share) noexcept {
+    patches()[std::size_t(std::clamp(index, 0, instrumentCount - 1))].spaceCharacter = share;
+}
+
+float levelShiftDb(int index, bool standIn) noexcept {
+    const auto i = std::size_t(std::clamp(index, 0, instrumentCount - 1));
+    return standIn ? standInLevelShift[i] : levelShift[i];
+}
+
 float legacyTrimDb(int index, bool standIn) noexcept {
     const auto i = std::size_t(std::clamp(index, 0, instrumentCount - 1));
     return standIn ? legacyStandInTrims[i] : legacyInstrumentTrims[i];
