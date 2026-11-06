@@ -2391,7 +2391,7 @@ all exactly as before Mix and Punch; never below velocity 1. Celesta and Harp si
 in its chapel than before Mix and Punch: its drier reverb share (80 %), a Mix and Punch design
 choice, not the strike.
 
-**Tests** (`attack` group, `Tests/AttackTests.h`, its own shard `9-attack`): the 15 instruments
+**Tests** (`attack` group, `Tests/AttackTests.h`, in the brass shard `9-brass`): the 15 instruments
 are exactly the ones without a sustain; Punch off by default on each; for each, at 0.3 / 0.7 /
 1.0, note and chord: never clips (peak <= -0.3 dBFS) and below velocity 1 the output limiter is
 never needed; the attack no more than 13 dB over its own decay and no sharper than at Punch 0;
@@ -2525,6 +2525,14 @@ than Standard", 40.0 vs 40.0 ms). Reported, not changed: measured alone here the
 the drawer is 11.9 ms (12.0 ms before this work), the map's 11.6 ms; nothing in these hotfixes
 touches painting (the hover guard runs on the 10 Hz timer, outside paint). Every functional
 check is green.
+
+### CI, third push: the timing failures were this work's own
+
+The two wall-clock checks had passed on every run before this work and failed on both runs
+after it: not runner noise. The cause was the new `9-attack` shard, an eleventh test process
+running at the same time as the other ten on the 4-core runner, which slowed the repaint and
+Eco timings in the basics shard (alone they are unchanged: 11.9 ms). The attack group now runs
+in the brass shard (`--only brass,attack`): no extra concurrency.
 
 ### Handoff: what to check in GarageBand
 

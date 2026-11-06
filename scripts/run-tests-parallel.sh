@@ -17,8 +17,9 @@ mkdir -p "$logs"
 "$tests" --only mix > "$logs/9-mix.txt" 2>&1 &
 "$tests" --only instrument,instruments > "$logs/7-instruments.txt" 2>&1 &
 "$tests" --only recorded > "$logs/8-recorded.txt" 2>&1 &
-"$tests" --only brass > "$logs/9-brass.txt" 2>&1 &
-"$tests" --only attack > "$logs/9-attack.txt" 2>&1 &
+# The attack group (GarageBand hotfix) shares the brass shard: an eleventh concurrent shard
+# loaded the 4-core runner enough to fail the wall-clock repaint and Eco checks.
+"$tests" --only brass,attack > "$logs/9-brass.txt" 2>&1 &
 wait
 "$tests" --only cpu > "$logs/4-cpu.txt" 2>&1
 
