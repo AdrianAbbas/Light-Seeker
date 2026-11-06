@@ -177,6 +177,11 @@ const Patch& patch(int index) noexcept;
 // The calibration tool (`LightSeekerTests --calibrate-library`) tries trims in place.
 void setLibraryTrimForTests(int index, float db, bool standIn = false) noexcept;
 void setLibraryTiltForTests(int index, float dbPerOctave) noexcept;
+// The loudness rebalance: the calibration (`LightSeekerTests --calibrate-instruments`) tries
+// level trims in place; the trims before it (old sessions where Level had been moved keep
+// their loudness, see the processor's state; the "before" listening renders).
+void setTrimForTests(int index, float db, bool standIn = false) noexcept;
+float legacyTrimDb(int index, bool standIn = false) noexcept;
 // Instruments follow the world's place order: Celestial Citadel's four, then three per location.
 int instrumentIndex(int location, int sub) noexcept;
 void instrumentPlace(int index, int& location, int& sub) noexcept;

@@ -3,7 +3,7 @@
 //   instrument    the two plug-ins, MIDI playing, Lock instrument, travel with held notes
 //   instruments   every instrument: plays, in tune, distinct from its siblings, level-matched,
 //                 no hung notes (also during journeys)
-//   --calibrate-instruments   measures each instrument's level and prints the trims
+//   (--calibrate-instruments: the loudness rebalance, LoudnessTests.h)
 
 // A host for the instrument: no input, a stereo output, MIDI in.
 struct InstrumentHost {
@@ -719,39 +719,6 @@ void testInstruments(Suite& s) {
         h.render(10.0);
         s.check(h.p->synthForTest().activeVoices() == 0, "... and silence after the release");
     }
-}
-
-int calibrateInstruments(const juce::String& path) {
-    samplesLoaded();
-    std::array<float, 31> trims {}, standIns {};
-    for (int pass = 0; pass < 2; ++pass) {
-        lswb::samples::Bank::bypassForTests(pass == 1);
-        for (int i = 0; i < ls::inst::instrumentCount; ++i) {
-            const auto& p = ls::inst::patch(i);
-            if (pass == 1 && !ls::inst::patchUsesRecordings(p)) { standIns[std::size_t(i)] = trims[std::size_t(i)]; continue; }
-            const auto r = renderInstrument(i);
-            const double level = loudestDb(r.chordL, r.chordR, r.sr, 0.0, 1.5);
-            const float current = pass == 1 || (ls::inst::patchUsesRecordings(p) && !ls::inst::patchSampled(p)) ? p.standInTrimDb : p.trimDb;
-            const float trim = float(std::round((current + instrumentTargetDb - level) * 10.0) / 10.0);
-            (pass == 0 ? trims : standIns)[std::size_t(i)] = trim;
-            std::cout << (pass == 0 ? "" : "stand-in ") << instrumentName(i) << ": " << fmt(level) << " dB -> trim " << fmt(trim) << "\n";
-        }
-    }
-    lswb::samples::Bank::bypassForTests(false);
-    const auto list = [](const std::array<float, 31>& a) {
-        juce::String out;
-        for (std::size_t i = 0; i < a.size(); ++i) out << (i ? ", " : "") << juce::String(a[i], 1) << "f";
-        return out;
-    };
-    juce::String text;
-    text << "#pragma once\n"
-         << "// Level trims of the 31 instruments (dB), written by `LightSeekerTests --calibrate-instruments\n"
-         << "// Source/Synth/InstrumentTrims.h`: each brings a held chord (C4 E4 G4, velocity 0.8, dry) to\n"
-         << "// the same loudness. `standIn` is for builds without the recordings (their stand-ins play).\n"
-         << "#include <array>\n\nnamespace ls::inst {\n"
-         << "inline constexpr std::array<float, 31> instrumentTrims { " << list(trims) << " };\n"
-         << "inline constexpr std::array<float, 31> standInTrims { " << list(standIns) << " };\n}\n";
-    return juce::File::getCurrentWorkingDirectory().getChildFile(path).replaceWithText(text) ? 0 : 1;
 }
 
 // Listening renders (CI artifact): every instrument plays the same short phrase and chord,

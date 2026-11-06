@@ -166,6 +166,13 @@ usage limit or a compaction) continues from the first unticked line. Push to `ma
 - [x] H3c. Every other landmark checked against its scenes and fixed; atmosphere, labels, clicks kept; snapshots before/after (map, Royal Gardens and forest close-ups); push `[skip ci]`
 - [x] H4. Whole suite green, DEVLOG handoff (what to check in GarageBand); final push without `[skip ci]`, CI green
 
+**Loudness rebalance: every instrument level in its own place, on its own kind of part** (see "Loudness rebalance" below; local work: recordings in `/home/user/deps/samples`, captures `/home/user/deps/irs`, JUCE `/home/user/deps/juce`, built in `build/`)
+
+- [x] L1. Loudness meter (ITU-R BS.1770: K-weighting, gated integrated, short-term max) and the standard test set (4-note legato chords 2 bars each for 16 bars, a melody of short and long notes, an 8th-note arpeggio; velocity 80; each instrument's own register), rendered in each instrument's own place at the shipped defaults (Intensity, MIX, Shimmer, Punch, Atmosphere); `--loudness-report`; the "before" table; push `[skip ci]`
+- [ ] L2. Rebalance: each instrument's role (chords / melody / arpeggio), trims calibrated in place to a common target (+-1.5 LU), recordings, stand-ins and library brass; pads' build-up (more notes held, long holds) and the space/shimmer's share on sustained material checked; old sessions: new level only where Level was left at its default; push `[skip ci]`
+- [ ] L3. Family pairs in the same place, the brass with its Punch, no clipping with every instrument's default Punch; push `[skip ci]`
+- [ ] L4. `loudness` group is the level-match test in CI (old dry-chord gates replaced), listening render (short mix, every instrument at default, before vs after) in test-logs, DEVLOG table and handoff; final push without `[skip ci]`, CI green
+
 ---
 
 ## Lessons carried over from DUNGEON CRAWLER (read first)
@@ -2560,3 +2567,90 @@ build, auval and the AU harness for both plug-ins green.
 - **The map**: the woods (real trees, conifers, blossom, shadows), Royal Gardens (hedges,
   roses, fountain, colonnade and pavilion), and the other landmarks: do they look like the
   places you get when you click them?
+
+## Loudness rebalance: every instrument level in its own place, on its own kind of part (2026-11-06)
+
+The developer, from a seven-part test piece (harp arpeggios, a strings pad, a brass fanfare,
+choir, flute melody, kalimba ostinato, bass): Shimmering Strings had to come down about 13 dB to
+sit level with the Concert Harp, and many others were out of balance. The level-match test
+measured the wrong thing: a **dry** three-note chord's **loudest 400 ms** (`InstrumentTests.h`,
+target -18 dB +-2). For a pad that is its sustain; for a harp it is the strike, a moment, while
+its notes then fall away; and it never heard the place's space, the shimmer, the Punch or a
+pad's long tails piling up under legato chords.
+
+### L1. The measurement (`Tests/LoudnessTests.h`)
+
+- **Meter**: ITU-R BS.1770-4 integrated loudness (K-weighting from the standard's prototypes at
+  any rate, equal to its 48 kHz coefficients; 400 ms blocks, 75 % overlap; absolute gate
+  -70 LUFS, relative gate -10 LU), the short-term maximum (3 s windows every 100 ms), the
+  momentary maximum and the sample peak. Checked against the standard's reference points in
+  the test (below).
+- **The standard test set** (120 bpm, 4/4, 16 bars each, C - Am - F - G - C - Em - F - G, two
+  bars a chord), velocity 80, each instrument in its own register:
+  (a) **chords**: four notes (root, third, fifth, octave; C3-A4), two bars each, legato (each
+  chord's notes end where the next begin); (b) **melody**: two-bar phrases of quarters and
+  eighths ending on a dotted half or a whole note (E4-G5), slightly detached; (c) **arpeggio**:
+  eighth notes up two octaves through the chord and back, each held for its eighth.
+- **Register** (semitones from the set's): bells, crystal bells, celesta, music box, kalimba,
+  pizzicato, fairy harp, Angelic Choir, Glass Harmonica Pad, Warm Strings (the violin) +12;
+  glockenspiel +24; the flutes +12 (E5-G6); Soaring Horn's solo -12 (E3-G4); the rest as written.
+- **Where and how**: each instrument in its own place, settled 6 s there, at the shipped
+  defaults (Intensity, MIX, Shimmer, Punch; the Atmosphere as it ships: on, level 0), through
+  the whole chain (the synth, the place's space and its level matcher, shimmer, the output
+  limiter), with the developer's recordings, the library brass and the captured spaces (CI's
+  condition).
+- **Roles** (the part each instrument is matched on): **chords** for the pads, choirs, strings,
+  the organ and the horn section (Shimmering Strings, Orchestral Chord Pad, Angelic Choir, Glass
+  Harmonica Pad, Grand Organ, Radiant Choir, Cloud Pad, Heroic Horns, Warm Strings, Epic Choir and
+  Brass); **arpeggio** for the harps, plucks, guitars, keyboards and bells (Rising Harp Glissando,
+  Wind Chimes and Bells, Elven Lyre, Crystal Bells, Celesta, Warm Acoustic Guitar, Bouncy Kalimba,
+  Celesta and Harp, Shimmering Pluck, Concert Harp, Music Box, Harpsichord, Bouncy Pizzicato,
+  Twinkling Glockenspiel, Fairy Harp); **melody** for the solo winds and brass (Fanfare Trumpets,
+  Soaring Horn, Airy Flute, Pastoral Oboe, Breathy Wind Flute, and the Glass Harp: rubbed glasses,
+  a sustained solo voice).
+- `LightSeekerTests --loudness-report [before]` prints the table (31 instruments x 3 parts,
+  rendered on 4 threads, 86 s here).
+
+**Before** (the shipped trims; integrated LUFS / short-term max LUFS; * the role's part; the
+target is -20 LUFS):
+
+| Instrument (place) | role | chords | melody | arpeggio | role part vs target |
+|---|---|---|---|---|---|
+| Fanfare Trumpets (Gates of Dawn) | melody | -18.5 / -17.1 | *-18.8 / -17.0 | -17.5 / -16.4 | +1.2 |
+| Shimmering Strings (Hall of Mirrors) | chords | *-14.9 / -13.8 | -19.3 / -18.3 | -20.7 / -19.4 | +5.1 |
+| Orchestral Chord Pad (Throne of Light) | chords | *-15.2 / -13.5 | -22.5 / -20.4 | -31.6 / -30.3 | +4.8 |
+| Soaring Horn (Spire Summit) | melody | -21.7 / -20.6 | *-24.0 / -22.5 | -23.4 / -21.9 | -4.0 |
+| Rising Harp Glissando (Cloud Steps) | arpeggio | -22.0 / -21.9 | -22.8 / -21.2 | *-19.7 / -18.6 | +0.3 |
+| Angelic Choir (Sanctum) | chords | *-16.2 / -14.4 | -27.5 / -24.0 | -28.6 / -26.8 | +3.8 |
+| Wind Chimes and Bells (Bell Garden) | arpeggio | -17.3 / -15.9 | -22.3 / -19.7 | *-19.8 / -18.7 | +0.2 |
+| Glass Harp (Moonwell) | melody | -15.9 / -15.2 | *-22.5 / -20.0 | -24.1 / -23.0 | -2.5 |
+| Elven Lyre (Leaf Halls) | arpeggio | -20.2 / -20.7 | -25.0 / -23.9 | *-21.9 / -20.4 | -1.9 |
+| Airy Flute (Starlit Canopy) | melody | -14.9 / -13.5 | *-20.2 / -19.2 | -21.1 / -20.4 | -0.2 |
+| Crystal Bells (Prism Hall) | arpeggio | -19.8 / -20.5 | -21.2 / -19.7 | *-18.9 / -17.7 | +1.1 |
+| Glass Harmonica Pad (Mirror Lake) | chords | *-15.2 / -13.2 | -23.8 / -20.3 | -31.6 / -29.9 | +4.8 |
+| Celesta (Diamond Vault) | arpeggio | -15.0 / -16.5 | -20.8 / -16.9 | *-19.8 / -18.2 | +0.2 |
+| Warm Acoustic Guitar (Sunlit Meadow) | arpeggio | -19.5 / -19.3 | -25.3 / -24.3 | *-20.7 / -19.3 | -0.7 |
+| Bouncy Kalimba (Butterfly Glade) | arpeggio | -21.5 / -22.0 | -24.3 / -22.1 | *-22.0 / -20.8 | -2.0 |
+| Pastoral Oboe (Wildflower Hill) | melody | -15.5 / -13.9 | *-22.1 / -21.0 | -22.5 / -21.1 | -2.1 |
+| Grand Organ (Nave of Light) | chords | *-15.2 / -13.9 | -20.1 / -18.7 | -20.5 / -19.3 | +4.8 |
+| Radiant Choir (Choir Loft) | chords | *-15.0 / -13.3 | -24.8 / -22.0 | -31.8 / -29.7 | +5.0 |
+| Celesta and Harp (Stained Glass Chapel) | arpeggio | -20.1 / -22.0 | -24.6 / -22.8 | *-21.2 / -20.1 | -1.2 |
+| Cloud Pad (Cloud Bridge) | chords | *-14.8 / -12.6 | -23.6 / -21.1 | -24.0 / -22.1 | +5.2 |
+| Breathy Wind Flute (Windswept Isle) | melody | -14.8 / -13.2 | *-20.8 / -17.9 | -21.4 / -18.0 | -0.8 |
+| Shimmering Pluck (Sky Harbour) | arpeggio | -21.7 / -20.1 | -20.9 / -19.4 | *-19.8 / -18.9 | +0.2 |
+| Concert Harp (Rose Garden) | arpeggio | -22.0 / -22.3 | -27.6 / -24.5 | *-22.8 / -21.5 | -2.8 |
+| Music Box (Fountain Court) | arpeggio | -20.7 / -23.6 | -20.8 / -19.6 | *-19.6 / -16.8 | +0.4 |
+| Harpsichord (Marble Colonnade) | arpeggio | -18.6 / -18.2 | -23.9 / -22.2 | *-21.2 / -19.9 | -1.2 |
+| Bouncy Pizzicato (Mushroom Ring) | arpeggio | -16.5 / -18.1 | -21.1 / -19.4 | *-18.0 / -16.8 | +2.0 |
+| Twinkling Glockenspiel (Firefly Hollow) | arpeggio | -18.6 / -20.3 | -20.0 / -18.8 | *-17.8 / -17.1 | +2.2 |
+| Fairy Harp (Fairy Court) | arpeggio | -18.5 / -19.5 | -27.0 / -25.2 | *-21.8 / -19.5 | -1.8 |
+| Heroic Horns (Eyrie) | chords | *-19.0 / -18.2 | -19.9 / -18.4 | -19.2 / -17.9 | +1.0 |
+| Warm Strings (Golden Nest) | chords | *-14.4 / -13.3 | -20.4 / -19.3 | -22.4 / -21.4 | +5.6 |
+| Epic Choir and Brass (Summit of Winds) | chords | *-17.6 / -16.5 | -24.8 / -23.9 | -25.5 / -24.3 | +2.4 |
+
+What it shows: the sustained instruments on their chords were 4-6 LU over the plucked ones on
+their arpeggios (Warm Strings +5.6, Cloud Pad +5.2, Shimmering Strings +5.1, Radiant Choir +5.0,
+the chord pad, organ and glass harmonica +4.8), Concert Harp -2.8: Shimmering Strings' chords
+sat 7.9 LU over Concert Harp's arpeggio here, at the same velocity (the developer's 13 dB in
+their song also had their own velocities, registers and voicings). Soaring Horn's solo was 4 LU
+under the trumpets'.

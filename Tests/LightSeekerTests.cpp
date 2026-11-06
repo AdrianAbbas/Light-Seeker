@@ -31,6 +31,8 @@
 #include <map>
 #include <new>
 #include <set>
+#include <thread>
+#include <atomic>
 #include <optional>
 #include <string>
 #include <vector>
@@ -2790,6 +2792,7 @@ int paintedSnapshots(const juce::String& directory) {
 #include "SearchTests.h"
 #include "BrassTests.h"
 #include "AttackTests.h"
+#include "LoudnessTests.h"
 
 int main(int argc, char** argv) {
     juce::ScopedJuceInitialiser_GUI gui;
@@ -2803,7 +2806,7 @@ int main(int argc, char** argv) {
         else if (arg == "--listen" && i + 1 < argc) return listen(argv[i + 1]);
         else if (arg == "--signatures") return signatureCheck();
         else if (arg == "--synth-debug") return synthDebug();
-        else if (arg == "--calibrate-instruments" && i + 1 < argc) return calibrateInstruments(argv[i + 1]);
+        else if (arg == "--calibrate-instruments" && i + 1 < argc) return calibrateLoudness(argv[i + 1]);
         else if (arg == "--listen-instruments" && i + 1 < argc) return listenInstruments(argv[i + 1]);
         else if (arg == "--listen-changed" && i + 1 < argc) return listenChanged(argv[i + 1]);
         else if (arg == "--instrument-snapshot" && i + 1 < argc) return instrumentSnapshot(argv[i + 1]);
@@ -2817,6 +2820,7 @@ int main(int argc, char** argv) {
         else if (arg == "--listen-mix" && i + 1 < argc) return listenMix(argv[i + 1]);
         else if (arg == "--brass-report") return brassReport();
         else if (arg == "--attack-report") return attackReport();
+        else if (arg == "--loudness-report") return loudnessReport(i + 1 < argc && juce::String(argv[i + 1]) == "before");
         else if (arg == "--calibrate-library" && i + 1 < argc) return calibrateLibrary(argv[i + 1]);
         else if (arg == "--listen-brass" && i + 1 < argc) return listenBrass(argv[i + 1]);
         else if (arg == "--brass-call") return brassCall();

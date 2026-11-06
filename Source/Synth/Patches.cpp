@@ -955,6 +955,16 @@ void setLibraryTiltForTests(int index, float dbPerOctave) noexcept {
     patches()[std::size_t(std::clamp(index, 0, instrumentCount - 1))].libraryTiltDb = dbPerOctave;
 }
 
+void setTrimForTests(int index, float db, bool standIn) noexcept {
+    auto& p = patches()[std::size_t(std::clamp(index, 0, instrumentCount - 1))];
+    (standIn ? p.standInTrimDb : p.trimDb) = db;
+}
+
+float legacyTrimDb(int index, bool standIn) noexcept {
+    const auto i = std::size_t(std::clamp(index, 0, instrumentCount - 1));
+    return standIn ? legacyStandInTrims[i] : legacyInstrumentTrims[i];
+}
+
 void setLibraryTrimForTests(int index, float db, bool standIn) noexcept {
     auto& p = patches()[std::size_t(std::clamp(index, 0, instrumentCount - 1))];
     (standIn ? p.libraryStandInTrimDb : p.libraryTrimDb) = db;
