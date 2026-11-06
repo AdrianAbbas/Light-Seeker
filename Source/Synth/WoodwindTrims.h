@@ -10,6 +10,6 @@
 #include <array>
 
 namespace ls::inst {
-inline constexpr std::array<float, 31> woodwindTrims { 0.0f, 0.0f, 17.3f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 14.7f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 20.0f, 0.0f, 0.0f, 0.0f, 0.0f, 15.8f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f };
-inline constexpr std::array<float, 31> woodwindStandInTrims { 0.0f, 0.0f, 17.3f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 14.7f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 20.0f, 0.0f, 0.0f, 0.0f, 0.0f, 15.8f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f };
+inline constexpr std::array<float, 31> woodwindTrims { 0.0f, 0.0f, 17.3f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 14.7f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 20.8f, 0.0f, 0.0f, 0.0f, 0.0f, 15.8f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f };
+inline constexpr std::array<float, 31> woodwindStandInTrims { 0.0f, 0.0f, 17.3f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 14.7f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 20.8f, 0.0f, 0.0f, 0.0f, 0.0f, 15.8f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f };
 }

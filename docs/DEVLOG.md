@@ -2981,7 +2981,7 @@ unchanged.
 |  | Piccolo (Character), an octave up | `vsco-piccolo-sus` | `vsco-piccolo-stac`, -9 dB | -12, 0.3 | 0.2 / 0.7 | +4.5 dB, brighter |
 | Breathy Wind Flute (Windswept Isle) | the flute | `vsco-flute-sus` (no vibrato) + `vsco-flute-vib` (by the wheel) | `vsco-flute-stac`, -12 dB | 0 (as loud as the flute: the wind), 0.05; it breathes in (150 ms), low-pass 7 kHz | 0.1 / 0.3 | +4.5 dB, brighter, the vibrato comes in: it soars |
 |  | Wind (Character), an octave up | `vsco-piccolo-sus`, airy (80 ms in) | none | -3, 0.1 (the wind around it) | 0 / 0.5 | +4.5 dB |
-| Pastoral Oboe (Wildflower Hill) | the oboe | `vsco-oboe-vib` (sustain with vibrato), warm (low-pass 11 kHz) | `vsco-oboe-stac`, -7 dB | -15, 0.3 | 0.35 / 0.25 | +4.5 dB, brighter |
+| Pastoral Oboe (Wildflower Hill) | the oboe | `vsco-oboe-vib` (sustain with vibrato), warm (low-pass 11 kHz) | `vsco-oboe-stac`, -7 dB | -6, 0.75 (its round fundamental: warmth) | 0 / 0.25 | +4.5 dB, brighter |
 |  | Recorder (Character), an octave up | `vsco-flute-sus` (no vibrato: pure; low-pass 9 kHz) | `vsco-flute-stac`, -8 dB | -11, 0.25 | 0.1 / 0.3 | +4.5 dB |
 | Orchestral Chord Pad (Throne of Light) | Woodwinds (the new macro): flute an octave up | `vsco-flute-sus` | none (it swells in, 750 ms) | -12, 0.4 | 0.15 / 0.3 | +3 dB |
 |  | clarinet at the pad's pitch | `vsco-clarinet-sus` | none | -12, 0.4 | 0.1 / 0.1 | +3 dB |
@@ -2995,10 +2995,17 @@ and shimmer are the instruments' own, as before.
 recordings, the library and the captured spaces): each solo woodwind's **melody** (the loudness
 test's: 16 bars of quarters, eighths and long notes, velocity 80, an octave up for the flutes)
 in its own place at the defaults as loud as with its synthesis: woodwind trims Airy Flute
-14.7 dB, Breathy Wind Flute 15.8, Pastoral Oboe 20.0 (the real part's level against the
+14.7 dB, Breathy Wind Flute 15.8, Pastoral Oboe 20.8 (the real part's level against the
 prepared notes' -20 dB RMS); the chord pad's woodwinds alone (its chords with the macro at 50 %
 less the macro at 0) as loud as their stand-ins (-28.2 LUFS, 8 LU under the pad: a soft layer;
 first designed 3 dB louder, -24.6, only 4.6 LU under it, and lowered), trim 17.3 dB. The pad's
 own trim brings its chords back to the target with the choir in it: -16.5 -> -17.1 dB (both
 conditions; `InstrumentTrims.h`, the only instrument trim changed; its `levelShift` for old
 sessions stays: its part is at the same -20 LUFS).
+
+**The oboe's warmth** (found by the instruments group's "in tune" check, the pitch class of a
+held A4 strongest): the library's oboe has a weak fundamental (at A4 7 dB under its third
+harmonic, E), and the presence band at 2.9 kHz lifted its sixth (E again): E read 5.7 dB over A.
+The tuning itself was right (harmonic sum: 0 cents). The presence band came off the oboe (warm,
+not nasal) and more of the synthesised oboe's round fundamental went under it (-15 -> -6 dB,
+its tone 0.3 -> 0.75): A strongest again, and closer to "warm and sunny".

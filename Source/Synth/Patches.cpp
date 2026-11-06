@@ -592,7 +592,7 @@ std::array<Patch, instrumentCount> build() {
         // The real woodwinds: the library's oboe with its vibrato, warm (its low-pass closed a
         // little, presence for the sun in it), a soft tongued front, the synthesis's breath under
         // it. The recorder above on the library's flute without vibrato, pure and soft.
-        a = woodwind(a, { "vsco-oboe-vib", nullptr, "vsco-oboe-stac", -7.0f, -15.0f, 0.3f, 0.35f, 0.25f });
+        a = woodwind(a, { "vsco-oboe-vib", nullptr, "vsco-oboe-stac", -7.0f, -6.0f, 0.75f, 0.0f, 0.25f });
         a.real.lowpass = 11000.0f;
         a.real.legatoSkipMs = 80.0f;   // the oboe speaks at once
         b = woodwind(b, { "vsco-flute-sus", nullptr, "vsco-flute-stac", -8.0f, -11.0f, 0.25f, 0.1f, 0.3f });
