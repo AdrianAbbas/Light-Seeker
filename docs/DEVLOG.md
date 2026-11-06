@@ -2853,3 +2853,14 @@ after: the mix -19.7 LUFS, peak -8.3 dBFS
   part); the Heroic Horns' 1 dB on theirs. Punch's own design (it never touches the note itself).
 - The Fairy Court's strings are tuned to C major (C5 E5 G5): other harps and plucks an octave
   up in C may ring them hard too; none reached the limiter in the test set.
+
+### CI, final push (`0b8f05f`, run `42185040687`)
+
+First run: macOS green (build, auval and the AU harness for both plug-ins, arm64 and x86_64).
+Linux 2600 passed, 2 failed, both wall-clock timing checks on the shared runner ("a full
+repaint with the drawer fits in a 30 fps frame", 36.7 ms; "Eco costs less than Standard",
+28.2 vs 19.4 ms); every functional check green, the loudness group included. The shards are
+unchanged (the loudness group runs alone after them, not beside the basics shard where these
+timings are taken). Re-run once as agreed: **green**, Linux 2602 passed, 0 failed (the timing
+checks included); the loudness render and tables in the test-logs artifact (`loudness/`: the
+mix -17.4 LUFS before, -19.7 after, the same numbers as here).
