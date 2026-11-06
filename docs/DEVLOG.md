@@ -2532,7 +2532,11 @@ The two wall-clock checks had passed on every run before this work and failed on
 after it: not runner noise. The cause was the new `9-attack` shard, an eleventh test process
 running at the same time as the other ten on the 4-core runner, which slowed the repaint and
 Eco timings in the basics shard (alone they are unchanged: 11.9 ms). The attack group now runs
-in the brass shard (`--only brass,attack`): no extra concurrency.
+in the brass shard (`--only brass,attack`): no extra concurrency. On that run the timing
+checks passed; one other check failed: "Stop ends the journey where it is ... with a note". It
+read the "Journey stopped" note after rendering 9 s of audio, but the note stays up for 2.5 s of
+wall-clock time, so on a busy runner it was already gone. The test now reads the note right
+after Stop and checks the place 9 s later (the same checks, without the wall-clock race).
 
 ### Handoff: what to check in GarageBand
 

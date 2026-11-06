@@ -2335,11 +2335,15 @@ void testNavigation(Suite& s) {
             const int l = h.p->engine().destination(), sub = h.p->engine().destinationSub();
             view.stopButton().onClick();
             oneBlock(h);
+            view.followForTest();
+            // The note shows for 2.5 s of wall-clock time: read it right after Stop, not after
+            // rendering 9 s of audio (on a busy machine that takes longer than the note lasts).
+            const auto note = view.noticeText();
             h.render(9.0, plucks(0.3f));
             view.followForTest();
             s.check(steeringOff(*h.p) && h.p->engine().destination() == l && h.p->engine().destinationSub() == sub && !view.steerBadgeVisible()
-                    && view.noticeText() == "Journey stopped", "Stop ends the journey where it is (" + placeName(l, sub) + ") with a note",
-                    view.noticeText().toStdString());
+                    && note == "Journey stopped", "Stop ends the journey where it is (" + placeName(l, sub) + ") with a note",
+                    note.toStdString());
             s.check(h.p->locationIndex() == l && juce::roundToInt(plain(*h.p, dc::ids::subLocation)) == sub,
                     "and Location / Sub-location keep that place");
             view.choosePresetForTest(swamp);
