@@ -58,6 +58,7 @@ LightSeekerProcessor::LightSeekerProcessor(bool instrumentEdition)
         instCharacter = parameters.getRawParameterValue(dc::ids::instCharacter);
         instVowel = parameters.getRawParameterValue(dc::ids::instVowel);
         instEnsemble = parameters.getRawParameterValue(dc::ids::instEnsemble);
+        instLayer = parameters.getRawParameterValue(dc::ids::instLayer);
         instLevel = parameters.getRawParameterValue(dc::ids::instLevel);
         instOctave = parameters.getRawParameterValue(dc::ids::instOctave);
         instLock = parameters.getRawParameterValue(dc::ids::instLock);
@@ -544,6 +545,7 @@ void LightSeekerProcessor::renderInstrument(juce::AudioBuffer<float>& buffer, in
     m.character = finiteOr(instCharacter->load(), 0.5f);
     m.vowel = finiteOr(instVowel->load(), 0.5f);
     m.ensemble = finiteOr(instEnsemble->load(), 0.5f);
+    m.layer = finiteOr(instLayer->load(), 0.5f);
     m.levelDb = finiteOr(instLevel->load(), 0.0f);
     m.octave = juce::jlimit(-2, 2, static_cast<int>(std::lround(finiteOr(instOctave->load(), 0.0f))));
     m.shimmer = juce::jlimit(0.0f, dc::dsp::shimmerMax, finiteOr(shimmer->load(), 1.0f));

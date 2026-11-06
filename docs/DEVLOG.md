@@ -176,8 +176,8 @@ usage limit or a compaction) continues from the first unticked line. Push to `ma
 **Real woodwinds: VSCO 2 Community Edition** (see "Real woodwinds" below; the brass's licence entry, fetch and cache reused; samples never committed here; local work: library in `/home/user/deps/vsco`, recordings `/home/user/deps/samples`, captures `/home/user/deps/irs`, JUCE `/home/user/deps/juce`, built in `build/`)
 
 - [x] W1. Licence and source re-checked for the woodwinds (same commit, CC0); `docs/LICENSES/VSCO-2-CE.txt` lists what is used; sample prep of the flute (sustain, vibrato, expressive vibrato, staccato), oboe (vibrato sustain, staccato), piccolo, clarinet and bassoon (sustain, staccato) in `vsco.py` (vibrato loops, breath kept); `ci-fetch-vsco.sh` fetches the woodwind folders (cache key); push `[skip ci]`
-- [ ] W2. Engine: the real part on a synthesised wind layer (looped sustain, staccato front, a little synthesis under it), the vibrato set crossfaded by the mod wheel, the mod wheel as expression (swell and brightness) on the real woodwinds, legato (an overlapping note joins without a new attack), sparkle/air shaping; a second instrument macro (Layer) for the chord pad's woodwinds; push `[skip ci]`
-- [ ] W3. Instruments: Airy Flute (flute + piccolo), Breathy Wind Flute (flute + the wind's octave), Pastoral Oboe (oboe + the recorder on the flute), Orchestral Chord Pad (a soft woodwind choir: flute, clarinet, bassoon, on its own macro); level-matched on the melody loudness test; push `[skip ci]`
+- [x] W2. Engine: the real part on a synthesised wind layer (looped sustain, staccato front, a little synthesis under it), the vibrato set crossfaded by the mod wheel, the mod wheel as expression (swell and brightness) on the real woodwinds, legato (an overlapping note joins without a new attack), sparkle/air shaping; a second instrument macro (Layer) for the chord pad's woodwinds; push `[skip ci]`
+- [x] W3. Instruments: Airy Flute (flute + piccolo), Breathy Wind Flute (flute + the wind's octave), Pastoral Oboe (oboe + the recorder on the flute), Orchestral Chord Pad (a soft woodwind choir: flute, clarinet, bassoon, on its own macro); level-matched on the melody loudness test; push `[skip ci]`
 - [ ] W4. Tests (`woodwinds` group: in tune across the range with a cents report, dynamics smooth, no clicks at loops, note-offs, legato; level-matched (loudness, melody), distinct from siblings, stand-ins), listening renders (each before vs after, dry and in place) in test-logs, DEVLOG handoff (which instrument uses which woodwinds); final push without `[skip ci]`, CI green
 
 ---
@@ -2924,3 +2924,81 @@ stand-in, level-matched.
   (about 470 MB fetched blob-filtered instead of 230); the cache key follows the prep scripts, so
   the first run prepares again; the log gives the woodwind WAVs fetched and "Prepared: N library
   notes (338 brass, 232 woodwinds)". The workflow's steps are renamed for the woodwinds.
+
+### W2. The engine: the real part on a wind layer, expression, vibrato, legato
+
+- **The real woodwinds** (`Layer::real` on a synthesised wind layer, `Engine::Wind`; the brass's
+  mechanism, `Synth.cpp`): with its sets loaded the layer plays the library's looped **sustain**
+  (the recorded release when let go), a **staccato as the tongue's soft front** (a 40 ms burst,
+  levelled per note to its sustain note, then its own level: -7 to -12 dB, so it is a chiff, not
+  a second note), and the layer's own synthesis **under** it: mostly its breath (`synthTone`,
+  0.05-0.4 of its voiced tone; the wind voice's `tone` 0 is breath alone) so the attacks stay
+  natural and breathy; without the library, the synthesis alone, exactly as before (the stand-
+  in). The real woodwinds have their recorded vibrato or none: no pitch LFO on them, and none on
+  the synthesis under them. Whether a layer plays its real part is now asked per layer
+  (`realLoaded`: its sustain, front and vibrato sets), so the chord pad's real brass and its
+  woodwinds can be measured apart (`bypassWoodwindsForTests`).
+- **The vibrato set** (`Real::vibrato`): a second sustain set of the same notes with vibrato,
+  played beside the sustain and crossfaded with it (equal power, weights ramped per 64-sample
+  chunk; each vibrato note levelled to its sustain note): `vibratoMix` of it at mod wheel 0, all
+  of it at full wheel (`wheelVibrato`).
+- **The mod wheel is the real woodwinds' expression** (`expressionDb`, `expressionTone`): at 0
+  they play as designed (velocity makes the dynamics: a session that never touches the wheel
+  sounds as calibrated); up, they swell (+4.5 dB at full, +3 dB on the chord pad's choir, a gain
+  ramped per chunk) and open up (the low-pass +0.6 octave): louder and brighter, and on the
+  flutes the vibrato comes in (see W3). The stand-ins keep the wheel as vibrato, as before.
+- **Legato** (`Real::legato`, the solo woodwinds): a note started while another of the same
+  instrument is held (begun more than 35 ms before: not a chord) **joins** it: its sustain
+  starts `legatoSkipMs` in (past the onset: 140 ms on the flutes, whose breathy onset is slow,
+  80 on the oboe), faded in over 60 ms, with no front, no strike and no Punch; the held note
+  is marked slurred and, when let go, fades under the new one (0.5 s to -60 dB) instead of
+  playing its recorded release (the player stopping). The library has no legato transitions;
+  this is how they are made. Chords and detached notes start afresh.
+- **Shaping**: the brass's presence band (2.9 kHz) and drive, and a new **sparkle** band
+  (8.5 kHz, `Real::sparkle`): air and shine on top, the radiant part.
+- **The woodwinds' own trims** (`Patch::woodwindTrimDb`, `Source/Synth/WoodwindTrims.h`,
+  `--calibrate-woodwinds`) on their real part, with no register tilt (the prep evens the range);
+  the synthesis under them is `synthDb` under the stand-in itself (the brass's is under it with
+  the library trim: for the woodwinds that put the synthesis 10 dB over the stand-in and its
+  tone over the flute, a velocity dip of 3.7 dB at the layer change; found by the woodwinds
+  group's velocity check, fixed before anything else was tuned).
+- **A second instrument macro** (`instLayer`, "Instrument Layer", added last: sessions saved
+  before it open at 50 %, as designed): `Patch::layerMacro` names it, the layers marked
+  `layerMacro` follow it (0 off, 50 % as designed, 100 % +6 dB, as Character's). On the panel it
+  sits beside Character, named by the instrument ("Woodwinds" on the Orchestral Chord Pad),
+  dimmed on every other instrument.
+
+### W3. The instruments: which instrument plays which woodwinds
+
+Every synthesised woodwind layer of the four instruments became a real woodwind layer (its
+synthesis stays the stand-in, unchanged); the Orchestral Chord Pad gained three (eight layers,
+the most a patch has). The Grand Organ's trumpet stop is an organ reed, not a woodwind:
+unchanged.
+
+| Instrument (place) | Layer | VSCO 2 CE woodwinds | Front (soft staccato) | Synthesis under it (dB, its tone) | Presence / sparkle | Mod wheel |
+|---|---|---|---|---|---|---|
+| Airy Flute (Starlit Canopy) | the flute | `vsco-flute-vib` (sustain with vibrato) + `vsco-flute-expvib` (expressive vibrato, by the wheel) | `vsco-flute-stac`, -7 dB | -14, 0.35 | 0.35 / 0.7 | +4.5 dB, brighter, into the expressive vibrato |
+|  | Piccolo (Character), an octave up | `vsco-piccolo-sus` | `vsco-piccolo-stac`, -9 dB | -12, 0.3 | 0.2 / 0.7 | +4.5 dB, brighter |
+| Breathy Wind Flute (Windswept Isle) | the flute | `vsco-flute-sus` (no vibrato) + `vsco-flute-vib` (by the wheel) | `vsco-flute-stac`, -12 dB | 0 (as loud as the flute: the wind), 0.05; it breathes in (150 ms), low-pass 7 kHz | 0.1 / 0.3 | +4.5 dB, brighter, the vibrato comes in: it soars |
+|  | Wind (Character), an octave up | `vsco-piccolo-sus`, airy (80 ms in) | none | -3, 0.1 (the wind around it) | 0 / 0.5 | +4.5 dB |
+| Pastoral Oboe (Wildflower Hill) | the oboe | `vsco-oboe-vib` (sustain with vibrato), warm (low-pass 11 kHz) | `vsco-oboe-stac`, -7 dB | -15, 0.3 | 0.35 / 0.25 | +4.5 dB, brighter |
+|  | Recorder (Character), an octave up | `vsco-flute-sus` (no vibrato: pure; low-pass 9 kHz) | `vsco-flute-stac`, -8 dB | -11, 0.25 | 0.1 / 0.3 | +4.5 dB |
+| Orchestral Chord Pad (Throne of Light) | Woodwinds (the new macro): flute an octave up | `vsco-flute-sus` | none (it swells in, 750 ms) | -12, 0.4 | 0.15 / 0.3 | +3 dB |
+|  | clarinet at the pad's pitch | `vsco-clarinet-sus` | none | -12, 0.4 | 0.1 / 0.1 | +3 dB |
+|  | bassoon an octave down | `vsco-bassoon-sus` | none | -12, 0.4 | 0 / 0 | +3 dB |
+
+So all five woodwinds are played: the flute (four sets), the oboe (two), the piccolo (two), the
+clarinet and the bassoon (one each). Their places add the space; the bus's air shelf, chorus
+and shimmer are the instruments' own, as before.
+
+**Levels** (`--calibrate-woodwinds`, the loudness test, CI's condition: the developer's
+recordings, the library and the captured spaces): each solo woodwind's **melody** (the loudness
+test's: 16 bars of quarters, eighths and long notes, velocity 80, an octave up for the flutes)
+in its own place at the defaults as loud as with its synthesis: woodwind trims Airy Flute
+14.7 dB, Breathy Wind Flute 15.8, Pastoral Oboe 20.0 (the real part's level against the
+prepared notes' -20 dB RMS); the chord pad's woodwinds alone (its chords with the macro at 50 %
+less the macro at 0) as loud as their stand-ins (-28.2 LUFS, 8 LU under the pad: a soft layer;
+first designed 3 dB louder, -24.6, only 4.6 LU under it, and lowered), trim 17.3 dB. The pad's
+own trim brings its chords back to the target with the choir in it: -16.5 -> -17.1 dB (both
+conditions; `InstrumentTrims.h`, the only instrument trim changed; its `levelShift` for old
+sessions stays: its part is at the same -20 LUFS).

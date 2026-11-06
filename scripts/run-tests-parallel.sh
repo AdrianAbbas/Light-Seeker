@@ -18,8 +18,9 @@ mkdir -p "$logs"
 "$tests" --only instrument,instruments > "$logs/7-instruments.txt" 2>&1 &
 "$tests" --only recorded > "$logs/8-recorded.txt" 2>&1 &
 # The attack group (GarageBand hotfix) shares the brass shard: an eleventh concurrent shard
-# loaded the 4-core runner enough to fail the wall-clock repaint and Eco checks.
-"$tests" --only brass,attack > "$logs/9-brass.txt" 2>&1 &
+# loaded the 4-core runner enough to fail the wall-clock repaint and Eco checks. The woodwinds
+# group (the real woodwinds update) shares it too, for the same reason.
+"$tests" --only brass,attack,woodwinds > "$logs/9-brass.txt" 2>&1 &
 wait
 # The loudness group (the instruments' level match, BS.1770; the loudness rebalance) renders on
 # every core itself: alone after the shards, so it neither slows their wall-clock checks nor

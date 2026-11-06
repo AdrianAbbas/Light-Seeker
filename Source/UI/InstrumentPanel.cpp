@@ -29,10 +29,11 @@ InstrumentPanel::InstrumentPanel(LightSeekerProcessor& p) : processor(p) {
     if (auto* param = processor.parameters.getParameter(dc::ids::instLock))
         lockAttachment = std::make_unique<juce::ButtonParameterAttachment>(*param, lock);
 
-    const std::array<const char*, 10> ids { dc::ids::instTone, dc::ids::instAttack, dc::ids::instRelease, dc::ids::instCharacter,
+    // 10: the second macro (the real woodwinds update), shown after Character.
+    const std::array<const char*, 11> ids { dc::ids::instTone, dc::ids::instAttack, dc::ids::instRelease, dc::ids::instCharacter,
                                             dc::ids::instVowel, dc::ids::instEnsemble, dc::ids::instLevel, dc::ids::intensity,
-                                            dc::ids::punch, dc::ids::punchTime };
-    const std::array<const char*, 10> names { "Tone", "Attack", "Release", "Character", "Vowel", "Ensemble", "Level", "Intensity", "Punch", "Punch Time" };
+                                            dc::ids::punch, dc::ids::punchTime, dc::ids::instLayer };
+    const std::array<const char*, 11> names { "Tone", "Attack", "Release", "Character", "Vowel", "Ensemble", "Level", "Intensity", "Punch", "Punch Time", "Layer" };
     for (std::size_t k = 0; k < macros.size(); ++k) {
         auto& s = macros[k];
         s.setSliderStyle(juce::Slider::LinearVertical);
@@ -50,6 +51,7 @@ InstrumentPanel::InstrumentPanel(LightSeekerProcessor& p) : processor(p) {
         if (auto* param = processor.parameters.getParameter(ids[k]))
             macroAttachments[k] = std::make_unique<juce::SliderParameterAttachment>(*param, s);
     }
+    macros[10].setTooltip("The instrument's second layer (the chord pad's woodwinds): 0 % none, 50 % as designed, 100 % +6 dB");
     macros[4].setTooltip("The voices' vowel: mmm, ooh, oh, aah, ee (50 %: the instrument's own)");
     macros[5].setTooltip("The voices: one singer at 0 %, the instrument's choir at 50 %, eight singers at 100 %");
     macros[7].setTooltip("How much of the place's space (0 %: the instrument dry)");
@@ -190,6 +192,12 @@ void InstrumentPanel::refreshName() {
         macros[k].setAlpha(voiced ? 1.0f : 0.4f);
         macroLabels[k].setAlpha(voiced ? 1.0f : 0.4f);
     }
+    // The second macro only where the instrument has one (named by it, dimmed elsewhere).
+    const bool layered = p.layerMacro != nullptr;
+    macroLabels[10].setText(layered ? p.layerMacro : "Layer", juce::dontSendNotification);
+    macros[10].setEnabled(layered);
+    macros[10].setAlpha(layered ? 1.0f : 0.4f);
+    macroLabels[10].setAlpha(layered ? 1.0f : 0.4f);
     const bool sampled = ls::inst::patchSampled(p);
     bool usesSamples = false;
     usesSamples = ls::inst::patchUsesRecordings(p);
@@ -251,7 +259,8 @@ void InstrumentPanel::resized() {
     octaveLabel.setBounds(150, 80, 56, 24);
     octave.setBounds(208, 80, 48, 24);
     int x = 280;
-    for (std::size_t k = 0; k < macros.size(); ++k) {
+    // The second macro (10) beside Character, before the voices' two.
+    for (std::size_t k : { 0u, 1u, 2u, 3u, 10u, 4u, 5u, 6u, 7u, 8u, 9u }) {
         macroLabels[k].setBounds(x - 6, 22, 62, 16);
         macros[k].setBounds(x, 38, 50, 66);
         x += k == 5 || k == 7 ? 62 : 56;

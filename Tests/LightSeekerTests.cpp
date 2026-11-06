@@ -2,6 +2,8 @@
 //   LightSeekerTests                      run everything except the report-only cpu group
 //   LightSeekerTests --calibrate-library Source/Synth/LibraryTrims.h   the library brass's level trims
 //   LightSeekerTests --listen-brass dir   each brass instrument before/after the real brass, the mini-song
+//   LightSeekerTests --calibrate-woodwinds Source/Synth/WoodwindTrims.h   the library woodwinds' level trims
+//   LightSeekerTests --listen-woodwinds dir   each woodwind instrument before/after the real woodwinds
 //   LightSeekerTests --only a,b           run only some groups (smoke, locations, travel, shimmer...)
 //   LightSeekerTests --snapshot f.png     also write an image of the editor
 //   LightSeekerTests --painted-snapshots dir   review images of the painted map and places (200 %)
@@ -2795,6 +2797,7 @@ int paintedSnapshots(const juce::String& directory) {
 #include "BrassTests.h"
 #include "AttackTests.h"
 #include "LoudnessTests.h"
+#include "WoodwindTests.h"
 
 int main(int argc, char** argv) {
     juce::ScopedJuceInitialiser_GUI gui;
@@ -2827,6 +2830,9 @@ int main(int argc, char** argv) {
         else if (arg == "--loudness-report") return loudnessReport(i + 1 < argc && juce::String(argv[i + 1]) == "before");
         else if (arg == "--calibrate-library" && i + 1 < argc) return calibrateLibrary(argv[i + 1]);
         else if (arg == "--listen-brass" && i + 1 < argc) return listenBrass(argv[i + 1]);
+        else if (arg == "--calibrate-woodwinds" && i + 1 < argc) return calibrateWoodwinds(argv[i + 1]);
+        else if (arg == "--listen-woodwinds" && i + 1 < argc) return listenWoodwinds(argv[i + 1]);
+        else if (arg == "--woodwind-level" && i + 2 < argc) return woodwindLevel(argv[i + 1], juce::String(argv[i + 2]).getIntValue());
         else if (arg == "--brass-call") return brassCall();
         else if (arg == "--brass-range") return brassRange();
         else if (arg == "--brass-tune" && i + 2 < argc) return brassTune(argv[i + 1], juce::String(argv[i + 2]).getIntValue());
@@ -2869,6 +2875,7 @@ int main(int argc, char** argv) {
     if (run("brass")) testBrass(s);
     if (run("attack")) testAttack(s);
     if (run("loudness")) testLoudness(s);
+    if (run("woodwinds")) testWoodwinds(s);
     if (only.contains("qa")) testQa(s);   // long (130 journeys): run explicitly
     if (only.contains("cpu")) testCpu(s);   // report only: run explicitly
     std::cout << "\n" << s.passed << " passed, " << s.failed << " failed" << std::endl;

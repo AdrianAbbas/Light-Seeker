@@ -318,6 +318,31 @@ place (Gates of Dawn, Spire Summit, Throne of Light, Eyrie, Summit of Winds), dr
 - [ ] A build without the library (the stand-in: the CI log says "Library brass not
       fetched"): the brass sounds exactly as before.
 
+## Real woodwinds (VSCO 2 Community Edition)
+
+The woodwind instruments play the library's flute, oboe, piccolo, clarinet and bassoon. Each
+at its own place (Starlit Canopy, Windswept Isle, Wildflower Hill, Throne of Light), dry
+(Intensity 0 %) and in the place; compare with `test-logs/real-woodwinds/*-before-then-after.wav`:
+
+- [ ] Airy Flute: a real flute with its own vibrato, airy, bright and sparkling; a soft
+      tongued start on each note, breath in it but not hissy. The piccolo (Character) sparkles
+      above it. Mod wheel up: louder, brighter, a deeper, more expressive vibrato.
+- [ ] Breathy Wind Flute: a plain flute (no vibrato) wrapped in wind, breathing in before the
+      tone; soaring. Mod wheel up: it swells and the vibrato comes in. The Wind (Character): a
+      breathy piccolo an octave above.
+- [ ] Pastoral Oboe: a warm, sunny oboe with its vibrato, not nasal or harsh; the recorder
+      (Character) a pure flute an octave above. Mod wheel up: it swells, brighter.
+- [ ] Orchestral Chord Pad: a soft woodwind choir (flute an octave up, clarinet, bassoon an
+      octave down) swelling in with the strings, horns and voices; the Woodwinds macro (beside
+      Character): 0 % none, 50 % as designed, 100 % more. Dimmed on every other instrument.
+- [ ] Legato: play a line holding each note until the next starts: the notes join (no new
+      tongued start, no gap); detached notes start afresh.
+- [ ] Velocity: soft to loud one continuous rise; the recorded dynamics change colour.
+- [ ] Notes held for 5+ s (the loops) and let go (the recorded release): no clicks, no
+      pumping; the mod wheel moved while holding: no steps.
+- [ ] Level: as loud as before in a song (matched on the loudness test's melody: -20 LUFS).
+- [ ] A build without the library: the woodwinds sound as before (the synthesis).
+
 ## Hotfixes: the celesta's clang, sticky hover, the map
 
 - Celesta (Diamond Vault) and every struck or plucked instrument: full-velocity chords strike

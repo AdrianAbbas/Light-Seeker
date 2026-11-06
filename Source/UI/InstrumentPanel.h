@@ -32,6 +32,7 @@ public:
     juce::String characterLabel() const { return macroLabels[3].getText(); }
     bool voiceMacrosEnabled() const { return macros[4].isEnabled() && macros[5].isEnabled(); }
     juce::Slider& macroSlider(int k) { return macros[std::size_t(k)]; }
+    juce::Label& macroLabel(int k) { return macroLabels[std::size_t(k)]; }   // 10: the second macro (Layer)
     juce::Button& lockButton() { return lock; }
     juce::Button& nextButton() { return next; }
     juce::Button& previousButton() { return previous; }
@@ -65,9 +66,9 @@ private:
     juce::ToggleButton lock { "Lock instrument" };
     std::unique_ptr<juce::ButtonParameterAttachment> lockAttachment;
     // Tone, Attack, Release, Character, Vowel, Ensemble, Level, Intensity, Punch, Punch Time
-    std::array<juce::Slider, 10> macros;
-    std::array<juce::Label, 10> macroLabels;
-    std::array<std::unique_ptr<juce::SliderParameterAttachment>, 10> macroAttachments;
+    std::array<juce::Slider, 11> macros;
+    std::array<juce::Label, 11> macroLabels;
+    std::array<std::unique_ptr<juce::SliderParameterAttachment>, 11> macroAttachments;
     juce::TextButton mix { "MIX" };
     juce::ComboBox octave;
     juce::Label octaveLabel;

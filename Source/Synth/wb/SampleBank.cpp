@@ -147,6 +147,7 @@ const Instrument* Bank::instrument(const char* id) const {
         if (i->id == id) {
             const bool library = isLibraryId(i->id);
             if ((library && libraryBypassed.load(std::memory_order_relaxed)) || (!library && recordingsBypassed.load(std::memory_order_relaxed))) return nullptr;
+            if (library && woodwindsBypassed.load(std::memory_order_relaxed) && isWoodwindId(i->id)) return nullptr;
             return i.get();
         }
     return nullptr;

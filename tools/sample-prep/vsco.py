@@ -77,8 +77,9 @@ SOURCE_COMMIT = "28092772094b2d9f1148d84cea97f4545b8c687d"
 # crossfade, seconds), `transpose` (semitones: the library maps its piccolo an octave under
 # where it sounds, measured), `family` (brass or woodwinds, for the report).
 # `spread`: how far (cents, the standard deviation over the note) the pitch may move and still
-# be measured (a vibrato moves 20-40 cents by design; a staccato sliding into its note does not).
-VIB = {"loop": 4.5, "xfade": 0.15, "spread": 45.0, "family": "woodwinds"}
+# be measured (a vibrato moves 20-40 cents by design; a staccato sliding into its note does not);
+# `harmonicPitch`: the pitch refined by a harmonic sum over 0.3-3.5 s (a vibrato's).
+VIB = {"loop": 4.5, "xfade": 0.15, "spread": 45.0, "harmonicPitch": True, "family": "woodwinds"}
 WW = {"family": "woodwinds"}
 SETS = [
     ("vsco-horn-sus", "FHornSus.sfz", True, "F horn, sustain (VSCO 2 CE)", {}),
@@ -175,6 +176,27 @@ def measure_pitch(x, centre, sustained):
     spread = float(np.std(1200 * np.log2(np.array(good) / f0)))
     f0 = prepare.refine(seg[:int(0.5 * RATE)], f0, 4)
     return 69 + 12 * math.log2(f0 / 440.0), spread
+
+
+def harmonic_pitch(x, midi, seconds=(0.3, 3.5), harmonics=6):
+    """The pitch (MIDI) by a harmonic sum over a long stretch (log magnitudes of six harmonics in
+    a zero-padded spectrum, searched +-60 cents around `midi` in 0.5 cent steps): a vibrato's
+    pitch, which frame-by-frame estimates (YIN's median) misjudge by up to 20 cents."""
+    seg = x[int(seconds[0] * RATE):int(seconds[1] * RATE)]
+    if len(seg) < int(0.5 * RATE):
+        return None
+    size = 1 << 19
+    spectrum = np.abs(np.fft.rfft(seg * np.hanning(len(seg)), size))
+    freqs = np.fft.rfftfreq(size, 1.0 / RATE)
+    f0 = 440.0 * 2 ** ((midi - 69) / 12)
+    best = None
+    for c in np.arange(-60.0, 60.5, 0.5):
+        f = f0 * 2 ** (c / 1200)
+        ks = [k for k in range(1, harmonics + 1) if f * k < 0.45 * RATE]
+        v = float(np.mean([20 * np.log10(np.interp(f * k, freqs, spectrum) + 1e-12) for k in ks]))
+        if best is None or v > best[0]:
+            best = (v, c)
+    return midi + best[1] / 100.0
 
 
 def prepare_note(x, sustained, loop_seconds=2.5, xfade=0.08):
@@ -327,6 +349,12 @@ def process_set(sid, sfz, sustained, name, source, out_dir, report, opts=None):
         tune = float(r.get("tune", 0)) / 100.0
         y, loop, release, notes = prepare_note(x, sustained, float(opts.get("loop", 2.5)), float(opts.get("xfade", 0.08)))
         measured, spread = measure_pitch(y, centre, sustained)
+        if measured is not None and opts.get("harmonicPitch"):
+            # A vibrato sustain: its pitch by a harmonic sum over 0.3-3.5 s (YIN's median of the
+            # frames misjudged a vibrato oboe note by 20 cents).
+            hp = harmonic_pitch(y, measured)
+            if hp is not None:
+                measured = hp
         root = float(centre)
         cents = None
         if measured is None:

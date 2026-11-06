@@ -113,6 +113,21 @@ struct Layer {
         // faded in over 2 ms): the library's staccatos take 40-70 ms to speak; started where
         // the tongue has already struck, the front is sharp.
         float frontSkipMs = 0;
+        // The real woodwinds (on a synthesised wind layer, Engine::Wind; the real woodwinds
+        // update). `vibrato`: a second sustain set (the same notes played with vibrato),
+        // crossfaded with `sustain` (equal power, each note levelled to its sustain note):
+        // vibratoMix of it at mod wheel 0, all of it at full wheel when wheelVibrato. The mod
+        // wheel is the real part's expression: expressionDb louder and expressionTone octaves
+        // brighter at full wheel (0: as designed). sparkle: an air band (~8.5 kHz) on it.
+        // synthTone: how much of the synthesis under it is its tone (0: only its breath and air).
+        // legato: a note started while another is held joins it (no new attack: the sustain
+        // from legatoSkipMs in, faded in over 60 ms, no front, no strike, no Punch).
+        const char* vibrato = nullptr;
+        float vibratoMix = 0;
+        bool wheelVibrato = false;
+        float expressionDb = 0, expressionTone = 0, sparkle = 0, synthTone = 1;
+        bool legato = false;
+        float legatoSkipMs = 70;
     } real;
     float vibrato = 0, vibratoHz = 5.2f, vibratoDelay = 0.35f;   // semitones
     int model = 0;               // BodyType, Modes, StringSize or SynthModel as the engine says
@@ -120,6 +135,7 @@ struct Layer {
     const char* sample = nullptr;
     int lowKey = 0, highKey = 127;   // the keys this layer plays (after transposing)
     bool character = false;      // its level follows the Character macro
+    bool layerMacro = false;     // its level follows the second macro (Patch::layerMacro: the chord pad's Woodwinds)
     // GarageBand hotfix (Pluck): odd notes start with the pluck's pulse the other way up.
     // One note sounds the same; a chord's notes, plucked on the same sample, no longer add
     // their first peaks together (the Fairy Harp's chords reached the safety limiter).
@@ -152,6 +168,13 @@ struct Patch {
     // The real part's register tilt (dB per octave from C4, calibrated): the library brass grows
     // louder up its range faster than the synthesis it replaces; this brings it back in line.
     float libraryTiltDb = 0;
+    // The real woodwinds' level (dB on their real part, matched to the synthesis they replace on
+    // the loudness test's melody, WoodwindTrims.h), and the same without the developer's recordings.
+    float woodwindTrimDb = 0, woodwindStandInTrimDb = 0;
+    // The second instrument macro (the real woodwinds update): its name on the panel, nullptr:
+    // none (the macro is dimmed). The layers marked layerMacro follow it (0 off, 50 % as
+    // designed, 100 % +6 dB), as `character` layers follow Character.
+    const char* layerMacro = nullptr;
     float standInTrimDb = 0;     // the same without the recordings (their stand-ins play)
     float bendRange = 2;         // semitones
     int polyphony = 16;
@@ -202,11 +225,20 @@ bool patchUsesLibrary(const Patch&) noexcept;
 bool patchLibraryLoaded(const Patch&) noexcept;
 // Whether a bank set is the library's (VSCO 2 CE: ids `vsco-*`).
 bool librarySet(const char* id) noexcept;
+// Whether a patch has real woodwind layers (Layer::real on a wind layer), and whether a
+// layer's real part has every set it plays loaded.
+bool patchUsesWoodwinds(const Patch&) noexcept;
+bool realLoaded(const Layer&) noexcept;
+// The woodwind calibration (`LightSeekerTests --calibrate-woodwinds`) tries trims in place.
+void setWoodwindTrimForTests(int index, float db, bool standIn = false) noexcept;
+// Tests: the woodwinds' legato on or off (a legato join against a fresh attack).
+void setLegatoForTests(int index, bool on) noexcept;
 
 // The instrument macros (0.5 = as designed) and the octave shift.
 struct Macros {
     float tone = 0.5f, attack = 0.5f, release = 0.5f, character = 0.5f;
     float vowel = 0.5f, ensemble = 0.5f;   // the voice instruments (as designed at 0.5)
+    float layer = 0.5f;   // the second macro (Patch::layerMacro), as designed at 0.5
     int octave = 0;
     float levelDb = 0;
     float shimmer = 1.0f;   // the Shimmer control (0..1.5), on the bus shimmer

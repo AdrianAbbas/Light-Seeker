@@ -69,6 +69,9 @@ inline constexpr const char* mixDuck = "mixDuck";
 inline constexpr const char* atmosOn = "atmosOn";
 inline constexpr const char* punch = "punch";          // the instrument only
 inline constexpr const char* punchTime = "punchTime";  // the instrument only
+// The real woodwinds update: the instrument's second macro (the chord pad's Woodwinds; dimmed
+// on instruments without one). Added last, so sessions saved before it open at 50 %.
+inline constexpr const char* instLayer = "instLayer";  // the instrument only
 inline juce::String advanced(std::size_t index) { return juce::String("adv_") + moduleSpecs[index].id; }
 }
 
@@ -260,6 +263,8 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
             juce::AudioParameterFloatAttributes().withLabel("ms")
                 .withStringFromValueFunction([](float v, int) { return juce::String(juce::roundToInt(v)) + " ms"; })
                 .withValueFromStringFunction([](const juce::String& s) { return s.getFloatValue(); })));
+        layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { ids::instLayer, 1 }, "Instrument Layer",
+                                                               juce::NormalisableRange<float>(0.0f, 1.0f), 0.5f, macroText));
     }
     return layout;
 }

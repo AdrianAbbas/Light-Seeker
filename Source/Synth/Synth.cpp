@@ -157,11 +157,12 @@ struct SampleVoice {
         if (amp < 1.0f) amp = std::min(1.0f, amp + attackStep * float(n));
         if (pos >= double(z.length - 2) || fade < 1.0e-4f) on = false;
     }
-    void release(float seconds) {
+    // `tail` false: no recorded release (a legato slur's last note fades under the next).
+    void release(float seconds, bool tail = true) {
         if (!on || releasing) return;
         releasing = true;
         const auto& z = *zone;
-        if (z.release > 0 && pos < double(z.release)) {
+        if (tail && z.release > 0 && pos < double(z.release)) {
             // The bow lifts: the recorded tail, faded in over 40 ms, a slower fade on top.
             tailPos = double(z.release);
             tailMix = 0;
@@ -565,11 +566,34 @@ struct Synth::Voice {
         float frontGain = 0, synthRel = 0, realRelease = 0.35f, frontRelease = 0.7f, strike = 0, strikeDecay = 0;
         int strikeHold = 0, frontHold = 0;
         float frontFade = 1, frontFadeMul = 1;
-        Svf presenceBand, biteBand;
-        float presenceAmount = 0, biteNow = 0, biteDecay = 0, drive = 0;
+        Svf presenceBand, biteBand, sparkleBand;
+        float presenceAmount = 0, biteNow = 0, biteDecay = 0, drive = 0, sparkleAmount = 0;
+        // The real woodwinds: the vibrato set beside the sustain (equal-power weights, ramped per
+        // chunk), the vibrato note levelled to the sustain note; the mod wheel's expression (a
+        // gain ramped per chunk, and octaves of brightness on the low-pass).
+        bool woodwind = false, layerMacro = false;
+        SampleVoice vib;
+        float vibGain = 0, susW = 1, susWStep = 0, vibW = 0, vibWStep = 0, vibratoMix = 0, expr = 1, exprStep = 0;
+        float expressionDb = 0, expressionTone = 0;
+        bool wheelVibrato = false;
+        // The real part's weights for a mod wheel position (equal power between the sets).
+        void realWeights(float wheel, float& sus, float& vibrato) const noexcept {
+            if (!vib.on) { sus = 1.0f; vibrato = 0.0f; return; }
+            const float mix = std::clamp(vibratoMix + (wheelVibrato ? (1.0f - vibratoMix) * wheel : 0.0f), 0.0f, 1.0f);
+            sus = std::cos(mix * 1.5707963f);
+            vibrato = std::sin(mix * 1.5707963f);
+        }
+        float realTick() noexcept {
+            float y = sample.tick() * susW;
+            if (vib.on) y += vib.tick() * vibGain * vibW;
+            susW += susWStep;
+            vibW += vibWStep;
+            return y;
+        }
         float shape(float y) noexcept {
             if (!shaped) return y;
             y += presenceAmount * presenceBand.bandpass(y);
+            if (sparkleAmount > 0.0f) y += sparkleAmount * sparkleBand.bandpass(y);
             if (biteNow > 1.0e-4f) {
                 y += biteNow * biteBand.bandpass(y);
                 biteNow *= biteDecay;
@@ -584,6 +608,10 @@ struct Synth::Voice {
         float bent = 0, vowelBase = 3, singersBase = 1, choirVowelBase = 0;
     };
     bool on = false, keyDown = false, sustained = false, released = false, grace = false, moved = false;
+    // The real woodwinds' legato: this note joined one already held (no new attack); `slurred`:
+    // a note joined by the next one (it fades under it, without its recorded release).
+    bool legato = false, slurred = false;
+    uint64_t startedAt = 0;
     // Punch: the gain on hit (dB at its start), where it is in its settling, the gain now
     // and its step per sample (set once per chunk).
     float punchDb = 0, punchGain = 1, punchStep = 0;
@@ -641,13 +669,26 @@ bool patchUsesLibrary(const Patch& p) noexcept {
     return false;
 }
 
+bool realLoaded(const Layer& l) noexcept {
+    if (l.real.sustain == nullptr) return false;
+    const auto& bank = lswb::samples::Bank::get();
+    return bank.instrument(l.real.sustain) != nullptr && (l.real.front == nullptr || bank.instrument(l.real.front) != nullptr)
+           && (l.real.vibrato == nullptr || bank.instrument(l.real.vibrato) != nullptr);
+}
+
+bool patchUsesWoodwinds(const Patch& p) noexcept {
+    for (int k = 0; k < p.layerCount; ++k)
+        if (p.layers[std::size_t(k)].engine == Engine::Wind && p.layers[std::size_t(k)].real.sustain != nullptr) return true;
+    return false;
+}
+
 bool patchLibraryLoaded(const Patch& p) noexcept {
     bool any = false;
     const auto& bank = lswb::samples::Bank::get();
     for (int k = 0; k < p.layerCount; ++k) {
         const auto& l = p.layers[std::size_t(k)];
         if (l.real.sustain != nullptr) {
-            if (bank.instrument(l.real.sustain) == nullptr || (l.real.front != nullptr && bank.instrument(l.real.front) == nullptr)) return false;
+            if (!realLoaded(l)) return false;
             any = true;
         }
         if (l.needs != Needs::Library || l.engine != Engine::Sample) continue;
@@ -807,6 +848,7 @@ void Synth::startLayers(Voice& voice) noexcept {
     const float trimDb = patchUsesRecordings(p) && !patchSampled(p) ? p.standInTrimDb : p.trimDb;
     const bool library = patchLibraryLoaded(p);
     const float libraryTrimDb = patchUsesRecordings(p) && !patchSampled(p) ? p.libraryStandInTrimDb : p.libraryTrimDb;
+    const float woodwindTrimDb = patchUsesRecordings(p) && !patchSampled(p) ? p.woodwindStandInTrimDb : p.woodwindTrimDb;
     const int note = voice.note;
     const float velocity = voice.velocity;
     const float graceRing = voice.grace ? 0.7f : 1.0f;
@@ -836,6 +878,16 @@ void Synth::startLayers(Voice& voice) noexcept {
         lv.body.count = 0;
         lv.shaped = false;
         lv.real = false;
+        lv.woodwind = false;
+        lv.layerMacro = L.layerMacro;
+        lv.vib.on = false;
+        lv.expr = 1;
+        lv.exprStep = 0;
+        lv.susW = 1;
+        lv.susWStep = 0;
+        lv.vibW = 0;
+        lv.vibWStep = 0;
+        lv.sparkleAmount = 0;
         const float hardness = clamp01(L.p[0] * (1.15f - 0.3f * macros.attack) + 0.25f * (vel - 0.6f));
         switch (L.engine) {
             case Engine::Brass:
@@ -961,6 +1013,7 @@ void Synth::startLayers(Voice& voice) noexcept {
                 w.vibratoHz = L.vibratoHz;
                 w.vibratoDelay = L.vibratoDelay;
                 w.wander = 2.0f;
+                w.tone = 1;
                 w.gain = 1;
                 w.bend = bendNow * p.bendRange;
                 w.start(hz, attack, 0.25f, r, noiseAt);
@@ -1049,30 +1102,51 @@ void Synth::startLayers(Voice& voice) noexcept {
             case Engine::None: continue;
         }
         // The real brass (Layer::real) with the library loaded: its sustain and front start
-        // with the synthesis, which goes on under them.
+        // with the synthesis, which goes on under them. The real woodwinds the same on a wind
+        // layer, with their vibrato set beside the sustain, the mod wheel's expression, and
+        // legato (a note joining one held: no new attack).
         float realWeight = 0;
-        if (L.engine == Engine::Brass && L.real.sustain != nullptr && library) {
+        const bool realLayer = (L.engine == Engine::Brass || L.engine == Engine::Wind) && L.real.sustain != nullptr;
+        if (realLayer && (L.engine == Engine::Brass ? library : realLoaded(L))) {
             const auto& R = L.real;
+            const bool woodwind = L.engine == Engine::Wind;
+            const bool join = woodwind && R.legato && voice.legato;
             const auto* sus = lswb::samples::Bank::get().instrument(R.sustain);
-            const auto* stac = R.front != nullptr ? lswb::samples::Bank::get().instrument(R.front) : nullptr;
+            const auto* stac = R.front != nullptr && !join ? lswb::samples::Bank::get().instrument(R.front) : nullptr;
+            const auto* vibSet = R.vibrato != nullptr ? lswb::samples::Bank::get().instrument(R.vibrato) : nullptr;
             if (sus != nullptr) {
                 const float pick = unipolar(mix64(noiseAt + 5));
-                lv.sample.vibrato = L.vibrato;
+                // The recorded woodwinds carry their own vibrato (or none): no pitch vibrato on them.
+                const float realVibrato = woodwind ? 0.0f : L.vibrato;
+                lv.sample.vibrato = realVibrato;
                 lv.sample.vibratoHz = L.vibratoHz;
                 lv.sample.vibratoDelay = L.vibratoDelay;
                 lv.sample.bend = bendNow * p.bendRange;
                 lv.front.vibrato = 0;
                 lv.front.bend = bendNow * p.bendRange;
-                const bool ok = lv.sample.start(*sus, midi, vel, pick, R.attack * attackScale, r, 0.0f, 0.0f, 0.0f, R.offset, true);
+                // A legato note joins in its sustain, past the attack, faded in over 60 ms (the
+                // last note lets go under it: a crossfade, no new attack).
+                const float skip = join ? R.legatoSkipMs * 0.001f : 0.0f;
+                const float realAttack = join ? 0.06f : R.attack * attackScale;
+                const bool ok = lv.sample.start(*sus, midi, vel, pick, realAttack, r, skip, 0.0f, 0.0f, R.offset, true);
                 const float frontSkip = R.frontSkipMs * 0.001f * (0.4f + 0.6f * vel);
                 const bool frontOk = stac != nullptr
                                      && lv.front.start(*stac, midi, vel, unipolar(mix64(noiseAt + 7)), frontSkip > 0.0f ? 0.002f : 0.0f, r, frontSkip, 0.0f,
                                                        0.0f, R.frontOffset, true);
                 if (!frontOk) lv.front.on = false;
+                if (ok && vibSet != nullptr) {
+                    lv.vib.vibrato = 0;
+                    lv.vib.bend = bendNow * p.bendRange;
+                    if (lv.vib.start(*vibSet, midi, vel, pick, realAttack, r, skip, 0.0f, 0.0f, R.offset, true) && lv.vib.zone != nullptr)
+                        lv.vibGain = dbToGain(std::clamp(lv.sample.zone->loudnessDb - lv.vib.zone->loudnessDb, -12.0f, 12.0f));
+                    else
+                        lv.vib.on = false;
+                }
                 if (ok) {
                     const int wait = int(std::max(0.0f, R.delayMs) * 0.001f * r);
                     lv.sample.wait = wait;
                     lv.front.wait = wait;
+                    lv.vib.wait = wait;
                     // Full real within 3 semitones of the recorded range, synthesis alone 9 past it.
                     const float past = std::max({ 0.0f, midi - sus->highRoot, sus->lowRoot - midi });
                     realWeight = std::clamp(1.0f - (past - 3.0f) / 6.0f, 0.0f, 1.0f);
@@ -1080,13 +1154,17 @@ void Synth::startLayers(Voice& voice) noexcept {
                 }
             }
             if (lv.real) {
-                lv.shaped = R.presence > 0.0f || R.bite > 0.0f || R.drive > 0.0f;
+                lv.woodwind = woodwind;
+                lv.shaped = R.presence > 0.0f || R.bite > 0.0f || R.drive > 0.0f || R.sparkle > 0.0f;
                 lv.presenceBand.reset();
                 lv.presenceBand.set(2900.0f, 0.9f, r);
                 lv.biteBand.reset();
                 lv.biteBand.set(std::min(4800.0f, 0.4f * r), 0.7f, r);
+                lv.sparkleBand.reset();
+                lv.sparkleBand.set(std::min(8500.0f, 0.42f * r), 0.7f, r);
                 lv.presenceAmount = 1.6f * R.presence;
-                lv.biteNow = R.bite * (0.4f + 0.9f * vel) * 1.8f;
+                lv.sparkleAmount = 1.6f * R.sparkle;
+                lv.biteNow = join ? 0.0f : R.bite * (0.4f + 0.9f * vel) * 1.8f;
                 lv.biteDecay = std::exp(-1.0f / (0.07f * r));
                 lv.drive = R.drive;
                 // The front levelled to its sustain note (the staccato takes and sets differ by
@@ -1094,7 +1172,7 @@ void Synth::startLayers(Voice& voice) noexcept {
                 lv.frontGain = lv.front.on && lv.front.zone != nullptr && lv.sample.zone != nullptr
                                    ? dbToGain(R.frontDb + std::clamp(lv.sample.zone->loudnessDb - lv.front.zone->loudnessDb, -12.0f, 12.0f))
                                    : 0.0f;
-                lv.strike = R.strikeDb > 0.0f ? dbToGain(R.strikeDb * (0.45f + 0.55f * vel)) - 1.0f : 0.0f;
+                lv.strike = R.strikeDb > 0.0f && !join ? dbToGain(R.strikeDb * (0.45f + 0.55f * vel)) - 1.0f : 0.0f;
                 lv.strikeHold = int(std::max(0.0f, R.strikeMs) * 0.001f * r) + int(std::max(0.0f, R.delayMs) * 0.001f * r);
                 lv.strikeDecay = std::exp(-1.0f / (0.015f * r));   // a 15 ms time constant: gone in about 45 ms (sharp, not long)
                 lv.realRelease = R.release;
@@ -1102,9 +1180,25 @@ void Synth::startLayers(Voice& voice) noexcept {
                 lv.frontFadeMul = std::exp(-6.9078f / (std::max(0.02f, R.frontDecay * ringScale) * r));
                 lv.frontFade = 1;
                 lv.frontRelease = R.frontRelease;
+                // The woodwinds: the vibrato set's weight and the mod wheel's expression, as the
+                // wheel is now (updateChunk follows it); the synthesis under them without its
+                // vibrato (the recordings carry their own), its tone as the patch asks.
+                lv.vibratoMix = R.vibratoMix;
+                lv.wheelVibrato = R.wheelVibrato;
+                lv.expressionDb = R.expressionDb;
+                lv.expressionTone = R.expressionTone;
+                lv.realWeights(modNow, lv.susW, lv.vibW);
+                lv.expr = dbToGain(R.expressionDb * modNow);
+                if (woodwind) {
+                    lv.vibrato = 0;
+                    lv.wind.vibratoDepth = 0;
+                    // Past the recordings the synthesis takes over whole (its tone back with it).
+                    lv.wind.tone = 1.0f - realWeight * (1.0f - std::clamp(R.synthTone, 0.0f, 1.0f));
+                }
             } else {
                 lv.sample.on = false;
                 lv.front.on = false;
+                lv.vib.on = false;
             }
         }
         // Level, tone, pan.
@@ -1120,9 +1214,13 @@ void Synth::startLayers(Voice& voice) noexcept {
             // under the real part it is synthDb under the stand-in, with the library trim.
             const float standIn = lv.gain;
             const float realVel = (1.0f - R.velocityGain) + R.velocityGain * std::pow(vel, 1.4f);
-            const float tilt = -p.libraryTiltDb * (float(note + 12 * macros.octave) - 60.0f) / 12.0f;
-            const float realGain = dbToGain(L.level + R.db + voice.levelDb + trimDb + libraryTrimDb + tilt) * realVel * fade * std::sqrt(realWeight);
-            const float blend = dbToGain(R.synthDb + libraryTrimDb);
+            // The woodwinds have their own trim and no register tilt (the sample prep evens their range).
+            const float realTrimDb = lv.woodwind ? woodwindTrimDb : libraryTrimDb;
+            const float tilt = lv.woodwind ? 0.0f : -p.libraryTiltDb * (float(note + 12 * macros.octave) - 60.0f) / 12.0f;
+            const float realGain = dbToGain(L.level + R.db + voice.levelDb + trimDb + realTrimDb + tilt) * realVel * fade * std::sqrt(realWeight);
+            // (The brass's synthDb is under the stand-in with the library trim; the woodwinds' under
+            // the stand-in itself: their trim is the real part's alone.)
+            const float blend = dbToGain(R.synthDb + (lv.woodwind ? 0.0f : realTrimDb));
             const float synthGain = standIn * std::sqrt((1.0f - realWeight) + realWeight * blend * blend);
             lv.gain = std::max(realGain, 1.0e-9f);
             lv.synthRel = synthGain / lv.gain;
@@ -1148,7 +1246,7 @@ void Synth::startLayers(Voice& voice) noexcept {
     // the safety limiters). There the overshoot rises in after the strike (over its first
     // 12 ms, a raised cosine from 0 dB) and settles back over the rest of Punch Time: it
     // gives the note's body weight and leaves the strike as it is.
-    const float db = voice.moved ? 0.0f : dc::dsp::punchDb(macros.punch, p.punchDb) * (0.35f + 0.65f * std::pow(clamp01(velocity), 1.3f));
+    const float db = voice.moved || voice.legato ? 0.0f : dc::dsp::punchDb(macros.punch, p.punchDb) * (0.35f + 0.65f * std::pow(clamp01(velocity), 1.3f));
     voice.punchDb = db;
     voice.punchPos = 0;
     voice.punchStep = 0;
@@ -1161,10 +1259,27 @@ void Synth::startNote(int note, float velocity, bool sustained, bool moved) noex
     const auto& p = patch(current);
     const bool sampled = patchSampled(p);
     const bool library = patchLibraryLoaded(p);
+    // The real woodwinds' legato: a note started while another of this instrument is held
+    // (begun more than a chord's spread ago: not a chord) joins it without a new attack.
+    bool legato = false;
+    if (!moved) {
+        bool legatoPatch = false;
+        for (int k = 0; k < p.layerCount; ++k) legatoPatch = legatoPatch || p.layers[std::size_t(k)].real.legato;
+        if (legatoPatch)
+            for (const auto& vp : voices)
+                if (vp->on && vp->keyDown && !vp->released && !vp->grace && vp->patch == current && vp->note != note
+                    && clock > vp->startedAt + uint64_t(chordWindowSeconds * float(rate))) {
+                    legato = true;
+                    vp->slurred = true;
+                }
+    }
     const auto start = [&](int delaySamples, float semis, float levelDb, bool grace) -> Voice* {
         auto* v = freeVoice(current, !grace);
         if (v == nullptr) return nullptr;
         v->on = true;
+        v->legato = legato && !grace;
+        v->slurred = false;
+        v->startedAt = clock + uint64_t(std::max(0, delaySamples));
         v->keyDown = !sustained;
         v->sustained = sustained;
         v->released = false;
@@ -1308,7 +1423,17 @@ void Synth::releaseVoice(Voice& v) noexcept {
             case Engine::Tine: lv.tine.release(s); break;
             case Engine::Fm: lv.fm.release(tau, float(rate)); break;
             case Engine::Choir: lv.choir.release(tau, float(rate)); break;
-            case Engine::Wind: lv.wind.release(tau, float(rate)); break;
+            case Engine::Wind:
+                lv.wind.release(tau, float(rate));
+                if (lv.real) {
+                    // Slurred into the next note: a fade under it (0.5 s to -60 dB), not the
+                    // recorded release (the player stopping).
+                    const float out = v.slurred ? 0.5f : std::max(0.01f, lv.realRelease * scale);
+                    lv.sample.release(out, !v.slurred);
+                    lv.vib.release(out, !v.slurred);
+                    lv.front.release(std::max(0.05f, lv.frontRelease * scale));
+                }
+                break;
             case Engine::Bowed: lv.bowed.release(tau, float(rate)); break;
             case Engine::Strings: lv.strings.release(tau); break;
             case Engine::Sample: lv.sample.release(s); break;
@@ -1494,9 +1619,26 @@ void Synth::updateChunk() noexcept {
                     break;
                 case Engine::Wind:
                     lv.wind.bend = bend;
-                    lv.wind.vibratoDepth = lv.vibrato + vibratoAdd;
+                    // The real woodwinds: the mod wheel is their expression (and the vibrato set), not
+                    // a pitch vibrato on the synthesis under them.
+                    lv.wind.vibratoDepth = lv.real ? 0.0f : lv.vibrato + vibratoAdd;
                     lv.wind.update(r);
                     alive = lv.wind.active();
+                    if (lv.real) {
+                        lv.sample.bend = bend;
+                        lv.sample.update();
+                        lv.vib.bend = bend;
+                        lv.vib.update();
+                        lv.front.bend = bend;
+                        lv.front.update();
+                        alive = alive || lv.sample.on || lv.front.on || lv.vib.on;
+                        // The wheel's expression and the vibrato set's weight, ramped over the chunk.
+                        float sw = 1, vw = 0;
+                        lv.realWeights(modNow, sw, vw);
+                        lv.susWStep = (sw - lv.susW) / float(chunk);
+                        lv.vibWStep = (vw - lv.vibW) / float(chunk);
+                        lv.exprStep = (dbToGain(lv.expressionDb * modNow) - lv.expr) / float(chunk);
+                    }
                     break;
                 case Engine::Bowed:
                     lv.bowed.bend = bend;
@@ -1532,8 +1674,9 @@ void Synth::updateChunk() noexcept {
             if (lv.engine == Engine::Choir) {
                 lv.choir.vowel = std::clamp(lv.choirVowelBase + (macros.vowel - 0.5f) * 3.2f, 0.0f, 4.0f);
             }
-            lv.lowpass.set(std::min(lv.cutoff * toneScale, 0.45f * r), 0.6f, r);
-            lv.lowpassR.set(std::min(lv.cutoff * toneScale, 0.45f * r), 0.6f, r);
+            const float bright = lv.real && lv.expressionTone > 0.0f ? std::exp2(lv.expressionTone * modNow) : 1.0f;
+            lv.lowpass.set(std::min(lv.cutoff * toneScale * bright, 0.45f * r), 0.6f, r);
+            lv.lowpassR.set(std::min(lv.cutoff * toneScale * bright, 0.45f * r), 0.6f, r);
             any = true;
         }
         if (!any || v.kill <= 0.0f) {
@@ -1555,6 +1698,7 @@ void Synth::updateChunk() noexcept {
 
 void Synth::render(float* outL, float* outR, int n) noexcept {
     const float characterGain = 2.0f * macros.character;
+    const float layerGain = 2.0f * macros.layer;
     const uint64_t base = clock;
     for (int i = 0; i < n; ++i) {
         if (chunkLeft <= 0) {
@@ -1583,7 +1727,7 @@ void Synth::render(float* outL, float* outR, int n) noexcept {
                             else lv.strike *= lv.strikeDecay;
                             if (lv.frontHold > 0) --lv.frontHold;
                             else lv.frontFade *= lv.frontFadeMul;
-                            y = y * lv.synthRel + lv.shape(lv.sample.tick() + lv.frontGain * lv.frontFade * lv.front.tick()) * strike;
+                            y = y * lv.synthRel + lv.shape(lv.realTick() + lv.frontGain * lv.frontFade * lv.front.tick()) * strike;
                         }
                         break;
                     }
@@ -1592,7 +1736,20 @@ void Synth::render(float* outL, float* outR, int n) noexcept {
                     case Engine::Tine: y = lv.tine.tick(); break;
                     case Engine::Fm: y = lv.fm.tick(); break;
                     case Engine::Choir: y = lv.choir.tick(); break;
-                    case Engine::Wind: y = lv.wind.tick(noise); break;
+                    case Engine::Wind:
+                        y = lv.wind.tick(noise);
+                        if (lv.real) {
+                            // The real woodwinds: the sustain (and its vibrato set), the front, the
+                            // mod wheel's expression; the synthesis's breath under them.
+                            const float strike = 1.0f + lv.strike;
+                            if (lv.strikeHold > 0) --lv.strikeHold;
+                            else lv.strike *= lv.strikeDecay;
+                            if (lv.frontHold > 0) --lv.frontHold;
+                            else lv.frontFade *= lv.frontFadeMul;
+                            y = y * lv.synthRel + lv.shape(lv.realTick() + lv.frontGain * lv.frontFade * lv.front.tick()) * strike * lv.expr;
+                            lv.expr += lv.exprStep;
+                        }
+                        break;
                     case Engine::Bowed: y = lv.bowed.tick(noise); break;
                     case Engine::Strings: y = lv.body.process(lv.strings.tick(noise)); break;
                     case Engine::Sample: y = lv.shape(lv.sample.tick()); break;
@@ -1601,14 +1758,14 @@ void Synth::render(float* outL, float* outR, int n) noexcept {
                         // The ensemble is stereo of its own: each side filtered, then the layer's pan.
                         float a = 0, b = 0;
                         lv.voice.tick(a, b);
-                        const float g = lv.gain * (lv.character ? characterGain : 1.0f) * 1.4142f;
+                        const float g = lv.gain * (lv.character ? characterGain : 1.0f) * (lv.layerMacro ? layerGain : 1.0f) * 1.4142f;
                         vl += lv.lowpass.tick(lv.highpass.hp(a)).lp * g * lv.pan.l;
                         vr += lv.lowpassR.tick(lv.highpassR.hp(b)).lp * g * lv.pan.r;
                         continue;
                     }
                     case Engine::None: break;
                 }
-                y = lv.lowpass.tick(lv.highpass.hp(y)).lp * lv.gain * (lv.character ? characterGain : 1.0f);
+                y = lv.lowpass.tick(lv.highpass.hp(y)).lp * lv.gain * (lv.character ? characterGain : 1.0f) * (lv.layerMacro ? layerGain : 1.0f);
                 vl += y * lv.pan.l;
                 vr += y * lv.pan.r;
             }

@@ -242,8 +242,9 @@ void testInstrument(Suite& s) {
         s.check(inst.acceptsMidi() && !inst.producesMidi(), "the instrument takes MIDI");
         s.check(fx.parameters.getParameter(dc::ids::instLock) == nullptr && inst.parameters.getParameter(dc::ids::instLock) != nullptr,
                 "the instrument's parameters exist only in the instrument");
-        s.check(inst.getParameters().size() == fx.getParameters().size() + 11,
-                "the instrument adds exactly its eleven parameters (Vowel and Ensemble since the recordings update, Punch and Punch Time since Mix and Punch)");
+        s.check(inst.getParameters().size() == fx.getParameters().size() + 12,
+                "the instrument adds exactly its twelve parameters (Vowel and Ensemble since the recordings update, Punch and Punch Time since Mix and Punch, "
+                "Layer since the real woodwinds)");
         s.check(fx.parameters.getParameter(dc::ids::punch) == nullptr && inst.parameters.getParameter(dc::ids::punch) != nullptr
                     && inst.parameters.getParameter(dc::ids::punchTime) != nullptr, "Punch and Punch Time exist only in the instrument");
         juce::AudioProcessor::BusesLayout stereo;

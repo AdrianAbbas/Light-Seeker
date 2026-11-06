@@ -252,6 +252,16 @@ jobs:
           build/LightSeekerTests_artefacts/Release/LightSeekerTests --listen-loudness build/test-logs/loudness
           build/LightSeekerTests_artefacts/Release/LightSeekerTests --loudness-report > build/test-logs/loudness/loudness-table.txt
           build/LightSeekerTests_artefacts/Release/LightSeekerTests --loudness-report before > build/test-logs/loudness/loudness-table-before.txt
+      # The real woodwinds (VSCO 2 CE): each changed instrument before (its synthesis) and after (the
+      # library), dry and in its place, as separate files and as one A/B file; the cents report.
+      - name: Real woodwinds listening renders (each woodwind instrument before and after)
+        if: always()
+        env:
+          LIGHTSEEKER_SAMPLES: ${{ runner.temp }}/samples
+        run: |
+          build/LightSeekerTests_artefacts/Release/LightSeekerTests --listen-woodwinds build/test-logs/real-woodwinds > build/test-logs/woodwinds-report.txt
+          mv build/test-logs/woodwinds-report.txt build/test-logs/real-woodwinds/
+          cp "${{ runner.temp }}/samples/report-vsco.json" build/test-logs/real-woodwinds/ || true
       - name: Upload test logs
         if: always()
         uses: actions/upload-artifact@v4

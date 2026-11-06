@@ -12,6 +12,7 @@
 #include <string_view>
 #include "InstrumentTrims.h"
 #include "LibraryTrims.h"
+#include "WoodwindTrims.h"
 #include "World/Locations.h"
 #include <algorithm>
 
@@ -186,6 +187,44 @@ Layer secondPlayer(Layer l, float offset, float frontOffset, float delayMs) {
     return l;
 }
 
+// The real woodwinds (VSCO 2 Community Edition, CC0; the real woodwinds update): a
+// synthesised wind layer that plays the library's looped sustain (and, crossfaded by the mod
+// wheel, its vibrato set) with a soft staccato as the tongue's front when the library is
+// loaded, the synthesis's breath and a little of its tone under it, shaped bright and radiant
+// (presence, sparkle); the mod wheel is its expression. Without the library: the synthesis
+// alone, exactly as before. Levels relative to the synthesised layer's own.
+struct WoodSpec {
+    const char* sustain;
+    const char* vibrato;    // nullptr: none
+    const char* front;      // nullptr: none (it swells in)
+    float frontDb, synthDb, synthTone, presence, sparkle;
+};
+Layer woodwind(Layer l, const WoodSpec& w) {
+    l.real.sustain = w.sustain;
+    l.real.vibrato = w.vibrato;
+    l.real.front = w.front;
+    l.real.frontDb = w.frontDb;
+    l.real.synthDb = w.synthDb;
+    l.real.synthTone = w.synthTone;
+    l.real.presence = w.presence;
+    l.real.sparkle = w.sparkle;
+    // A breathy, natural attack: the recording's own (no strike, no bite); the front is the
+    // tongue's soft chiff, a short burst; the recorded release when let go.
+    l.real.strikeDb = 0;
+    l.real.frontHoldMs = 40;
+    l.real.frontDecay = 0.18f;
+    l.real.frontRelease = 0.15f;
+    l.real.release = 0.3f;
+    l.real.lowpass = 17000.0f;
+    l.real.velocityGain = 0.6f;   // the recorded layers already differ in colour and level
+    l.real.velocityTone = 0.15f;
+    l.real.expressionDb = 4.5f;   // the mod wheel swells it (louder and brighter)
+    l.real.expressionTone = 0.6f;
+    l.real.legato = true;
+    l.real.legatoSkipMs = 140.0f;   // a legato note joins past the flute's slow, breathy onset
+    return l;
+}
+
 Layer shift(Layer l, float semis, float cents = 0.0f, float pan = 0.0f) {
     l.transpose = semis;
     l.cents = cents;
@@ -211,6 +250,7 @@ struct Builder {
     Builder& poly(int n) { p.polyphony = n; return *this; }
     Builder& struck(float modDepth = 0.5f) { p.tremoloMod = true; p.modDepth = modDepth; p.sustaining = false; return *this; }
     Builder& trim(float db) { p.trimDb = db; return *this; }
+    Builder& layerMacro(const char* name) { p.layerMacro = name; return *this; }
 };
 
 std::array<Patch, instrumentCount> build() {
@@ -292,8 +332,38 @@ std::array<Patch, instrumentCount> build() {
         e.release = 1.8f;
         e.highpass = 110.0f;
         e.lowpass = 9000.0f;
+        // The real woodwinds update: a soft woodwind choir swelling in with the pad, on its own
+        // macro (Woodwinds: 0 % none, 50 % as designed, 100 % +6 dB): the library's flute an
+        // octave above, its clarinet at the pad's pitch, its bassoon an octave below; no front
+        // (a pad), a little of their synthesis under them (the stand-ins without the library).
+        const auto padWind = [](Layer l, const WoodSpec& w) {
+            l.attack = 0.8f;
+            l.release = 1.6f;
+            l.vibrato = 0.08f;
+            l.layerMacro = true;
+            l = woodwind(l, w);
+            l.real.attack = 0.75f;
+            l.real.release = 1.2f;
+            l.real.legato = false;
+            l.real.expressionDb = 3.0f;
+            l.real.velocityGain = 0.5f;
+            return l;
+        };
+        auto fl = padWind(shift(wind(0.2f, 0.08f, 0.02f, 0.0f, 0.12f, 0.0f, -16.0f), 12.0f, 2.0f, 0.25f),
+                          { "vsco-flute-sus", nullptr, nullptr, 0.0f, -12.0f, 0.4f, 0.15f, 0.3f });
+        fl.lowpass = 8000.0f;
+        fl.real.lowpass = 10000.0f;
+        auto cl = padWind(shift(wind(0.04f, 0.45f, 0.02f, 0.25f, 0.06f, 0.0f, -15.0f), 0.0f, -3.0f, -0.2f),
+                          { "vsco-clarinet-sus", nullptr, nullptr, 0.0f, -12.0f, 0.4f, 0.1f, 0.1f });
+        cl.lowpass = 5000.0f;
+        cl.real.lowpass = 7000.0f;
+        auto bn = padWind(shift(wind(0.5f, 0.35f, 0.25f, 0.15f, 0.05f, 0.0f, -17.0f), -12.0f, 0.0f, 0.1f),
+                          { "vsco-bassoon-sus", nullptr, nullptr, 0.0f, -12.0f, 0.4f, 0.0f, 0.0f });
+        bn.lowpass = 2600.0f;
+        bn.real.lowpass = 4000.0f;
+        bn.lowKey = 24;
         Builder p("Orchestral Chord Pad", "Radiant brass and strings", "Voices");
-        p.add(a).add(b).add(c).add(d).add(e).air(2.0f).chorus(0.15f).trim(0.0f);
+        p.add(a).add(b).add(c).add(d).add(e).add(fl).add(cl).add(bn).air(2.0f).chorus(0.15f).layerMacro("Woodwinds").trim(0.0f);
         put(p);
     }
     {   // Spire Summit: a soaring solo horn.
@@ -420,6 +490,13 @@ std::array<Patch, instrumentCount> build() {
         auto a = wind(0.25f, 0.1f, 0.03f, 0.0f, 0.18f, 0.3f);
         a.vibrato = 0.14f;
         auto b = character(shift(wind(0.15f, 0.05f, 0.0f, 0.0f, 0.15f, 0.3f, -9.0f), 12.0f, 3.0f, 0.2f));
+        // The real woodwinds: the library's flute with its vibrato (the mod wheel swells it and
+        // crossfades into its expressive vibrato), a soft tongued front, the synthesis's breath
+        // and a little of its tone under it; bright and sparkling (presence, the air band). The
+        // piccolo above on the library's piccolo, sparkling.
+        a = woodwind(a, { "vsco-flute-vib", "vsco-flute-expvib", "vsco-flute-stac", -7.0f, -14.0f, 0.35f, 0.35f, 0.7f });
+        a.real.wheelVibrato = true;
+        b = woodwind(b, { "vsco-piccolo-sus", nullptr, "vsco-piccolo-stac", -9.0f, -12.0f, 0.3f, 0.2f, 0.7f });
         Builder p("Airy Flute", "Harps and flutes", "Piccolo");
         p.add(a).add(b).air(2.5f).chorus(0.1f).poly(10).trim(0.0f);
         put(p);
@@ -512,6 +589,14 @@ std::array<Patch, instrumentCount> build() {
         a.attack = 0.06f;
         auto b = character(shift(wind(0.12f, 0.06f, 0.0f, 0.0f, 0.2f, 0.4f, -8.0f), 12.0f, 0.0f, 0.2f));
         b.vibrato = 0.05f;
+        // The real woodwinds: the library's oboe with its vibrato, warm (its low-pass closed a
+        // little, presence for the sun in it), a soft tongued front, the synthesis's breath under
+        // it. The recorder above on the library's flute without vibrato, pure and soft.
+        a = woodwind(a, { "vsco-oboe-vib", nullptr, "vsco-oboe-stac", -7.0f, -15.0f, 0.3f, 0.35f, 0.25f });
+        a.real.lowpass = 11000.0f;
+        a.real.legatoSkipMs = 80.0f;   // the oboe speaks at once
+        b = woodwind(b, { "vsco-flute-sus", nullptr, "vsco-flute-stac", -8.0f, -11.0f, 0.25f, 0.1f, 0.3f });
+        b.real.lowpass = 9000.0f;
         Builder p("Pastoral Oboe", "Pastoral", "Recorder");
         p.add(a).add(b).air(1.0f).poly(10).trim(0.0f);
         put(p);
@@ -611,6 +696,17 @@ std::array<Patch, instrumentCount> build() {
         a.lowpass = 6000.0f;
         auto b = character(shift(wind(0.1f, 0.03f, 0.0f, 0.0f, 0.7f, 0.4f, -12.0f), 12.0f, 5.0f, 0.3f));
         b.attack = 0.2f;
+        // The real woodwinds: the library's flute without vibrato (plain and breathy; the mod
+        // wheel swells it and brings its vibrato in: it soars), much of the synthesis's breath
+        // and wind under it (little of its tone), a very soft front; the wind's octave on the
+        // library's piccolo, airy, the synthesis's wind around it.
+        a = woodwind(a, { "vsco-flute-sus", "vsco-flute-vib", "vsco-flute-stac", -12.0f, 0.0f, 0.05f, 0.1f, 0.3f });
+        a.real.wheelVibrato = true;
+        a.real.attack = 0.15f;   // it breathes in: the wind first, the tone after
+        a.real.lowpass = 7000.0f;
+        b = woodwind(b, { "vsco-piccolo-sus", nullptr, nullptr, 0.0f, -3.0f, 0.1f, 0.0f, 0.5f });
+        b.real.attack = 0.08f;
+        b.real.lowpass = 12000.0f;
         Builder p("Breathy Wind Flute", "Airy", "Wind");
         p.add(a).add(b).air(1.0f).poly(10).trim(0.0f);
         put(p);
@@ -862,6 +958,8 @@ std::array<Patch, instrumentCount> build() {
         all[i].libraryTrimDb = libraryTrims[i];
         all[i].libraryStandInTrimDb = libraryStandInTrims[i];
         all[i].libraryTiltDb = libraryTilts[i];
+        all[i].woodwindTrimDb = woodwindTrims[i];
+        all[i].woodwindStandInTrimDb = woodwindStandInTrims[i];
     }
     // Mix and Punch. Punch (dB of gain on hit at Punch 50 %): high on the brass, low on bowed
     // strings and winds, none on pads and choirs. GarageBand hotfix: none on the struck and
@@ -958,6 +1056,17 @@ const Patch& patch(int index) noexcept {
 
 void setLibraryTiltForTests(int index, float dbPerOctave) noexcept {
     patches()[std::size_t(std::clamp(index, 0, instrumentCount - 1))].libraryTiltDb = dbPerOctave;
+}
+
+void setWoodwindTrimForTests(int index, float db, bool standIn) noexcept {
+    auto& p = patches()[std::size_t(std::clamp(index, 0, instrumentCount - 1))];
+    (standIn ? p.woodwindStandInTrimDb : p.woodwindTrimDb) = db;
+}
+
+void setLegatoForTests(int index, bool on) noexcept {
+    auto& p = patches()[std::size_t(std::clamp(index, 0, instrumentCount - 1))];
+    for (int k = 0; k < p.layerCount; ++k)
+        if (p.layers[std::size_t(k)].engine == Engine::Wind && p.layers[std::size_t(k)].real.sustain != nullptr) p.layers[std::size_t(k)].real.legato = on;
 }
 
 void setTrimForTests(int index, float db, bool standIn) noexcept {

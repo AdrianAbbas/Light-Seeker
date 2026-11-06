@@ -35,6 +35,14 @@ sound (a struck front, presence, bite, a touch of drive, a little of the synthes
 under them for weight and shine). The samples are not in this repository: the build fetches
 them from their official source. A build without them plays the synthesised brass.
 
+**The woodwinds are real too** (Airy Flute, Breathy Wind Flute, Pastoral Oboe, and a soft
+woodwind choir in the Orchestral Chord Pad on its own Woodwinds macro): the same library's
+flute, oboe, piccolo, clarinet and bassoon, looped sustains (with and without vibrato),
+staccatos as a soft tongued front, every dynamic layer; the mod wheel is their expression (a
+swell, brighter, and on the flutes more vibrato); a note played while the last is held joins
+it legato. Bright and radiant: a little of the synthesised breath under them, presence and
+an air band. A build without the library plays the synthesised woodwinds.
+
 | Location (family) | Place → instrument |
 |---|---|
 | Celestial Citadel (radiant brass & strings) | Gates of Dawn → Fanfare Trumpets · Hall of Mirrors → Shimmering Strings · Throne of Light → Orchestral Chord Pad · Spire Summit → Soaring Horn |

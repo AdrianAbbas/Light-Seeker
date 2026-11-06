@@ -86,6 +86,14 @@ public:
     static void bypassLibraryForTests(bool on) { libraryBypassed = on; }
     static void bypassRecordingsForTests(bool on) { recordingsBypassed = on; }
     static bool isLibraryId(const juce::String& id) { return id.startsWith("vsco-"); }
+    // Tests (the real woodwinds update): only the library's woodwinds act as missing (the
+    // chord pad's woodwinds against their stand-ins, its real brass kept).
+    static void bypassWoodwindsForTests(bool on) { woodwindsBypassed = on; }
+    static bool isWoodwindId(const juce::String& id) {
+        for (const char* w : { "vsco-flute", "vsco-oboe", "vsco-piccolo", "vsco-clarinet", "vsco-bassoon" })
+            if (id.startsWith(w)) return true;
+        return false;
+    }
     // nullptr unless Ready and the instrument exists. Safe on the audio thread.
     const Instrument* instrument(const char* id) const;
 
@@ -113,7 +121,7 @@ private:
     juce::File from;
     juce::String error;
     static inline std::atomic<bool> bypassed { false };
-    static inline std::atomic<bool> libraryBypassed { false }, recordingsBypassed { false };
+    static inline std::atomic<bool> libraryBypassed { false }, recordingsBypassed { false }, woodwindsBypassed { false };
 };
 
 } // namespace lswb::samples
