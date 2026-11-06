@@ -173,6 +173,13 @@ usage limit or a compaction) continues from the first unticked line. Push to `ma
 - [x] L3. Family pairs in the same place, the brass with its Punch, no clipping with every instrument's default Punch; push `[skip ci]`
 - [x] L4. `loudness` group is the level-match test in CI (old dry-chord gates replaced), listening render (short mix, every instrument at default, before vs after) in test-logs, DEVLOG table and handoff; final push without `[skip ci]`, CI green
 
+**Real woodwinds: VSCO 2 Community Edition** (see "Real woodwinds" below; the brass's licence entry, fetch and cache reused; samples never committed here; local work: library in `/home/user/deps/vsco`, recordings `/home/user/deps/samples`, captures `/home/user/deps/irs`, JUCE `/home/user/deps/juce`, built in `build/`)
+
+- [x] W1. Licence and source re-checked for the woodwinds (same commit, CC0); `docs/LICENSES/VSCO-2-CE.txt` lists what is used; sample prep of the flute (sustain, vibrato, expressive vibrato, staccato), oboe (vibrato sustain, staccato), piccolo, clarinet and bassoon (sustain, staccato) in `vsco.py` (vibrato loops, breath kept); `ci-fetch-vsco.sh` fetches the woodwind folders (cache key); push `[skip ci]`
+- [ ] W2. Engine: the real part on a synthesised wind layer (looped sustain, staccato front, a little synthesis under it), the vibrato set crossfaded by the mod wheel, the mod wheel as expression (swell and brightness) on the real woodwinds, legato (an overlapping note joins without a new attack), sparkle/air shaping; a second instrument macro (Layer) for the chord pad's woodwinds; push `[skip ci]`
+- [ ] W3. Instruments: Airy Flute (flute + piccolo), Breathy Wind Flute (flute + the wind's octave), Pastoral Oboe (oboe + the recorder on the flute), Orchestral Chord Pad (a soft woodwind choir: flute, clarinet, bassoon, on its own macro); level-matched on the melody loudness test; push `[skip ci]`
+- [ ] W4. Tests (`woodwinds` group: in tune across the range with a cents report, dynamics smooth, no clicks at loops, note-offs, legato; level-matched (loudness, melody), distinct from siblings, stand-ins), listening renders (each before vs after, dry and in place) in test-logs, DEVLOG handoff (which instrument uses which woodwinds); final push without `[skip ci]`, CI green
+
 ---
 
 ## Lessons carried over from DUNGEON CRAWLER (read first)
@@ -2864,3 +2871,56 @@ unchanged (the loudness group runs alone after them, not beside the basics shard
 timings are taken). Re-run once as agreed: **green**, Linux 2602 passed, 0 failed (the timing
 checks included); the loudness render and tables in the test-logs artifact (`loudness/`: the
 mix -17.4 LUFS before, -19.7 after, the same numbers as here).
+
+---
+
+## Real woodwinds: VSCO 2 Community Edition (2026-11-06)
+
+The developer: real woodwinds from the same free library as the brass, "VSCO 2 Community
+Edition" (Versilian Studios, CC0): its flute, oboe, piccolo, clarinet and bassoon, looped
+sustains, staccatos, vibrato where it has it, dynamics as velocity layers, the mod wheel as
+expression (and vibrato where it suits); natural, breathy attacks; processed and placed so it
+is LIGHT SEEKER's own sound, bright and radiant. The brass's licence entry, fetch and cache
+reused; the samples never go into this repository; each instrument's synthesis stays its
+stand-in, level-matched.
+
+### W1. The licence, the sample prep, CI
+
+- **Licence**: the same official source and commit as the brass
+  (https://github.com/sgossner/VSCO-2-CE, tag 1.1.0, `28092772094b2d9f1148d84cea97f4545b8c687d`);
+  its `LICENSE` checked again on 2026-11-06: **CC0 1.0 Universal**, sha256 `36ffd9dc...a39673`, the
+  same file. `docs/LICENSES/VSCO-2-CE.txt` now lists the woodwinds used. Nothing in
+  `AdrianAbbas/Samples` changed (read only, for the local runs).
+- **What the library has** (its SFZ maps): flute `susNV` (19 notes C4-C7, two dynamics),
+  `susvib` (13), `expvib` (14, an expressive vibrato that swells), `stac` (48, up to four
+  dynamics, round-robins); oboe `Sus` (no vibrato), `Vib` (18 each, A#3-F6), `Stacc` (51); piccolo
+  `Sus`, `Stac` (5 each: sparse, one note every 5-7 semitones); clarinet `susLong` (33, D3-F#6,
+  three dynamics), `stac` (64); bassoon `sus` (25, A#1-D#5), `vib` (21), `stac` (46). **No legato
+  transitions** in the library (legato is made in the engine, W2).
+- **Used** (`tools/sample-prep/vsco.py`, ten new sets, 232 notes, 582 s of audio: about 51 MB in
+  memory as 16-bit): `vsco-flute-{sus,vib,expvib,stac}`, `vsco-oboe-{vib,stac}`,
+  `vsco-piccolo-{sus,stac}`, `vsco-clarinet-sus`, `vsco-bassoon-sus`. The oboe without vibrato,
+  the clarinet's and bassoon's staccatos and the bassoon's vibrato are not played by any
+  instrument (W3), so they are not fetched or shipped.
+- **What the prep found and did** (the brass's pipeline; per set, "Prepared" in the CI log):
+  - **The piccolo sounds an octave above where the library maps it** (measured: the
+    "G4" sustain is 785 Hz, G5; the library's own map plays it an octave low): moved up the
+    octave (`transpose` 12): sustains G5-G7, staccatos A#5-A#7.
+  - **Vibrato sustains**: their pitch moves 20-40 cents by design; the "pitch moves" check
+    allows a vibrato's spread there (45 cents) and their loops are looked for over 4.5 s (whole
+    vibrato cycles) with a 150 ms crossfade.
+  - **Tuning**: flute sustains -12..0 cents (vibrato -2..+9, expressive -23..+1), staccatos
+    -23..+13; oboe -10..+3 (staccato -15..+22); piccolo +2..+8; clarinet -2..+6; bassoon 0..+1.
+    Two oboe staccatos (A#3 v2, D4 v3) slide into their note (over 100 cents): mapped at their
+    key centres (listed in `report-vsco.json`).
+  - **Pre-roll**: the flute's sustains start up to 67 ms before they speak (its expressive
+    vibrato up to 357 ms: it swells from nothing), the clarinet's 41 ms: cut 2 ms before the
+    level reaches 40 dB under the note's peak, so the breath before the tone stays (the natural,
+    breathy attack) and the note lands on time.
+  - **Loops**: every sustain has one (79 of 79), the recorded release after it. Levels as the
+    brass: a key's velocity layers levelled to each other (+0.9 dB a layer), the range evened,
+    one gain per set.
+- **CI** (`scripts/ci-fetch-vsco.sh`): the sparse clone now also takes the ten woodwind folders
+  (about 470 MB fetched blob-filtered instead of 230); the cache key follows the prep scripts, so
+  the first run prepares again; the log gives the woodwind WAVs fetched and "Prepared: N library
+  notes (338 brass, 232 woodwinds)". The workflow's steps are renamed for the woodwinds.

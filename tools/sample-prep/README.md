@@ -102,8 +102,11 @@ and tuba of VSCO 2 Community Edition (CC0 1.0; source, version and licence in
 `docs/LICENSES/VSCO-2-CE.txt`), sustains and staccatos with every dynamic layer, from the
 library's own SFZ maps. Never committed: `scripts/ci-fetch-vsco.sh` fetches only those
 folders from the official repository at the pinned commit (licence hash checked), prepares
-them (CI caches the result) and adds the eight `vsco-*` sets to the prepared folder, after
-the developer's recordings. Locally:
+them (CI caches the result) and adds the `vsco-*` sets to the prepared folder, after
+the developer's recordings. **The library woodwinds** (the real woodwinds update) come the
+same way: the flute (sustain, vibrato, expressive vibrato, staccato), oboe (vibrato sustain,
+staccato), piccolo (sustain, staccato; moved up the octave it sounds in), clarinet and
+bassoon (sustains): ten more sets, 18 in all. Locally:
 
     git clone --filter=blob:none --no-checkout --depth 1 --branch 1.1.0 https://github.com/sgossner/VSCO-2-CE ../vsco
     bash scripts/ci-fetch-vsco.sh build/vsco-cache build/samples     # or: python3 tools/sample-prep/vsco.py --source ../vsco --out build/samples

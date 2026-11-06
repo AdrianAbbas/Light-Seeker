@@ -2,8 +2,11 @@ VSCO 2: Community Edition (Versilian Studios Chamber Orchestra 2, Community Edit
 ===================================================================================
 
 What LIGHT SEEKER uses: the brass of the library (F horn, trumpet, tenor trombone and tuba;
-their sustains and staccatos, every dynamic layer the library has), prepared for the
-instrument's sampler by tools/sample-prep/vsco.py. The samples are NOT in this repository:
+their sustains and staccatos, every dynamic layer the library has) and, since the real
+woodwinds update, its woodwinds: the flute (sustain without vibrato, with vibrato, expressive
+vibrato, staccato), oboe (sustain with vibrato, staccato), piccolo (sustain, staccato),
+clarinet (sustain) and bassoon (sustain), every dynamic layer they have; all prepared for
+the instrument's sampler by tools/sample-prep/vsco.py. The samples are NOT in this repository:
 CI fetches them from the official source below at build time (scripts/ci-fetch-vsco.sh),
 caches them and ships the prepared notes inside the instrument's bundle.
 
@@ -19,7 +22,8 @@ Licence:             Creative Commons CC0 1.0 Universal (public domain dedicatio
                      in software included, with no attribution required.
 Credits (from its README, given though not required): recorded by Sam Gossner and Simon
 Dalzell; sample cutting by Elan Hickler / Soundemote; Versilian Studios.
-Downloaded and checked: 2026-11-03.
+Downloaded and checked: 2026-11-03 (the brass); 2026-11-06 (the woodwinds: the same commit and
+                     LICENSE, sha256 checked again).
 
 The licence text below is copied verbatim from that LICENSE file.
 

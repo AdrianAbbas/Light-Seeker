@@ -1,16 +1,21 @@
 #!/usr/bin/env python3
-"""Prepares the brass of VSCO 2 Community Edition (CC0) for the instrument's sampler.
+"""Prepares the brass and woodwinds of VSCO 2 Community Edition (CC0) for the instrument's sampler.
 
 The library (https://github.com/sgossner/VSCO-2-CE, tag 1.1.0; licence and source in
 docs/LICENSES/VSCO-2-CE.txt) is never committed to this repository: CI fetches its brass
-folders and SFZ maps (scripts/ci-fetch-vsco.sh) and this script writes, beside the
+and woodwind folders (FOLDERS below) and SFZ maps (scripts/ci-fetch-vsco.sh) and this script writes, beside the
 developer's prepared recordings, mono 16-bit FLAC notes and one mapping file per set in
 the format the sample bank reads (Source/Synth/wb/SampleBank.cpp), and adds the sets to
 index.json (creating it when the developer's recordings are not there).
 
     python3 tools/sample-prep/vsco.py --source ../VSCO-2-CE --out build/samples
 
-What it does, per SFZ region (horn, trumpet, tenor trombone, tuba; sustain and staccato):
+What it does, per SFZ region (horn, trumpet, tenor trombone, tuba; sustain and staccato; since
+the real woodwinds update the flute's sustain, vibrato, expressive vibrato and staccato, the
+oboe's vibrato sustain and staccato, the piccolo's sustain and staccato, the clarinet's and the
+bassoon's sustains; the piccolo moved up an octave to where it sounds: the library's map plays
+it an octave low, measured; the vibrato sustains loop over a longer stretch, 4.5 s, with a
+150 ms crossfade, and keep their pitch measurement with a vibrato's spread):
 
 1. **Decode**: 44.1 kHz WAV. The two channels are a spaced pair (correlation 0.2-0.8, the
    tuba's sustains even negative: summed they would comb-filter), so each set uses one
@@ -67,17 +72,41 @@ import prepare  # noqa: E402  (the same folder: the loop search, YIN, loudness)
 RATE = prepare.RATE
 SOURCE_COMMIT = "28092772094b2d9f1148d84cea97f4545b8c687d"
 
-# The sets: id, SFZ map, sustained (loops) or short, a readable name.
+# The sets: id, SFZ map, sustained (loops) or short, a readable name, options:
+# `loop` (seconds of the note the sustain loop is looked for in), `xfade` (the loop's
+# crossfade, seconds), `transpose` (semitones: the library maps its piccolo an octave under
+# where it sounds, measured), `family` (brass or woodwinds, for the report).
+# `spread`: how far (cents, the standard deviation over the note) the pitch may move and still
+# be measured (a vibrato moves 20-40 cents by design; a staccato sliding into its note does not).
+VIB = {"loop": 4.5, "xfade": 0.15, "spread": 45.0, "family": "woodwinds"}
+WW = {"family": "woodwinds"}
 SETS = [
-    ("vsco-horn-sus", "FHornSus.sfz", True, "F horn, sustain (VSCO 2 CE)"),
-    ("vsco-horn-stac", "FHornStac.sfz", False, "F horn, staccato (VSCO 2 CE)"),
-    ("vsco-trumpet-sus", "TrumpetSus.sfz", True, "Trumpet, sustain (VSCO 2 CE)"),
-    ("vsco-trumpet-stac", "TrumpetStac.sfz", False, "Trumpet, staccato (VSCO 2 CE)"),
-    ("vsco-trombone-sus", "TromboneSus.sfz", True, "Tenor trombone, sustain (VSCO 2 CE)"),
-    ("vsco-trombone-stac", "TromboneStac.sfz", False, "Tenor trombone, staccato (VSCO 2 CE)"),
-    ("vsco-tuba-sus", "TubaSus.sfz", True, "Tuba, sustain (VSCO 2 CE)"),
-    ("vsco-tuba-stac", "TubaStac.sfz", False, "Tuba, staccato (VSCO 2 CE)"),
+    ("vsco-horn-sus", "FHornSus.sfz", True, "F horn, sustain (VSCO 2 CE)", {}),
+    ("vsco-horn-stac", "FHornStac.sfz", False, "F horn, staccato (VSCO 2 CE)", {}),
+    ("vsco-trumpet-sus", "TrumpetSus.sfz", True, "Trumpet, sustain (VSCO 2 CE)", {}),
+    ("vsco-trumpet-stac", "TrumpetStac.sfz", False, "Trumpet, staccato (VSCO 2 CE)", {}),
+    ("vsco-trombone-sus", "TromboneSus.sfz", True, "Tenor trombone, sustain (VSCO 2 CE)", {}),
+    ("vsco-trombone-stac", "TromboneStac.sfz", False, "Tenor trombone, staccato (VSCO 2 CE)", {}),
+    ("vsco-tuba-sus", "TubaSus.sfz", True, "Tuba, sustain (VSCO 2 CE)", {}),
+    ("vsco-tuba-stac", "TubaStac.sfz", False, "Tuba, staccato (VSCO 2 CE)", {}),
+    # The woodwinds (the real woodwinds update). The vibrato sustains get a longer loop
+    # window and crossfade (whole vibrato cycles; a short loop would pulse).
+    ("vsco-flute-sus", "FluteSusNV.sfz", True, "Flute, sustain without vibrato (VSCO 2 CE)", WW),
+    ("vsco-flute-vib", "FluteSusVib.sfz", True, "Flute, sustain with vibrato (VSCO 2 CE)", VIB),
+    ("vsco-flute-expvib", "FluteExpVib.sfz", True, "Flute, expressive vibrato (VSCO 2 CE)", VIB),
+    ("vsco-flute-stac", "FluteStac.sfz", False, "Flute, staccato (VSCO 2 CE)", WW),
+    ("vsco-oboe-vib", "OboeSusVib.sfz", True, "Oboe, sustain with vibrato (VSCO 2 CE)", VIB),
+    ("vsco-oboe-stac", "OboeStac.sfz", False, "Oboe, staccato (VSCO 2 CE)", WW),
+    ("vsco-piccolo-sus", "PiccoloSus.sfz", True, "Piccolo, sustain (VSCO 2 CE)", {**WW, "transpose": 12}),
+    ("vsco-piccolo-stac", "PiccoloStac.sfz", False, "Piccolo, staccato (VSCO 2 CE)", {**WW, "transpose": 12}),
+    ("vsco-clarinet-sus", "ClarinetSus.sfz", True, "Clarinet, sustain (VSCO 2 CE)", WW),
+    ("vsco-bassoon-sus", "BassoonSus.sfz", True, "Bassoon, sustain (VSCO 2 CE)", WW),
 ]
+# The folders those maps read (scripts/ci-fetch-vsco.sh fetches only these).
+FOLDERS = ["Brass/F Horn/sus", "Brass/F Horn/stac", "Brass/Trumpet/sus", "Brass/Trumpet/stac", "Brass/Tenor Trombone/sus",
+           "Brass/Tenor Trombone/stac", "Brass/Tuba/sus", "Brass/Tuba/stac", "Woodwinds/Flute/susNV", "Woodwinds/Flute/susvib",
+           "Woodwinds/Flute/expvib", "Woodwinds/Flute/stac", "Woodwinds/Oboe/Vib", "Woodwinds/Oboe/Stacc", "Woodwinds/Piccolo/Sus",
+           "Woodwinds/Piccolo/Stac", "Woodwinds/Clarinet/susLong", "Woodwinds/Bassoon/sus"]
 
 
 def parse_sfz(path):
@@ -148,7 +177,7 @@ def measure_pitch(x, centre, sustained):
     return 69 + 12 * math.log2(f0 / 440.0), spread
 
 
-def prepare_note(x, sustained):
+def prepare_note(x, sustained, loop_seconds=2.5, xfade=0.08):
     """(audio, loop, release, notes) for one region's mono audio."""
     s = attack_start(x)
     y = x[s:].copy()
@@ -168,7 +197,7 @@ def prepare_note(x, sustained):
         notes["loop"] = "no steady part"
         return fade_end(y[:int(6 * RATE)]), None, None, notes
     a, rel = region
-    b = min(rel, a + int(2.5 * RATE))
+    b = min(rel, a + int(loop_seconds * RATE))
     hop = prepare.ENV_HOP
     probe = y[a:b]
     f0 = None
@@ -182,7 +211,7 @@ def prepare_note(x, sustained):
         notes["loop"] = "none found"
         return fade_end(y[:int(6 * RATE)]), None, None, notes
     ls, le, cost, _ = found
-    y = prepare.crossfade_loop(y, ls, le, int(0.08 * RATE))
+    y = prepare.crossfade_loop(y, ls, le, int(xfade * RATE))
     # The recorded release: from 30 ms before the level leaves the sustain, until it has
     # fallen 60 dB under the note's peak (at most 1.5 s).
     env = prepare.envelope(y)
@@ -234,8 +263,13 @@ def fade_end(y):
     return y
 
 
-def process_set(sid, sfz, sustained, name, source, out_dir, report):
+def process_set(sid, sfz, sustained, name, source, out_dir, report, opts=None):
+    opts = opts or {}
+    shift = int(opts.get("transpose", 0))
     regions = parse_sfz(os.path.join(source, sfz))
+    for r in regions:
+        for k in ("lokey", "hikey", "pitch_keycenter"):
+            r[k] = str(int(r[k]) + shift)
     # Overlapping velocity sets on one key range (the SFZ sounds both at once there): the
     # finer split is kept, the other left out (reported).
     by_range = {}
@@ -290,16 +324,17 @@ def process_set(sid, sfz, sustained, name, source, out_dir, report):
         x = x * 10 ** (gain_db / 20)
         x = signal.sosfilt(signal.butter(2, 15.0, "highpass", fs=RATE, output="sos"), x)
         centre = int(r["pitch_keycenter"])
-        y, loop, release, notes = prepare_note(x, sustained)
+        tune = float(r.get("tune", 0)) / 100.0
+        y, loop, release, notes = prepare_note(x, sustained, float(opts.get("loop", 2.5)), float(opts.get("xfade", 0.08)))
         measured, spread = measure_pitch(y, centre, sustained)
         root = float(centre)
         cents = None
         if measured is None:
             report["warnings"].append(f"{sid} {os.path.basename(path)}: no clear pitch; mapped at its key centre {prepare.name_of(centre)}")
-        elif spread > 20.0:
+        elif spread > float(opts.get("spread", 20.0)):
             report["warnings"].append(f"{sid} {os.path.basename(path)}: its pitch moves ({spread:.0f} cents over the note, "
                                       f"{100 * (measured - centre):+.0f} on average); mapped at its key centre {prepare.name_of(centre)}")
-        elif abs(measured - centre) > 0.6:
+        elif abs(measured - centre - tune) > 0.6:
             report["warnings"].append(f"{sid} {os.path.basename(path)}: measured {measured - centre:+.2f} semitones from its key centre "
                                       f"{prepare.name_of(centre)}; mapped at the key centre")
         else:
@@ -391,7 +426,7 @@ def process_set(sid, sfz, sustained, name, source, out_dir, report):
         json.dump(mapping, f, indent=1)
     # The report.
     cents = [z["cents"] for z in zones if z["cents"] is not None]
-    entry = {"sfz": sfz, "zones": len(zones), "layers": layers, "gainDb": mapping["gainDb"],
+    entry = {"sfz": sfz, "family": opts.get("family", "brass"), "transpose": shift, "zones": len(zones), "layers": layers, "gainDb": mapping["gainDb"],
              "seconds": round(sum(len(z["audio"]) for z in zones) / RATE, 1),
              "loops": sum(1 for z in zones if z["loop"] is not None),
              "keys": f"{prepare.name_of(min(z['loKey'] for z in zones))}-{prepare.name_of(max(z['hiKey'] for z in zones))}",
@@ -421,11 +456,11 @@ def main():
     report = {"source": f"https://github.com/sgossner/VSCO-2-CE @ {SOURCE_COMMIT}", "licence": "CC0 1.0 Universal",
               "sets": {}, "warnings": []}
     made = []
-    for sid, sfz, sustained, name in SETS:
+    for sid, sfz, sustained, name, opts in SETS:
         if only and sid not in only:
             continue
         print(f"[{sid}] ...", flush=True)
-        process_set(sid, sfz, sustained, name, args.source, args.out, report)
+        process_set(sid, sfz, sustained, name, args.source, args.out, report, opts)
         made.append(sid)
     index_path = os.path.join(args.out, "index.json")
     index = {"version": 1, "instruments": []}
@@ -445,7 +480,8 @@ def main():
         print(f"{sid}: {s['zones']} notes ({s['keys']}, {s['layers']} velocity layers), {s['seconds']} s of audio, {s['loops']} loops, "
               f"gain {s['gainDb']:+.1f} dB, tuning {t['min']:+.0f}..{t['max']:+.0f} cents (mean |{t['meanAbs']}|), "
               f"pre-roll cut up to {s['preRollMsMax']} ms, channel {s['channel']}")
-    print(f"VSCO 2 CE brass: {total} notes in {len(made)} sets")
+    fam = {f: sum(report["sets"][m]["zones"] for m in made if report["sets"][m]["family"] == f) for f in ("brass", "woodwinds")}
+    print(f"VSCO 2 CE: {total} notes in {len(made)} sets (brass {fam['brass']}, woodwinds {fam['woodwinds']})")
     if report["warnings"]:
         print(f"Warnings ({len(report['warnings'])}):")
         for w in report["warnings"]:
