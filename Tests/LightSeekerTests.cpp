@@ -14,6 +14,8 @@
 //   LightSeekerTests --strength [f.csv]   the strength table (Direction Update 2), report only
 //   LightSeekerTests --calibrate-instruments Source/Synth/InstrumentTrims.h   the instruments' level trims
 //   LightSeekerTests --listen-instruments dir   every instrument dry and in its place, and a travel (WAV)
+//   LightSeekerTests --loudness-report [before]   every instrument's loudness on the test set (BS.1770)
+//   LightSeekerTests --listen-loudness dir   a short mix, every instrument at its defaults, before vs after the rebalance
 //   LightSeekerTests --listen-changed dir   the instruments the recordings update changed: one melody and chord progression, dry and in place
 #include "PluginEditor.h"
 #include "PluginProcessor.h"
@@ -2820,6 +2822,8 @@ int main(int argc, char** argv) {
         else if (arg == "--listen-mix" && i + 1 < argc) return listenMix(argv[i + 1]);
         else if (arg == "--brass-report") return brassReport();
         else if (arg == "--attack-report") return attackReport();
+        else if (arg == "--loudness-probe" && i + 2 < argc) return loudnessProbe(argc, argv, i + 1);
+        else if (arg == "--listen-loudness" && i + 1 < argc) return listenLoudness(argv[i + 1]);
         else if (arg == "--loudness-report") return loudnessReport(i + 1 < argc && juce::String(argv[i + 1]) == "before");
         else if (arg == "--calibrate-library" && i + 1 < argc) return calibrateLibrary(argv[i + 1]);
         else if (arg == "--listen-brass" && i + 1 < argc) return listenBrass(argv[i + 1]);
@@ -2864,6 +2868,7 @@ int main(int argc, char** argv) {
     if (run("search")) testSearch(s);
     if (run("brass")) testBrass(s);
     if (run("attack")) testAttack(s);
+    if (run("loudness")) testLoudness(s);
     if (only.contains("qa")) testQa(s);   // long (130 journeys): run explicitly
     if (only.contains("cpu")) testCpu(s);   // report only: run explicitly
     std::cout << "\n" << s.passed << " passed, " << s.failed << " failed" << std::endl;

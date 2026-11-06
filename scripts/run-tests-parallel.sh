@@ -21,6 +21,10 @@ mkdir -p "$logs"
 # loaded the 4-core runner enough to fail the wall-clock repaint and Eco checks.
 "$tests" --only brass,attack > "$logs/9-brass.txt" 2>&1 &
 wait
+# The loudness group (the instruments' level match, BS.1770; the loudness rebalance) renders on
+# every core itself: alone after the shards, so it neither slows their wall-clock checks nor
+# is slowed by them.
+"$tests" --only loudness > "$logs/9-loudness.txt" 2>&1
 "$tests" --only cpu > "$logs/4-cpu.txt" 2>&1
 
 passed=0

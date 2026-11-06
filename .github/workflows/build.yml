@@ -239,6 +239,17 @@ jobs:
           build/LightSeekerTests_artefacts/Release/LightSeekerTests --listen-brass build/test-logs/real-brass
           cp "${{ runner.temp }}/samples/report-vsco.json" build/test-logs/real-brass/ || true
           build/LightSeekerTests_artefacts/Release/LightSeekerTests --brass-report > build/test-logs/real-brass/brass-report.txt
+      # The loudness rebalance: a short mix (harp arpeggios, strings pad, brass, choir, flute), every
+      # instrument at its defaults and no fader moved, with the trims before and after; the table of
+      # every instrument's loudness on the test set (BS.1770), now and before.
+      - name: Loudness listening renders (a short mix before and after the rebalance, the loudness tables)
+        if: always()
+        env:
+          LIGHTSEEKER_SAMPLES: ${{ runner.temp }}/samples
+        run: |
+          build/LightSeekerTests_artefacts/Release/LightSeekerTests --listen-loudness build/test-logs/loudness
+          build/LightSeekerTests_artefacts/Release/LightSeekerTests --loudness-report > build/test-logs/loudness/loudness-table.txt
+          build/LightSeekerTests_artefacts/Release/LightSeekerTests --loudness-report before > build/test-logs/loudness/loudness-table-before.txt
       - name: Upload test logs
         if: always()
         uses: actions/upload-artifact@v4

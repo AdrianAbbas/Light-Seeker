@@ -533,8 +533,9 @@ int synthDebug() {
 
 //==============================================================================
 // Every instrument (Direction Update 1, milestones 4-6).
-constexpr double instrumentTargetDb = -18.0;   // a held chord's loudest 400 ms, dry
-constexpr double instrumentLevelTolerance = 2.0;
+// The level match is the loudness group's (LoudnessTests.h, the loudness rebalance): each
+// instrument's own part in its own place, BS.1770 integrated loudness. A dry chord's loudest
+// 400 ms (this group's gate before) is printed here for reference only.
 
 void testInstrumentRange(Suite& s, int first, int last, bool gateLevels) {
     std::vector<InstrumentRender> renders(static_cast<std::size_t>(ls::inst::instrumentCount));
@@ -563,11 +564,8 @@ void testInstrumentRange(Suite& s, int first, int last, bool gateLevels) {
             s.check(margin <= 3.0, name + ": in tune (" + juce::MidiMessage::getMidiNoteName(note, true, true, 4).toStdString() + ")",
                     "strongest pitch class " + juce::MidiMessage::getMidiNoteName(strongest, true, false, 4).toStdString() + ", " + fmt(margin) + " dB over the note");
         }
-        if (gateLevels)
-            s.check(std::abs(level - instrumentTargetDb) <= instrumentLevelTolerance, name + ": level-matched",
-                    fmt(level) + " dB (target " + fmt(instrumentTargetDb) + " +- " + fmt(instrumentLevelTolerance) + ")");
-        else
-            std::cout << "  [report] " << name << ": " << fmt(level) << " dB\n";
+        juce::ignoreUnused(gateLevels);
+        std::cout << "  [report] " << name << ": a dry chord's loudest 400 ms " << fmt(level) << " dB (the level match: the loudness group)\n";
         // Released, a sustained instrument falls away (struck ones ring as they should).
         const double after = loudestDb(r.chordL, r.chordR, r.sr, 2.4, 3.0);
         if (ls::inst::patch(i).sustaining)
@@ -615,13 +613,13 @@ void testInstruments(Suite& s) {
     const bool sampled = samplesLoaded();
     std::cout << "  recordings: " << lswb::samples::Bank::get().message() << "\n";
     testInstrumentRange(s, 0, ls::inst::instrumentCount - 1, true);
-    {   // Without the recordings the stand-ins play (and are level-matched too).
+    {   // Without the recordings the stand-ins play (their level match: the loudness group).
         lswb::samples::Bank::bypassForTests(true);
         for (int i = 0; i < ls::inst::instrumentCount; ++i) {
             if (!ls::inst::patchUsesRecordings(ls::inst::patch(i))) continue;
             const auto r = renderInstrument(i);
             const double level = loudestDb(r.chordL, r.chordR, r.sr, 0.0, 1.5);
-            s.check(std::abs(level - instrumentTargetDb) <= instrumentLevelTolerance + 1.0, instrumentName(i) + ": its stand-in plays without the recordings, level-matched", fmt(level) + " dB");
+            s.check(level > -40.0, instrumentName(i) + ": its stand-in plays without the recordings", fmt(level) + " dB");
             int strongest = 0;
             s.check(pitchClassMargin(chroma(r.note, r.sr), 69, strongest) <= 3.0, instrumentName(i) + ": its stand-in is in tune");
         }
@@ -1039,19 +1037,8 @@ void testRecordedInstruments(Suite& s) {
             s.check(toDb(late) > toDb(early) - 6.0 && toDb(late) < toDb(early) + 3.0, name + ": a held chord stays steady while it loops",
                     fmt(toDb(late) - toDb(early)) + " dB from 1-2 s to 6-8 s");
         }
-        // Level-matched with its siblings (their held chords' loudest 400 ms, dry).
-        int l = 0, k = 0;
-        ls::inst::instrumentPlace(i, l, k);
-        const auto mine = renderInstrument(i);
-        const double level = loudestDb(mine.chordL, mine.chordR, mine.sr, 0.0, 1.5);
-        double far = 0;
-        for (int j = 0; j <= dc::subLocationCount(l); ++j) {
-            const int other = ls::inst::instrumentIndex(l, j);
-            if (other == i) continue;
-            const auto r = renderInstrument(other);
-            far = std::max(far, std::abs(level - loudestDb(r.chordL, r.chordR, r.sr, 0.0, 1.5)));
-        }
-        s.check(far <= 3.0, name + ": level-matched with its siblings", "furthest " + fmt(far) + " dB");
+        // Level-matched with its siblings: the loudness group (every pair of siblings, each on
+        // its own part, in each other's places; LoudnessTests.h).
     }
     if (sampled) {
         // The voices' macros: Vowel changes the colour, Ensemble the width; the level stays.

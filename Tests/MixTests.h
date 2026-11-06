@@ -636,7 +636,13 @@ void testMixPunch(Suite& s) {
         s.check(attackToSustain > b.attackToSustain + (organ ? 0.8 : 1.5), n + ": a louder hit over the sustain than before",
                 fmt(b.attackToSustain, 1) + " -> " + fmt(attackToSustain, 1) + " dB");
         s.check(presence > b.presence + (organ ? 0.5 : 1.0), n + ": more 2-4 kHz presence on the attack than before", fmt(b.presence, 1) + " -> " + fmt(presence, 1) + " dB");
-        s.check(std::abs(toDb(sustainHit) - b.sustain) < 0.5, n + ": the same sustain as before", fmt(b.sustain, 1) + " -> " + fmt(toDb(sustainHit), 1) + " dBFS");
+        // The loudness rebalance moved every instrument's level by its trim's change: the sustain
+        // is compared with the one before, moved by exactly that.
+        const int index = mixsong::instrumentNamed(b.name);
+        const bool standIn = ls::inst::patchUsesRecordings(patch) && !ls::inst::patchSampled(patch);
+        const double moved = (standIn ? patch.standInTrimDb : patch.trimDb) - ls::inst::legacyTrimDb(index, standIn);
+        s.check(std::abs(toDb(sustainHit) - (b.sustain + moved)) < 0.5, n + ": the same sustain as before (moved by the loudness rebalance's trim change)",
+                fmt(b.sustain, 1) + " " + (moved >= 0 ? "+" : "") + fmt(moved, 1) + " -> " + fmt(toDb(sustainHit), 1) + " dBFS");
     }
     }
     {   // The fanfare's rise: quicker than 25 ms from 10 to 90 %.

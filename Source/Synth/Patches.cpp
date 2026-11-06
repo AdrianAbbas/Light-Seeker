@@ -931,6 +931,11 @@ std::array<Patch, instrumentCount> build() {
     for (auto& p : all)
         for (const auto& [name, db] : punchBefore)
             if (std::string_view(p.name) == name) p.punchLegacyDb = db;
+    // The loudness rebalance: the Fairy Harp (an octave up) plays right on the Fairy Court's
+    // sympathetic strings (C5, E5, G5, feedback 0.92): at full share its chords at velocity 80
+    // drove them 3.5 dB into the output's safety limiter. It takes 40 % of them by default.
+    for (auto& p : all)
+        if (std::string_view(p.name) == "Fairy Harp") p.spaceCharacter = 0.4f;
     for (auto& p : all) {
         p.sustaining = !p.tremoloMod;
         for (int k = 0; k < p.layerCount; ++k)

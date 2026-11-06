@@ -11,6 +11,6 @@
 
 namespace ls::inst {
 inline constexpr std::array<float, 31> libraryTilts { 1.8f, 0.0f, 0.7f, 0.6f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.4f, 0.0f, 1.0f };
-inline constexpr std::array<float, 31> libraryTrims { 8.1f, 0.0f, 7.7f, 8.6f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 8.6f, 0.0f, 8.1f };
-inline constexpr std::array<float, 31> libraryStandInTrims { 8.1f, 0.0f, 7.7f, 8.6f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 8.6f, 0.0f, 8.1f };
+inline constexpr std::array<float, 31> libraryTrims { 7.7f, 0.0f, 7.7f, 10.2f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 8.4f, 0.0f, 8.1f };
+inline constexpr std::array<float, 31> libraryStandInTrims { 7.7f, 0.0f, 7.7f, 10.2f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 8.4f, 0.0f, 8.0f };
 }

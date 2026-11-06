@@ -76,6 +76,18 @@ float LightSeekerProcessor::migratedPunch(float control, int instrument) noexcep
     return dc::dsp::punchControl(dc::dsp::punchDb(control, p.punchLegacyDb), p.punchDb);
 }
 
+float LightSeekerProcessor::migratedLevel(float levelDb, int instrument) noexcept {
+    if (std::abs(levelDb) < 1.0e-4f) return levelDb;   // left at its default: the new level
+    const auto& p = ls::inst::patch(instrument);
+    // The trim it was saved against: the stand-in's when its recordings are not there.
+    auto& bank = lswb::samples::Bank::get();
+    bank.load();
+    bank.waitUntilLoaded(3000);
+    const bool standIn = ls::inst::patchUsesRecordings(p) && bank.state() != lswb::samples::Bank::Loading && !ls::inst::patchSampled(p);
+    const float now = standIn ? p.standInTrimDb : p.trimDb;
+    return juce::jlimit(-24.0f, 12.0f, levelDb + ls::inst::legacyTrimDb(instrument, standIn) - now);
+}
+
 float LightSeekerProcessor::punchDesignDb() const noexcept {
     return instrumentMode ? ls::inst::patch(shownInstrument.load(std::memory_order_relaxed)).punchDb : 0.0f;
 }
@@ -676,6 +688,7 @@ void LightSeekerProcessor::process(juce::AudioBuffer<float>& buffer, bool forced
         if (instrumentMode) {
             const auto& patch = ls::inst::patch(synth->patchIndex());
             mx.reverb = juce::jlimit(0.0f, dc::mixMax, mx.reverb * patch.space);
+            mx.character = juce::jlimit(0.0f, dc::mixMax, mx.character * patch.spaceCharacter);
             mx.preDelayMs = juce::jlimit(dc::preDelayMin, dc::preDelayMax, mx.preDelayMs + patch.spacePreDelayMs);
             mx.duck = 1.0f - (1.0f - mx.duck) * (1.0f - juce::jlimit(0.0f, 1.0f, patch.spaceDuck));
         }
@@ -775,6 +788,9 @@ void LightSeekerProcessor::getStateInformation(juce::MemoryBlock& data) {
     // GarageBand hotfix: the Punch design (2: the struck instruments' new defaults). States
     // without it come from before; see setStateInformation.
     state.setProperty("punchDesign", 2, nullptr);
+    // The loudness rebalance: the instruments' level design (1: each matched on its own part in
+    // its place). States without it come from before; see setStateInformation.
+    state.setProperty("levelDesign", 1, nullptr);
     state.setProperty("editorScale", static_cast<double>(editorScale.load()), nullptr);
     state.setProperty("presetName", presetName, nullptr);
     state.setProperty("presetModified", presetModified(), nullptr);
@@ -824,21 +840,25 @@ void LightSeekerProcessor::setStateInformation(const void* data, int size) {
     // session from before with Punch left at its default (50 %) simply gets the new default;
     // one where Punch had been moved keeps the dB it had on the instrument it was saved
     // with (the control is re-expressed against the new default).
-    if (instrumentMode && !incoming.hasProperty("punchDesign")) {
-        float location = 0, sub = 0, locked = 0, *punchValue = nullptr;
+    // The loudness rebalance: the instruments' levels changed. A session from before with
+    // Level left at its default (0 dB) simply gets the new level; one where Level had been
+    // moved keeps the loudness it had on the instrument it was saved with.
+    const bool oldPunch = !incoming.hasProperty("punchDesign"), oldLevel = !incoming.hasProperty("levelDesign");
+    if (instrumentMode && (oldPunch || oldLevel)) {
+        float location = 0, sub = 0, locked = 0, *punchValue = nullptr, *levelValue = nullptr;
         for (auto& [parameter, value] : values) {
             if (parameter->getParameterID() == dc::ids::location) location = value;
             else if (parameter->getParameterID() == dc::ids::subLocation) sub = value;
             else if (parameter->getParameterID() == dc::ids::instLock) locked = value;
             else if (parameter->getParameterID() == dc::ids::punch) punchValue = &value;
+            else if (parameter->getParameterID() == dc::ids::instLevel) levelValue = &value;
         }
-        if (punchValue != nullptr) {
-            // The instrument it played: the locked one, else its place's.
-            const int index = locked >= 0.5f && incoming.hasProperty("lockedInstrument")
-                                  ? juce::jlimit(0, ls::inst::instrumentCount - 1, static_cast<int>(incoming.getProperty("lockedInstrument")))
-                                  : ls::inst::instrumentIndex(juce::roundToInt(location), juce::roundToInt(sub));
-            *punchValue = migratedPunch(*punchValue, index);
-        }
+        // The instrument it played: the locked one, else its place's.
+        const int index = locked >= 0.5f && incoming.hasProperty("lockedInstrument")
+                              ? juce::jlimit(0, ls::inst::instrumentCount - 1, static_cast<int>(incoming.getProperty("lockedInstrument")))
+                              : ls::inst::instrumentIndex(juce::roundToInt(location), juce::roundToInt(sub));
+        if (oldPunch && punchValue != nullptr) *punchValue = migratedPunch(*punchValue, index);
+        if (oldLevel && levelValue != nullptr) *levelValue = migratedLevel(*levelValue, index);
     }
     for (auto& [parameter, value] : values) parameter->setValueNotifyingHost(parameter->convertTo0to1(value));
     // The window's scale and the preset name (version 4).

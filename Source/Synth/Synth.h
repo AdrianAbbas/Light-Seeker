@@ -166,6 +166,10 @@ struct Patch {
     // a little drier), the reverbs' pre-delay added and how much they dip under its attacks
     // (the dry hit first: the brass), and its own Punch (dB of gain on hit at Punch 50 %).
     float space = 1.0f, spacePreDelayMs = 0, spaceDuck = 0;
+    // The loudness rebalance: how much of the place's signature (times the MIX Character
+    // control) it takes: the Fairy Harp's chords set the Fairy Court's sympathetic strings
+    // ringing into the output limiter at full share.
+    float spaceCharacter = 1.0f;
     float punchDb = 0;
     // GarageBand hotfix: the Punch this instrument had in the Mix and Punch release (older
     // sessions with a Punch the user had moved keep their dB, see the processor's state).

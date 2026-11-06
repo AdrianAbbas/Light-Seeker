@@ -175,6 +175,9 @@ public:
     // GarageBand hotfix: a Punch control saved before the struck instruments' new defaults,
     // re-expressed so it gives the same dB on that instrument (50 %, the default, stays).
     static float migratedPunch(float control, int instrument) noexcept;
+    // The loudness rebalance: a Level the user had moved, in a session saved before it, re-expressed
+    // so the instrument it was saved with plays exactly as loud as it did (dB, clamped to the range).
+    static float migratedLevel(float levelDb, int instrument) noexcept;
     float punchDesignDb() const noexcept;
     // Calibration only (tests): the chain's raw level, without trims or level matcher.
     void setLevelMatching(bool on) noexcept { world.setLevelMatching(on); }

@@ -222,6 +222,7 @@ struct Options {
     int place = -1;            // play in another instrument's place (-1: its own)
     float intensity = -1, shimmer = -1, punch = -1;   // -1: the default
     double tail = 3.0;         // seconds after the last note
+    float level = -99;         // the Level control (dB); -99: its default
 };
 
 struct Render {
@@ -266,6 +267,7 @@ Render play(int instrument, const std::vector<Note>& notes, const Options& o = {
     if (o.intensity >= 0) setPlain(h, dc::ids::intensity, o.intensity);
     if (o.shimmer >= 0) setPlain(h, dc::ids::shimmer, o.shimmer);
     if (o.punch >= 0) setPlain(h, dc::ids::punch, o.punch);
+    if (o.level > -98) setPlain(h, dc::ids::instLevel, o.level);
     h.render(settleSeconds);
     struct Event { double t; bool on; int note; };
     std::vector<Event> ev;
@@ -313,7 +315,8 @@ void forEachInstrument(F&& f, int threads = 0) {
 struct Row {
     std::array<Loudness, 3> parts {};
     double roleLufs = 0;
-    double outputLimiterDb = 0, punchLimiterDb = 0;
+    double outputLimiterDb = 0, punchLimiterDb = 0;   // the most on any part
+    std::array<double, 3> outputLimiter {}, punchLimiter {};   // per part
 };
 
 // Every instrument, the three parts (or only its role's), in its own place at the defaults.
@@ -326,6 +329,8 @@ std::vector<Row> table(bool before, bool allParts) {
             if (!allParts && part != roleOf(i).part) continue;
             const auto r = playPart(i, part);
             row.parts[std::size_t(part)] = loudnessOf(r);
+            row.outputLimiter[std::size_t(part)] = r.outputLimiterDb;
+            row.punchLimiter[std::size_t(part)] = r.punchLimiterDb;
             row.outputLimiterDb = std::min(row.outputLimiterDb, r.outputLimiterDb);
             row.punchLimiterDb = std::min(row.punchLimiterDb, r.punchLimiterDb);
         }
@@ -344,13 +349,19 @@ int loudnessReport(bool before) {
     std::cout << (before ? "BEFORE (the trims before the rebalance)" : "NOW") << ": integrated LUFS / short-term max per part; role part marked *; target "
               << fmt(targetLufs) << " LUFS\n";
     const auto rows = table(before, true);
-    std::cout << "instrument | role | chords | melody | arpeggio | role vs target | output limiter (dB)\n";
+    std::cout << "instrument | role | chords | melody | arpeggio | role vs target | output limiter, chords/melody/arpeggio (dB) | Punch limiter (dB) | peaks (dBFS)\n";
     for (int i = 0; i < ls::inst::instrumentCount; ++i) {
         const auto& row = rows[std::size_t(i)];
         std::cout << instrumentName(i) << " | " << partName(roleOf(i).part);
         for (int p = 0; p < 3; ++p)
             std::cout << " | " << (p == roleOf(i).part ? "*" : "") << fmt(row.parts[std::size_t(p)].integrated) << " / " << fmt(row.parts[std::size_t(p)].shortTermMax);
-        std::cout << " | " << (row.roleLufs >= targetLufs ? "+" : "") << fmt(row.roleLufs - targetLufs) << " | " << fmt(row.outputLimiterDb, 2) << "\n";
+        std::cout << " | " << (row.roleLufs >= targetLufs ? "+" : "") << fmt(row.roleLufs - targetLufs) << " |";
+        for (int p = 0; p < 3; ++p) std::cout << " " << fmt(row.outputLimiter[std::size_t(p)], 2);
+        std::cout << " |";
+        for (int p = 0; p < 3; ++p) std::cout << " " << fmt(row.punchLimiter[std::size_t(p)], 2);
+        std::cout << " |";
+        for (int p = 0; p < 3; ++p) std::cout << " " << fmt(row.parts[std::size_t(p)].peakDb, 1);
+        std::cout << "\n";
     }
     return 0;
 }
@@ -420,4 +431,444 @@ int calibrateLoudness(const juce::String& path) {
          << "inline constexpr std::array<float, 31> legacyInstrumentTrims { " << list(legacy) << " };\n"
          << "inline constexpr std::array<float, 31> legacyStandInTrims { " << list(legacyStandIn) << " };\n}\n";
     return juce::File::getCurrentWorkingDirectory().getChildFile(path).replaceWithText(text) ? 0 : 1;
+}
+
+//==============================================================================
+namespace loudness {
+std::vector<float> sineOf(double hz, double dbfs, double seconds, double sr) {
+    std::vector<float> x(static_cast<std::size_t>(seconds * sr));
+    const double a = std::pow(10.0, dbfs / 20.0);
+    for (std::size_t i = 0; i < x.size(); ++i) x[i] = float(a * std::sin(2.0 * juce::MathConstants<double>::pi * hz * double(i) / sr));
+    return x;
+}
+
+bool isChordRole(int i) { return roleOf(i).part == Chords; }
+
+// A chord held long (24 s): its short-term loudness late against early (a pad must not keep
+// building up as its tails and voices pile up).
+double holdBuildUp(int i) {
+    std::vector<Note> notes;
+    for (int n : progression[0]) notes.push_back({ 0.0, 48.0, n + shiftOf(i) });
+    const auto r = play(i, notes, { -1, -1, -1, -1, 1.0 });
+    const auto early = measure(r.L, r.R, r.sr, 3.0, 6.0).integrated, late = measure(r.L, r.R, r.sr, 21.0, 24.0).integrated;
+    return late - early;
+}
+
+// Notes added one a bar (C3 G3 C4 E4 G4 C5 E5 G5, each held to the end): the loudness with
+// eight notes held against four, beyond what the same notes add up to played alone (their
+// powers summed: uncorrelated voices, each in its own register). A pad whose voices pile up
+// (stacked unisons, tails, a shared stage that swells) grows more than that.
+double stackExcess(int i, double& four, double& eight, double& expected) {
+    const std::array<int, 8> stack { 48, 55, 60, 64, 67, 72, 76, 79 };
+    std::vector<Note> notes;
+    for (int k = 0; k < 8; ++k) notes.push_back({ 4.0 * k, 4.0 * (8 - k) + 8.0, stack[std::size_t(k)] + shiftOf(i) });
+    const auto r = play(i, notes, { -1, -1, -1, -1, 1.0 });
+    four = measure(r.L, r.R, r.sr, 7.0, 8.0).integrated;       // the last second of bar 4 (four held)
+    eight = measure(r.L, r.R, r.sr, 18.0, 20.0).integrated;    // eight held, settled
+    // Each note alone, held as long, measured 4-6 s into it (settled, as the stack's notes are).
+    double first4 = 0, all8 = 0;
+    for (int k = 0; k < 8; ++k) {
+        const auto one = play(i, { { 0.0, 14.0, stack[std::size_t(k)] + shiftOf(i) } }, { -1, -1, -1, -1, 0.5 });
+        const double power = std::pow(10.0, (measure(one.L, one.R, one.sr, 4.0, 6.0).integrated + 0.691) / 10.0);
+        all8 += power;
+        if (k < 4) first4 += power;
+    }
+    expected = 10.0 * std::log10(all8 / std::max(first4, 1.0e-20));
+    return (eight - four) - expected;
+}
+} // namespace loudness
+
+void testLoudness(Suite& s) {
+    using namespace loudness;
+    s.section("loudness: every instrument as loud as the others on its own kind of part, in its own place, at the defaults (BS.1770)");
+    const bool sampled = samplesLoaded();
+    std::cout << "  recordings: " << lswb::samples::Bank::get().message() << "\n";
+    const bool captured = dc::Vault::capturedSpacesBuiltIn();
+    const bool library = ls::inst::patchLibraryLoaded(ls::inst::patch(mixsong::instrumentNamed("Fanfare Trumpets")));
+    std::cout << "  captured spaces: " << (captured ? "yes" : "no") << ", library brass: " << (library ? "yes" : "no") << "\n";
+    // The gate holds for the conditions the trims were calibrated in (CI: recordings or their
+    // stand-ins, the library brass, the captured spaces). A build without the captures plays
+    // fallback spaces in two places, one without the library a synthesised brass: those are
+    // reported there, not gated.
+    const auto gated = [&](int i) {
+        int l = 0, k = 0;
+        ls::inst::instrumentPlace(i, l, k);
+        if (!captured && onCapturedFallback(placeName(l, k))) return false;
+        if (!library && ls::inst::patchUsesLibrary(ls::inst::patch(i))) return false;
+        return true;
+    };
+    {   // The meter against the standard's reference points (EBU Tech 3341, BS.2217).
+        for (const double sr : { 48000.0, 44100.0 }) {
+            const auto x = sineOf(1000.0, -23.0, 20.0, sr);
+            const auto m = measure(x, x, sr);
+            s.check(std::abs(m.integrated + 23.0) <= 0.1, "meter: a 1 kHz sine at -23 dBFS in both channels reads -23.0 LUFS (" + fmt(sr / 1000.0) + " kHz)", fmt(m.integrated, 2));
+            s.check(std::abs(m.shortTermMax + 23.0) <= 0.1, "meter: ... and its short-term maximum too", fmt(m.shortTermMax, 2));
+            std::vector<float> silent(x.size(), 0.0f);
+            const auto one = measure(x, silent, sr);
+            s.check(std::abs(one.integrated + 26.01) <= 0.1, "meter: in one channel only, 3 dB less (-26.0 LUFS)", fmt(one.integrated, 2));
+            const auto a = sineOf(1000.0, -36.0, 10.0, sr), b = sineOf(1000.0, -23.0, 60.0, sr);
+            std::vector<float> gate(a);
+            gate.insert(gate.end(), b.begin(), b.end());
+            gate.insert(gate.end(), a.begin(), a.end());
+            const auto g = measure(gate, gate, sr);
+            s.check(std::abs(g.integrated + 23.0) <= 0.1, "meter: the relative gate (-36 / -23 / -36 dBFS: -23.0 LUFS)", fmt(g.integrated, 2));
+            const auto low = sineOf(25.0, -23.0, 20.0, sr);
+            s.check(measure(low, low, sr).integrated < -30.0, "meter: K-weighting (25 Hz counts far less)", fmt(measure(low, low, sr).integrated, 2));
+        }
+    }
+    {
+        std::set<std::string> covered;
+        for (int i = 0; i < ls::inst::instrumentCount; ++i)
+            if (juce::String(roleOf(i).name) == ls::inst::patch(i).name) covered.insert(roleOf(i).name);
+        s.check(int(covered.size()) == ls::inst::instrumentCount, "every instrument has its role and register", std::to_string(covered.size()) + " of 31");
+    }
+
+    // The gate: each instrument's role part, in its own place at the defaults. Every part is
+    // rendered (the other two are printed for the table), at its default Punch.
+    const auto rows = table(false, true);
+    double low = 1e9, high = -1e9;
+    for (int i = 0; i < ls::inst::instrumentCount; ++i) {
+        const auto& row = rows[std::size_t(i)];
+        const auto name = instrumentName(i);
+        std::cout << "  [loudness] " << name << " (" << partName(roleOf(i).part) << "): chords " << fmt(row.parts[0].integrated) << " / " << fmt(row.parts[0].shortTermMax)
+                  << ", melody " << fmt(row.parts[1].integrated) << " / " << fmt(row.parts[1].shortTermMax) << ", arpeggio " << fmt(row.parts[2].integrated) << " / "
+                  << fmt(row.parts[2].shortTermMax) << " LUFS (integrated / short-term max)\n";
+        const std::string detail = fmt(row.roleLufs) + " LUFS on its " + partName(roleOf(i).part) + " (target " + fmt(targetLufs) + " +- " + fmt(tolerance) + ")";
+        if (gated(i)) {
+            s.check(std::abs(row.roleLufs - targetLufs) <= tolerance, name + ": level-matched (integrated loudness of its own part, in its place, at the defaults)", detail);
+            low = std::min(low, row.roleLufs);
+            high = std::max(high, row.roleLufs);
+        } else std::cout << "  [report] " << name << ": " << detail << " (fallback space or no library: not gated)\n";
+        // No clipping with its default Punch: the output's safety limiter (a peak catcher, not a
+        // part of the sound) idle on every part at velocity 80, Punch's own limiter too.
+        double worstPeak = -120;
+        for (const auto& p : row.parts) worstPeak = std::max(worstPeak, p.peakDb);
+        s.check(worstPeak <= -0.3 && row.outputLimiterDb >= -1.0,
+                name + ": no clipping on any part at its default Punch (peak <= -0.3 dBFS, the output's safety limiter takes <= 1 dB)",
+                "peak " + fmt(worstPeak) + " dBFS, output limiter " + fmt(row.outputLimiterDb, 2) + " dB");
+        // Punch's own ceiling (it takes back only what Punch added, above -0.4 dBFS in the synth:
+        // never the note itself) may shave the hits of a part the instrument is not made for (the
+        // trumpets' four-note chords); on its own part it leaves Punch nearly whole (the horn
+        // section's +8 dB hits on four-note chords lose about 1 dB of it).
+        const double ownPunchLimiter = row.punchLimiter[std::size_t(roleOf(i).part)];
+        s.check(ownPunchLimiter >= -1.5, name + ": on its own part Punch's ceiling takes <= 1.5 dB of its hits", fmt(ownPunchLimiter, 2) + " dB");
+        if (row.punchLimiterDb < -1.0)
+            std::cout << "  [report] " << name << ": Punch's ceiling took up to " << fmt(row.punchLimiterDb, 2) << " dB of its hits (chords/melody/arpeggio: "
+                      << fmt(row.punchLimiter[0], 2) << " / " << fmt(row.punchLimiter[1], 2) << " / " << fmt(row.punchLimiter[2], 2) << ")\n";
+    }
+    s.metric("role-part loudness spread (loudest - quietest)", high - low, " LU");
+
+    // Without the recordings: the stand-ins, on the same gate.
+    {
+        lswb::samples::Bank::bypassForTests(true);
+        std::array<double, 31> level {};
+        forEachInstrument([&](int i) {
+            if (ls::inst::patchUsesRecordings(ls::inst::patch(i))) level[std::size_t(i)] = loudnessOf(playPart(i, roleOf(i).part)).integrated;
+        });
+        lswb::samples::Bank::bypassForTests(false);
+        for (int i = 0; i < ls::inst::instrumentCount; ++i) {
+            if (!ls::inst::patchUsesRecordings(ls::inst::patch(i))) continue;
+            const std::string detail = fmt(level[std::size_t(i)]) + " LUFS";
+            if (gated(i)) s.check(std::abs(level[std::size_t(i)] - targetLufs) <= tolerance, instrumentName(i) + ": its stand-in (no recordings) level-matched too", detail);
+            else std::cout << "  [report] " << instrumentName(i) << " stand-in: " << detail << "\n";
+        }
+    }
+    if (!sampled) std::cout << "  (the recordings were not found: the instruments that use them were measured with their stand-ins)\n";
+
+    // The sustained instruments (their role is the chords): no build-up.
+    {
+        std::array<double, 31> halves {}, hold {}, growth {}, four {}, eight {}, expected {}, dryDiff {}, shimmerDiff {};
+        forEachInstrument([&](int i) {
+            if (!isChordRole(i)) return;
+            const auto r = playPart(i, Chords);
+            halves[std::size_t(i)] = measure(r.L, r.R, r.sr, 8 * 4 * beat, 16 * 4 * beat).integrated - measure(r.L, r.R, r.sr, 0.0, 8 * 4 * beat).integrated;
+            hold[std::size_t(i)] = holdBuildUp(i);
+            growth[std::size_t(i)] = stackExcess(i, four[std::size_t(i)], eight[std::size_t(i)], expected[std::size_t(i)]);
+            // The space and the shimmer on sustained chords: in the place at the defaults against
+            // the same chords dry (Intensity 0) and with the Shimmer off.
+            Options dry;
+            dry.intensity = 0.0f;
+            Options noShimmer;
+            noShimmer.shimmer = 0.0f;
+            const double wet = loudnessOf(r).integrated;
+            dryDiff[std::size_t(i)] = wet - loudnessOf(playPart(i, Chords, dry)).integrated;
+            shimmerDiff[std::size_t(i)] = wet - loudnessOf(playPart(i, Chords, noShimmer)).integrated;
+        });
+        double worstSpace = -99, worstShimmer = -99;
+        for (int i = 0; i < ls::inst::instrumentCount; ++i) {
+            if (!isChordRole(i)) continue;
+            const auto name = instrumentName(i);
+            std::cout << "  [build-up] " << name << ": bars 9-16 vs 1-8 " << fmt(halves[std::size_t(i)], 2) << " LU, held 24 s " << fmt(hold[std::size_t(i)], 2)
+                      << " LU, four -> eight notes " << fmt(eight[std::size_t(i)] - four[std::size_t(i)], 2) << " LU (alone they add " << fmt(expected[std::size_t(i)], 2)
+                      << "), the space +" << fmt(dryDiff[std::size_t(i)], 2) << " LU, the shimmer +" << fmt(shimmerDiff[std::size_t(i)], 2) << " LU\n";
+            s.check(halves[std::size_t(i)] <= 1.0, name + ": its legato chords do not build up (bars 9-16 against 1-8, within +1 LU)", fmt(halves[std::size_t(i)], 2) + " LU");
+            s.check(hold[std::size_t(i)] <= 1.0, name + ": a chord held 24 s does not keep growing (21-24 s against 3-6 s, within +1 LU)", fmt(hold[std::size_t(i)], 2) + " LU");
+            s.check(growth[std::size_t(i)] <= 1.5, name + ": eight notes held against four grow no more than the same notes add up to alone (within +1.5 LU)",
+                    fmt(four[std::size_t(i)]) + " -> " + fmt(eight[std::size_t(i)]) + " LUFS, the notes alone add " + fmt(expected[std::size_t(i)], 2) + " LU: "
+                        + (growth[std::size_t(i)] >= 0 ? "+" : "") + fmt(growth[std::size_t(i)], 2) + " LU beyond");
+            s.check(dryDiff[std::size_t(i)] <= 2.0, name + ": its place's space adds little loudness on sustained chords (in place against dry, <= +2 LU)",
+                    fmt(dryDiff[std::size_t(i)], 2) + " LU");
+            s.check(shimmerDiff[std::size_t(i)] <= 1.0, name + ": the shimmer adds little loudness on sustained chords (Shimmer 100 % against 0 %, <= +1 LU)",
+                    fmt(shimmerDiff[std::size_t(i)], 2) + " LU");
+            worstSpace = std::max(worstSpace, dryDiff[std::size_t(i)]);
+            worstShimmer = std::max(worstShimmer, shimmerDiff[std::size_t(i)]);
+        }
+        s.metric("sustained chords: most the space adds (in place - dry)", worstSpace, " LU");
+        s.metric("sustained chords: most the shimmer adds (100 % - 0 %)", worstShimmer, " LU");
+    }
+
+    // Siblings (the instruments of one location, its family) level with each other in the same
+    // place: each pair played, locked, in each other's places, each on its own part.
+    {
+        struct Pair { int a, b, place; double la = 0, lb = 0; };
+        std::vector<Pair> pairs;
+        for (int l = 0; l < dc::LocationCount; ++l)
+            for (int x = 0; x <= dc::subLocationCount(l); ++x)
+                for (int y = x + 1; y <= dc::subLocationCount(l); ++y)
+                    for (int where : { x, y }) pairs.push_back({ ls::inst::instrumentIndex(l, x), ls::inst::instrumentIndex(l, y), ls::inst::instrumentIndex(l, where) });
+        std::atomic<int> next { 0 };
+        std::vector<std::thread> pool;
+        int threads = juce::jlimit(1, 8, int(std::thread::hardware_concurrency()));
+        if (const char* t = std::getenv("LS_LOUDNESS_THREADS")) threads = juce::jlimit(1, 32, juce::String(t).getIntValue());
+        for (int t = 0; t < threads; ++t)
+            pool.emplace_back([&] {
+                for (int k = next++; k < int(pairs.size()); k = next++) {
+                    auto& p = pairs[std::size_t(k)];
+                    Options o;
+                    o.place = p.place;
+                    p.la = loudnessOf(playPart(p.a, roleOf(p.a).part, o)).integrated;
+                    p.lb = loudnessOf(playPart(p.b, roleOf(p.b).part, o)).integrated;
+                }
+            });
+        for (auto& t : pool) t.join();
+        double worst = 0;
+        for (const auto& p : pairs) {
+            if (!gated(p.a) || !gated(p.b) || !gated(p.place)) continue;
+            const double d = std::abs(p.la - p.lb);
+            worst = std::max(worst, d);
+            int l = 0, k = 0;
+            ls::inst::instrumentPlace(p.place, l, k);
+            s.check(d <= 2.0 * tolerance, std::string(ls::inst::patch(p.a).name) + " and " + ls::inst::patch(p.b).name + " level with each other in " + dc::subLocationName(l, k)
+                        + " (each on its own part, within " + fmt(2.0 * tolerance) + " LU)",
+                    fmt(p.la) + " / " + fmt(p.lb) + " LUFS");
+        }
+        s.metric("siblings in the same place: furthest apart", worst, " LU");
+    }
+
+    // Old sessions: Level left at its default (0 dB) gets the new level; a Level the user had
+    // moved keeps the loudness it had on the instrument it was saved with.
+    {
+        bool defaults = true;
+        for (int i = 0; i < ls::inst::instrumentCount; ++i) defaults &= LightSeekerProcessor::migratedLevel(0.0f, i) == 0.0f;
+        s.check(defaults, "an older session with Level at its default (0 dB) opens with the new level, every instrument");
+        const int strings = mixsong::instrumentNamed("Shimmering Strings");
+        const auto& p = ls::inst::patch(strings);
+        const float moved = LightSeekerProcessor::migratedLevel(-13.0f, strings);
+        s.check(std::abs(moved - (-13.0f + ls::inst::legacyTrimDb(strings) - p.trimDb)) < 1.0e-3f,
+                "an older session's moved Level is re-expressed against the new trim (Shimmering Strings at -13 dB)", fmt(moved, 2) + " dB");
+        s.check(LightSeekerProcessor::migratedLevel(12.0f, mixsong::instrumentNamed("Concert Harp")) <= 12.0f
+                    && LightSeekerProcessor::migratedLevel(-24.0f, strings) >= -24.0f, "... within the Level range");
+        // Through the state: a session saved before (no levelDesign) on the strings at -13 dB.
+        InstrumentHost h;
+        h.instrument(strings);
+        h.set(dc::ids::instLevel, -13.0f);
+        juce::MemoryBlock data;
+        h.p->getStateInformation(data);
+        auto xml = juce::AudioProcessor::getXmlFromBinary(data.getData(), static_cast<int>(data.getSize()));
+        s.check(xml != nullptr && xml->hasAttribute("levelDesign"), "a session saved now carries the level design");
+        if (xml != nullptr) {
+            xml->removeAttribute("levelDesign");
+            juce::MemoryBlock old;
+            juce::AudioProcessor::copyXmlToBinary(*xml, old);
+            InstrumentHost g;
+            g.p->setStateInformation(old.getData(), static_cast<int>(old.getSize()));
+            const auto* level = g.p->parameters.getParameter(dc::ids::instLevel);
+            const float opened = level->convertFrom0to1(level->getValue());
+            // As loud as it was: the strings' chords with the old trims at -13 dB against the new
+            // trims at the Level the old session opens with.
+            double before = 0;
+            {
+                BeforeTrims legacy(true);
+                Options o;
+                o.level = -13.0f;
+                before = loudnessOf(playPart(strings, Chords, o)).integrated;
+            }
+            Options o;
+            o.level = opened;
+            const double after = loudnessOf(playPart(strings, Chords, o)).integrated;
+            s.check(std::abs(after - before) <= 0.2, "an older session's moved Level on Shimmering Strings plays as loud as it did",
+                    fmt(before, 2) + " -> " + fmt(after, 2) + " LUFS (Level -13.0 -> " + fmt(opened, 2) + " dB)");
+            InstrumentHost k;
+            k.p->setStateInformation(data.getData(), static_cast<int>(data.getSize()));
+            const auto* again = k.p->parameters.getParameter(dc::ids::instLevel);
+            s.check(std::abs(again->convertFrom0to1(again->getValue()) + 13.0f) < 1.0e-3f, "a session saved now reopens with its Level as it was");
+            // A session from before the Punch hotfix too (neither design): both migrate.
+            xml->removeAttribute("punchDesign");
+            juce::MemoryBlock older;
+            juce::AudioProcessor::copyXmlToBinary(*xml, older);
+            InstrumentHost m;
+            m.p->setStateInformation(older.getData(), static_cast<int>(older.getSize()));
+            const auto* l2 = m.p->parameters.getParameter(dc::ids::instLevel);
+            s.check(std::abs(l2->convertFrom0to1(l2->getValue()) - opened) < 1.0e-3f, "a session from before the Punch hotfix: its Level migrates as well");
+        }
+    }
+
+    // The brass after the Punch work: level-matched with its Punch (above), and what the Punch
+    // adds to its loudness and to its loudest moments.
+    {
+        const std::array<const char*, 4> brassNames { "Fanfare Trumpets", "Soaring Horn", "Heroic Horns", "Epic Choir and Brass" };
+        std::array<Loudness, 4> withPunch {}, without {};
+        std::array<double, 4> limiter {};
+        std::atomic<int> next { 0 };
+        std::vector<std::thread> pool;
+        for (int t = 0; t < 4; ++t)
+            pool.emplace_back([&] {
+                for (int k = next++; k < 4; k = next++) {
+                    const int i = mixsong::instrumentNamed(brassNames[std::size_t(k)]);
+                    const auto r = playPart(i, roleOf(i).part);
+                    withPunch[std::size_t(k)] = loudnessOf(r);
+                    limiter[std::size_t(k)] = std::min(r.outputLimiterDb, r.punchLimiterDb);
+                    Options o;
+                    o.punch = 0.0f;
+                    without[std::size_t(k)] = loudnessOf(playPart(i, roleOf(i).part, o));
+                }
+            });
+        for (auto& t : pool) t.join();
+        for (std::size_t k = 0; k < brassNames.size(); ++k) {
+            const int i = mixsong::instrumentNamed(brassNames[k]);
+            const auto name = instrumentName(i);
+            std::cout << "  [brass] " << name << ": " << fmt(without[k].integrated) << " LUFS with Punch 0, " << fmt(withPunch[k].integrated) << " at its default (+"
+                      << fmt(withPunch[k].integrated - without[k].integrated) << " LU); momentary max " << fmt(without[k].momentaryMax) << " -> " << fmt(withPunch[k].momentaryMax)
+                      << " LUFS; peak " << fmt(withPunch[k].peakDb) << " dBFS; limiters " << fmt(limiter[k], 2) << " dB\n";
+            // Level-matched with its Punch and never near clipping: the gates above.
+        }
+    }
+}
+
+// `--loudness-probe "Instrument name" part [id=value ...]`: one part (chords, melody, arpeggio),
+// in its own place, with parameters set (plain values by ID; "place=Instrument" plays it
+// there): integrated, short-term and momentary maxima, peak, the limiters (investigation aid).
+int loudnessProbe(int argc, char** argv, int at) {
+    using namespace loudness;
+    samplesLoaded();
+    const int i = mixsong::instrumentNamed(argv[at]);
+    const juce::String partArg(argv[at + 1]);
+    const int part = partArg == "chords" ? Chords : partArg == "melody" ? Melody : Arpeggio;
+    Options o;
+    std::vector<std::pair<juce::String, float>> sets;
+    for (int k = at + 2; k < argc; ++k) {
+        const juce::String a(argv[k]);
+        const auto id = a.upToFirstOccurrenceOf("=", false, false), value = a.fromFirstOccurrenceOf("=", false, false);
+        if (id == "place") o.place = mixsong::instrumentNamed(value.toRawUTF8());
+        else if (id == "intensity") o.intensity = value.getFloatValue();
+        else if (id == "shimmer") o.shimmer = value.getFloatValue();
+        else if (id == "punch") o.punch = value.getFloatValue();
+        else sets.push_back({ id, value.getFloatValue() });
+    }
+    // Other parameters: through a host of its own (the same as play(), with the sets applied).
+    InstrumentHost h;
+    if (o.place >= 0 && o.place != i) { h.instrument(o.place); h.render(0.05); h.p->chooseInstrument(i); }
+    else h.instrument(i);
+    if (o.intensity >= 0) setPlain(h, dc::ids::intensity, o.intensity);
+    if (o.shimmer >= 0) setPlain(h, dc::ids::shimmer, o.shimmer);
+    if (o.punch >= 0) setPlain(h, dc::ids::punch, o.punch);
+    for (const auto& [id, v] : sets) setPlain(h, id.toRawUTF8(), v);
+    h.render(settleSeconds);
+    struct Event { double t; bool on; int note; };
+    std::vector<Event> ev;
+    double last = 0;
+    for (const auto& n : notesOf(part, shiftOf(i))) {
+        ev.push_back({ n.at * beat, true, n.note });
+        ev.push_back({ (n.at + n.length) * beat, false, n.note });
+        last = std::max(last, (n.at + n.length) * beat);
+    }
+    std::stable_sort(ev.begin(), ev.end(), [](const Event& a, const Event& b) { return a.t < b.t || (a.t == b.t && !a.on && b.on); });
+    double now = 0;
+    for (const auto& e : ev) {
+        if (e.t > now) { h.render(e.t - now); now = e.t; }
+        if (e.on) h.noteOn(e.note, velocity);
+        else h.noteOff(e.note);
+    }
+    h.render(last + 3.0 - now);
+    const auto skip = static_cast<std::ptrdiff_t>(h.at(settleSeconds));
+    std::vector<float> L(h.outL.begin() + skip, h.outL.end()), R(h.outR.begin() + skip, h.outR.end());
+    const auto m = measure(L, R, h.sr);
+    std::cout << instrumentName(i) << ", " << partName(part) << ": " << fmt(m.integrated, 2) << " LUFS, short-term max " << fmt(m.shortTermMax) << ", momentary max "
+              << fmt(m.momentaryMax) << ", peak " << fmt(m.peakDb) << " dBFS, output limiter " << fmt(toDb(h.p->outputLimiterLowestForTest()), 2) << " dB, Punch limiter "
+              << fmt(toDb(h.p->synthForTest().punchLimiterLowest()), 2) << " dB\n";
+    // Where the loudest peaks are (the first 8 above -1 dBFS before the limiter is unknown: after it).
+    int shown = 0;
+    for (std::size_t k = 0; k < L.size() && shown < 6; ++k)
+        if (std::max(std::abs(L[k]), std::abs(R[k])) > 0.9f) { std::cout << "  near the ceiling at " << fmt(double(k) / h.sr, 3) << " s\n"; ++shown; k += std::size_t(h.sr * 0.5); }
+    if (const char* dump = std::getenv("LS_PROBE_WAV")) writeWav(juce::File(dump), L, R, h.sr);
+    return 0;
+}
+
+// `--listen-loudness dir`: a short mix (16 bars at 120 bpm, the test set's chords): Concert Harp
+// arpeggios, a Shimmering Strings pad, a Fanfare Trumpets call, Angelic Choir, an Airy Flute
+// melody. Five LIGHT SEEKER instances in their own places, every control at its default, no
+// fader moved (summed 6 dB down, no master processing); once with the trims before the
+// rebalance (the same code otherwise), once with the new ones; each alone and before-then-after.
+int listenLoudness(const juce::String& directory) {
+    using namespace loudness;
+    samplesLoaded();
+    const auto dir = juce::File::getCurrentWorkingDirectory().getChildFile(directory);
+    dir.createDirectory();
+    struct Track { const char* name; std::vector<Note> notes; };
+    std::vector<Track> tracks;
+    {   // The harp: the test set's arpeggio.
+        tracks.push_back({ "Concert Harp", notesOf(Arpeggio, 0) });
+        // The strings: the chords, legato.
+        tracks.push_back({ "Shimmering Strings", notesOf(Chords, 0) });
+        // The brass: a fanfare call at the start of each chord (the root, the fifth twice, a held third; G4-C6).
+        std::vector<Note> call;
+        for (int c = 0; c < 8; ++c) {
+            const auto& v = progression[std::size_t(c)];
+            const double t = c * 8.0;
+            call.push_back({ t, 0.9, v[0] + 12 });
+            call.push_back({ t + 1.0, 0.4, v[2] + 12 });
+            call.push_back({ t + 1.5, 0.4, v[2] + 12 });
+            call.push_back({ t + 2.0, 1.9, v[1] + 12 });
+        }
+        tracks.push_back({ "Fanfare Trumpets", call });
+        // The choir: the upper chord tones, an octave up (its register), a chord at a time.
+        std::vector<Note> choir;
+        for (int c = 0; c < 8; ++c)
+            for (int k = 1; k < 4; ++k) choir.push_back({ c * 8.0, 8.0, progression[std::size_t(c)][std::size_t(k)] + 12 });
+        tracks.push_back({ "Angelic Choir", choir });
+        // The flute: the test set's melody in its register.
+        tracks.push_back({ "Airy Flute", notesOf(Melody, 12) });
+    }
+    int written = 0;
+    std::vector<float> both[2];
+    for (const bool before : { true, false }) {
+        BeforeTrims trims(before);
+        std::vector<Render> renders(tracks.size());
+        std::vector<std::thread> pool;
+        for (std::size_t t = 0; t < tracks.size(); ++t)
+            pool.emplace_back([&, t] { renders[t] = play(mixsong::instrumentNamed(tracks[t].name), tracks[t].notes, { -1, -1, -1, -1, 4.0 }); });
+        for (auto& th : pool) th.join();
+        std::vector<float> L, R;
+        for (std::size_t t = 0; t < tracks.size(); ++t) {
+            const auto& r = renders[t];
+            if (L.size() < r.L.size()) { L.resize(r.L.size(), 0.0f); R.resize(r.R.size(), 0.0f); }
+            for (std::size_t k = 0; k < r.L.size(); ++k) { L[k] += 0.5f * r.L[k]; R[k] += 0.5f * r.R[k]; }
+            const auto m = loudnessOf(r);
+            std::cout << (before ? "before" : "after") << ": " << tracks[t].name << " " << fmt(m.integrated) << " LUFS (short-term max " << fmt(m.shortTermMax) << ")\n";
+            written += writeWav(dir.getChildFile(juce::String(before ? "before-" : "after-") + juce::String(tracks[t].name).toLowerCase().replaceCharacter(' ', '-') + ".wav"),
+                                r.L, r.R, r.sr) ? 1 : 0;
+        }
+        const auto m = measure(L, R, 48000.0);
+        std::cout << (before ? "before" : "after") << ": the mix " << fmt(m.integrated) << " LUFS, peak " << fmt(m.peakDb) << " dBFS\n";
+        written += writeWav(dir.getChildFile(before ? "mix-before.wav" : "mix-after.wav"), L, R, 48000.0) ? 1 : 0;
+        both[0].insert(both[0].end(), L.begin(), L.end());
+        both[1].insert(both[1].end(), R.begin(), R.end());
+        if (before) {   // a second of silence between them
+            both[0].insert(both[0].end(), 48000, 0.0f);
+            both[1].insert(both[1].end(), 48000, 0.0f);
+        }
+    }
+    written += writeWav(dir.getChildFile("mix-before-then-after.wav"), both[0], both[1], 48000.0) ? 1 : 0;
+    std::cout << written << " listening files written to " << dir.getFullPathName() << "\n";
+    return written > 0 ? 0 : 1;
 }

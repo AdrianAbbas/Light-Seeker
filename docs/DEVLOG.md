@@ -169,8 +169,8 @@ usage limit or a compaction) continues from the first unticked line. Push to `ma
 **Loudness rebalance: every instrument level in its own place, on its own kind of part** (see "Loudness rebalance" below; local work: recordings in `/home/user/deps/samples`, captures `/home/user/deps/irs`, JUCE `/home/user/deps/juce`, built in `build/`)
 
 - [x] L1. Loudness meter (ITU-R BS.1770: K-weighting, gated integrated, short-term max) and the standard test set (4-note legato chords 2 bars each for 16 bars, a melody of short and long notes, an 8th-note arpeggio; velocity 80; each instrument's own register), rendered in each instrument's own place at the shipped defaults (Intensity, MIX, Shimmer, Punch, Atmosphere); `--loudness-report`; the "before" table; push `[skip ci]`
-- [ ] L2. Rebalance: each instrument's role (chords / melody / arpeggio), trims calibrated in place to a common target (+-1.5 LU), recordings, stand-ins and library brass; pads' build-up (more notes held, long holds) and the space/shimmer's share on sustained material checked; old sessions: new level only where Level was left at its default; push `[skip ci]`
-- [ ] L3. Family pairs in the same place, the brass with its Punch, no clipping with every instrument's default Punch; push `[skip ci]`
+- [x] L2. Rebalance: each instrument's role (chords / melody / arpeggio), trims calibrated in place to a common target (+-1.5 LU), recordings, stand-ins and library brass; pads' build-up (more notes held, long holds) and the space/shimmer's share on sustained material checked; old sessions: new level only where Level was left at its default; push `[skip ci]`
+- [x] L3. Family pairs in the same place, the brass with its Punch, no clipping with every instrument's default Punch; push `[skip ci]`
 - [ ] L4. `loudness` group is the level-match test in CI (old dry-chord gates replaced), listening render (short mix, every instrument at default, before vs after) in test-logs, DEVLOG table and handoff; final push without `[skip ci]`, CI green
 
 ---

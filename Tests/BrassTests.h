@@ -278,8 +278,7 @@ void testBrass(Suite& s) {
             else
                 s.check(callAfter < callBefore + 1.0, n + ": not louder in the song's brass call either (short and held notes in its place, within +1 dB)", detail);
         }
-        s.check(std::abs(levelAfter - instrumentTargetDb) <= instrumentLevelTolerance, n + ": level-matched with the other instruments",
-                fmt(levelAfter, 1) + " dB (target " + fmt(instrumentTargetDb, 1) + ")");
+        // Level-matched with the other instruments: the loudness group (its own part in its place).
         const auto clicks = [&](double& held, double& repeats, double& heldAt, double& repeatsAt) {
             InstrumentHost h;
             h.instrument(i);
@@ -342,9 +341,7 @@ void testBrass(Suite& s) {
         for (const auto& pair : { std::pair<const char*, const char*> { "Fanfare Trumpets", "Soaring Horn" }, { "Heroic Horns", "Epic Choir and Brass" },
                                   { "Fanfare Trumpets", "Orchestral Chord Pad" }, { "Soaring Horn", "Orchestral Chord Pad" } }) {
             const int a = mixsong::instrumentNamed(pair.first), c = mixsong::instrumentNamed(pair.second);
-            const double la = chordLevel(a), lc = chordLevel(c);
-            s.check(std::abs(la - lc) <= 2.0 * instrumentLevelTolerance, std::string(pair.first) + " and " + pair.second + ": level-matched siblings",
-                    fmt(la, 1) + " / " + fmt(lc, 1) + " dB");
+            // Their level with each other: the loudness group (each on its own part, in the same place).
             const double d = printDistance(instrumentPrint(renderInstrument(a)), instrumentPrint(renderInstrument(c)));
             s.check(d > 3.0, std::string(pair.first) + " is distinct from its sibling " + pair.second, "distance " + fmt(d, 2));
         }
@@ -377,6 +374,8 @@ int calibrateLibrary(const juce::String& path) {
         const auto& p = ls::inst::patch(i);
         tilts[std::size_t(i)] = p.libraryTiltDb;
         if (!ls::inst::patchUsesLibrary(p)) continue;
+        // LS_KEEP_TILTS: only the trims (the loudness rebalance moved the levels, not the registers).
+        if (std::getenv("LS_KEEP_TILTS") != nullptr) continue;
         const BrassInstrument* range = nullptr;
         for (const auto& b : brass) if (mixsong::instrumentNamed(b.name) == i) range = &b;
         if (range == nullptr) continue;
