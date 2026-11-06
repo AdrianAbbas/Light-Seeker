@@ -2538,6 +2538,9 @@ read the "Journey stopped" note after rendering 9 s of audio, but the note stays
 wall-clock time, so on a busy runner it was already gone. The test now reads the note right
 after Stop and checks the place 9 s later (the same checks, without the wall-clock race).
 
+**CI, `42155012948`: green.** Linux 2411 passed, 0 failed (the timing checks included); macOS
+build, auval and the AU harness for both plug-ins green.
+
 ### Handoff: what to check in GarageBand
 
 - **Celesta** (Crystal Palace > Diamond Vault): chords at full velocity: a clean, bell-like
