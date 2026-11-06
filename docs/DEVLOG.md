@@ -178,7 +178,7 @@ usage limit or a compaction) continues from the first unticked line. Push to `ma
 - [x] W1. Licence and source re-checked for the woodwinds (same commit, CC0); `docs/LICENSES/VSCO-2-CE.txt` lists what is used; sample prep of the flute (sustain, vibrato, expressive vibrato, staccato), oboe (vibrato sustain, staccato), piccolo, clarinet and bassoon (sustain, staccato) in `vsco.py` (vibrato loops, breath kept); `ci-fetch-vsco.sh` fetches the woodwind folders (cache key); push `[skip ci]`
 - [x] W2. Engine: the real part on a synthesised wind layer (looped sustain, staccato front, a little synthesis under it), the vibrato set crossfaded by the mod wheel, the mod wheel as expression (swell and brightness) on the real woodwinds, legato (an overlapping note joins without a new attack), sparkle/air shaping; a second instrument macro (Layer) for the chord pad's woodwinds; push `[skip ci]`
 - [x] W3. Instruments: Airy Flute (flute + piccolo), Breathy Wind Flute (flute + the wind's octave), Pastoral Oboe (oboe + the recorder on the flute), Orchestral Chord Pad (a soft woodwind choir: flute, clarinet, bassoon, on its own macro); level-matched on the melody loudness test; push `[skip ci]`
-- [ ] W4. Tests (`woodwinds` group: in tune across the range with a cents report, dynamics smooth, no clicks at loops, note-offs, legato; level-matched (loudness, melody), distinct from siblings, stand-ins), listening renders (each before vs after, dry and in place) in test-logs, DEVLOG handoff (which instrument uses which woodwinds); final push without `[skip ci]`, CI green
+- [x] W4. Tests (`woodwinds` group: in tune across the range with a cents report, dynamics smooth, no clicks at loops, note-offs, legato; level-matched (loudness, melody), distinct from siblings, stand-ins), listening renders (each before vs after, dry and in place) in test-logs, DEVLOG handoff (which instrument uses which woodwinds); final push without `[skip ci]`, CI green
 
 ---
 
@@ -3009,3 +3009,107 @@ harmonic, E), and the presence band at 2.9 kHz lifted its sixth (E again): E rea
 The tuning itself was right (harmonic sum: 0 cents). The presence band came off the oboe (warm,
 not nasal) and more of the synthesised oboe's round fundamental went under it (-15 -> -6 dB,
 its tone 0.3 -> 0.75): A strongest again, and closer to "warm and sunny".
+
+### W4. Tests, listening renders, handoff
+
+**Tests** (`woodwinds` group, `Tests/WoodwindTests.h`, in the `9-brass` shard; `LS_WOODWINDS_ONLY`
+runs one instrument), each woodwind instrument against its synthesised self in the same build
+(the bank leaves the library's woodwinds out: "before"):
+- the licence entry lists the woodwinds; each instrument has real woodwind layers and plays
+  them; the chord pad's Woodwinds macro on the panel (beside Character, named by the instrument,
+  moves `instLayer`; dimmed and named Layer elsewhere), and it brings in more woodwinds as it
+  rises (0 / 50 / 100 %);
+- **in tune across its range** (a note every 3 semitones, harmonic sum over 0.3-1.25 s, within 15
+  cents), the **cents report** (MIDI:cents):
+  - Airy Flute 62:-0.5 65:-1.0 68:+7.0 71:-1.0 74:+0.5 77:+3.5 80:+3.0 83:-1.5 86:-0.5 89:-1.5 92:-2.5 95:-2.5
+  - Breathy Wind Flute 62-95: 0.0 to +0.5 everywhere
+  - Pastoral Oboe 59:+0.5 62:+1.0 65:-1.0 68-89: +0.5
+  - Orchestral Chord Pad 48:-1.0 51:-1.0 54:-5.0 57:-3.5 60:-0.5 63:+5.5 66:+1.0 69:+0.5 72:-0.5 75:0.0
+- **dynamics smooth**: velocity 0.1-1 in 0.05 steps rising over 4 dB with no dip and no step over
+  3.5 dB (the flutes and oboe: 7.1-8.9 dB, steps 0..+1.4 dB, no dip at the layer changes); the
+  **mod wheel's swell** smooth (400 ms windows every 100 ms: no step more than 1 dB beyond the
+  note's own movement with the wheel at 0) and real: Airy Flute +7.0 dB at full wheel, Breathy Wind
+  Flute +5.3, Pastoral Oboe +9.3 (expression and brightness, measured broadband), the chord pad
+  +0.4 (only its soft choir swells);
+- **no clicks** (a held two-note chord through its loops for 5 s and its note-off, fast repeats,
+  the wheel's sweep, legato and detached lines; against the stand-in's own sharp onsets:
+  `max(14, 1.25 x the stand-in's)`; worst 7.7, the stand-ins up to 7.7);
+- **legato**: the line runs on through each join (10 ms frames, its lowest from 30 ms before to
+  150 ms after the join against the notes either side) no deeper than the note's own movement
+  plus 1.5 dB: Airy Flute -2.9 dB (its recorded vibrato pulses by 5.1 dB in those frames; with
+  fresh attacks -7.0), Breathy Wind Flute -0.7 (fresh -9.0), Pastoral Oboe +0.6;
+- **level-matched on the realistic loudness test**: the melody (the chord pad: its chords) in its
+  own place at the defaults, BS.1770, within 1 LU of its synthesised self and within 1.5 LU of
+  the -20 LUFS target: Airy Flute -19.99 -> -20.04, Breathy Wind Flute -19.98 -> -19.96, Pastoral
+  Oboe -20.03 -> -20.15, the chord pad -20.11 -> -19.96 (its woodwinds alone -28.23 -> -28.28,
+  8 LU under it); the `loudness` group gates every instrument as before (all 31 within 1.5 LU);
+- **distinct from their siblings** (the instruments group's fingerprint, gate 3.0): Airy Flute /
+  Glass Harp 9.25, / Elven Lyre 8.36; Breathy Wind Flute / Cloud Pad 5.47, / Shimmering Pluck 4.97;
+  Pastoral Oboe / Warm Acoustic Guitar 5.64, / Bouncy Kalimba 8.29; the chord pad / Shimmering
+  Strings 4.15, / Fanfare Trumpets 6.32. The two flutes are not siblings (Elven Sanctuary and
+  Floating Isles) and their stand-ins were only 1.53 apart: now 2.21 (checked: more distinct than
+  before);
+- **no clipping** at the defaults, nor at full velocity and Level +12 dB in its place (under
+  -0.3 dBFS); **without the library** each plays its synthesised stand-in, and sounds.
+Tools: `--calibrate-woodwinds Source/Synth/WoodwindTrims.h`, `--listen-woodwinds dir`, and for
+debugging `--woodwind-level "<instrument>" note` (a velocity sweep: everything, Character 0, the
+stand-in; `LS_WOODWIND_DUMP` writes the renders).
+
+**The rest of the suite**: the instrument's parameter count is now twelve (Layer); the brass
+group's chord pad checks (with its woodwinds both real or both synthesised) all hold; the
+instruments group's "in tune" found the oboe's weak fundamental (W3, fixed). Snapshot
+`docs/snapshots/instrument-window.png` re-taken (the panel with the Layer slot, dimmed there).
+
+**Local run before the final push** (Linux, this container, CI's condition: the developer's
+recordings prepared from `AdrianAbbas/Samples`, read only, the captured spaces, and the library
+prepared by the final `vsco.py` through `ci-fetch-vsco.sh`'s merge): the whole suite as CI runs it,
+**2679 passed, 0 failed** (the brass shard with attack and woodwinds 217, loudness 240).
+
+**Listening renders** (CI: `test-logs/real-woodwinds/`, `--listen-woodwinds`): for each changed
+instrument a phrase (a detached melody, a legato line, a long note swelled with the mod wheel and
+back, staccato repeats soft to loud; the chord pad: four chords), before (its synthesis) and after
+(the real woodwinds), dry and in its place: `<instrument>-dry-before.wav`, `-dry-after.wav`,
+`-in-place-before.wav`, `-in-place-after.wav`, and one A/B file each (`-before-then-after.wav`);
+`woodwinds-report.txt` (each phrase's loudness, the cents report) and `report-vsco.json`. Here,
+integrated over each phrase: Airy Flute -20.6 -> -19.8 LUFS dry (in place -20.3 -> -19.5), Breathy
+Wind Flute -20.7 -> -19.4 (-20.5 -> -19.4), Pastoral Oboe -20.2 -> -18.7 (-20.2 -> -18.1), the chord
+pad -19.7 -> -19.4 (-19.3 -> -19.0). The phrases are 0.3-2.1 dB louder after while the loudness
+test's melody is matched within 0.1 LU: the phrase's long note is swelled with the mod wheel,
+which on the real woodwinds is expression (up to +4.5 dB) and on the stand-ins only vibrato.
+
+### Handoff: what to listen for in GarageBand
+
+`docs/MANUAL_TEST.md`, "Real woodwinds". In short:
+- **Which instrument plays which woodwinds**: Airy Flute: the flute with vibrato (the expressive
+  vibrato by the wheel) and the piccolo (Character); Breathy Wind Flute: the flute without
+  vibrato in the synthesis's wind (its vibrato by the wheel) and a breathy piccolo (Wind);
+  Pastoral Oboe: the oboe with vibrato and the recorder on the flute without vibrato; Orchestral
+  Chord Pad: the flute, clarinet and bassoon (the Woodwinds macro). Table in W3.
+- **Its own sound**: bright and radiant (sparkle, presence on the flutes), breathy attacks (the
+  recording's own breath, a soft tongued front, the synthesised breath under it); does any of it
+  sound like a stock library? Compare the A/B files.
+- **The mod wheel**: up = louder, brighter, and on the flutes more vibrato. At 0 they play as
+  calibrated; an old session that used the wheel for vibrato on these instruments now gets a
+  swell instead (the stand-ins keep vibrato).
+- **Legato**: hold each note until the next: they join, no new start; is the slur natural?
+- **The pad's woodwinds**: soft under the strings, horns and voices; the Woodwinds macro from
+  0 to 100 %.
+- **Without the library** ("Library brass not fetched" in the CI log): exactly the synthesis.
+
+### Known issues and decisions to revisit
+
+- **The mod wheel changed meaning** on the four instruments' real woodwinds (vibrato ->
+  expression). Velocity still makes the dynamics; expression is on top (0 = as designed).
+- **Legato is made, not recorded** (the library has no legato transitions): a join starts the
+  next note's sustain past its onset (140 ms on the flutes, 80 on the oboe) with a 60 ms fade,
+  the last note fading under it. Slurs over large intervals may want a short scoop.
+- **The two flutes** are 2.21 apart on the fingerprint (siblings must be over 3.0; they are in
+  different locations, and were 1.53 apart before): both are flutes; the Breathy one is the
+  plain, windy one.
+- **Short swelled phrases** read up to 2.1 LU louder than before when the wheel is moved
+  (expression); without the wheel they match.
+- **Memory**: the woodwinds add about 51 MB (16-bit, 232 notes) to the bank, the bundle about
+  15 MB of FLAC; the oboe without vibrato, the clarinet's and bassoon's staccatos and the
+  bassoon's vibrato are not used (not fetched).
+- **The piccolo** has only five notes in the library (one every 5-7 semitones): stretched up to
+  +-3.5 semitones.
