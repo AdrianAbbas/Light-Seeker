@@ -3113,3 +3113,12 @@ which on the real woodwinds is expression (up to +4.5 dB) and on the stand-ins o
   bassoon's vibrato are not used (not fetched).
 - **The piccolo** has only five notes in the library (one every 5-7 semitones): stretched up to
   +-3.5 semitones.
+
+**CI, final push (`611df2b`, run `42308208195`): green on the first run.** Linux with the
+developer's recordings, the captured spaces and the library (fetched from the official
+repository: "VSCO 2 CE: 1.1.0 2809277 (CC0 1.0 Universal, licence sha256 checked), 343 brass
+WAVs, 231 woodwind WAVs", "Prepared: 570 library notes (338 brass, 232 woodwinds); 38 sets in
+all"): **2679 passed, 0 failed** (the woodwinds group included, the wall-clock checks too); the
+real woodwinds listening renders (24 files and the report) in `test-logs/real-woodwinds/`.
+macOS: build, smoke (the library required and loaded) on arm64 and x86_64, auval and the AU
+harness for both plug-ins, the package uploaded.
