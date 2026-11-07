@@ -353,3 +353,12 @@ at its own place (Starlit Canopy, Windswept Isle, Wildflower Hill, Throne of Lig
   reproduce, send `~/Library/Logs/LightSeeker/hover.log`.
 - The map: real trees (broadleaf, conifers, blossom, shadows); Royal Gardens with hedges,
   roses, fountain, colonnade and pavilion; every landmark like its own scenes.
+
+## The celesta's softer ring
+
+- Celesta (Crystal Palace > Diamond Vault): chords and single notes held, soft to full velocity:
+  the strike as before, then a round, bell-like decay; no metallic afterring, no piano drone
+  under the bars, no clang at full velocity. Still sparkly, still the vault (glitter, shimmer);
+  MIX Character and Shimmer bring more of the vault.
+- In your seven-part piece with every fader at 0 dB: the celesta as loud as before.
+- Celesta and Harp: the bars a little rounder. Music Box: unchanged.

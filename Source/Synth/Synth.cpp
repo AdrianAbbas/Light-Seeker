@@ -32,6 +32,15 @@ const std::array<ModeSet, ModesCount>& modeSets() {
         { 6, { 1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f }, { 1.0f, 0.7f, 0.5f, 0.38f, 0.28f, 0.2f }, { 1.0f, 0.45f, 0.25f, 0.15f, 0.08f, 0.05f } },
         // Crystal: bright, sweet, a little inharmonic.
         { 6, { 1.0f, 2.0f, 2.756f, 4.0f, 5.404f, 6.63f }, { 1.0f, 0.8f, 0.55f, 0.45f, 0.3f, 0.22f }, { 1.0f, 0.55f, 0.3f, 0.28f, 0.14f, 0.08f } },
+        // Celesta, the softer ring: the same bars, but the resonator box carries the
+        // fundamental and the bar's overtones are only the strike's sparkle. The fundamental
+        // twice: a bloom that settles within half a second and a softer hum under it (a round,
+        // bell-like decay); the octave and the double octave (tuned exactly: 3.98 beat against
+        // the other notes' harmonics) die early, the bar's own inharmonic overtone (10.6)
+        // within about 100 ms.
+        { 5, { 1.0f, 1.0f, 2.0f, 4.0f, 10.6f }, { 1.0f, 0.3f, 0.28f, 0.12f, 0.06f }, { 0.55f, 0.55f, 0.18f, 0.11f, 0.08f } },
+        // Celesta, the softer ring without the bloom (under a harp): the same bars and overtones.
+        { 4, { 1.0f, 2.0f, 4.0f, 10.6f }, { 1.0f, 0.3f, 0.12f, 0.05f }, { 1.0f, 0.2f, 0.12f, 0.06f } },
     } };
     return sets;
 }
@@ -557,6 +566,7 @@ struct Synth::Voice {
         float gain = 1, cutoff = 18000, release = 0.3f, fade = 1, fadeMul = 1, vibrato = 0, hz = 440;
         bool character = false, stretchRelease = true;
         float polarity = 1;   // the Pluck's (Layer::alternatePolarity)
+        int hold = 0;         // samples before the layer speaks (Layer::strikeSpreadMs)
         // The library brass's shaping (Sample layers with presence, bite or drive).
         bool shaped = false;
         // The real brass of a brass layer (Layer::real): its sustain (`sample`) and front, the
@@ -888,6 +898,9 @@ void Synth::startLayers(Voice& voice) noexcept {
         lv.vibW = 0;
         lv.vibWStep = 0;
         lv.sparkleAmount = 0;
+        // The celesta's softer ring: a chord's strikes land a little apart, by key (0 .. the
+        // spread), so their first peaks no longer add up on one sample. One note: unchanged.
+        lv.hold = L.strikeSpreadMs > 0.0f ? int(L.strikeSpreadMs * 0.001f * r * float((note * 7) % 5) / 4.0f) : 0;
         const float hardness = clamp01(L.p[0] * (1.15f - 0.3f * macros.attack) + 0.25f * (vel - 0.6f));
         switch (L.engine) {
             case Engine::Brass:
@@ -1715,6 +1728,7 @@ void Synth::render(float* outL, float* outR, int n) noexcept {
             float vl = 0, vr = 0;
             for (auto& lv : v.layer) {
                 if (!lv.on) continue;
+                if (lv.hold > 0) { --lv.hold; continue; }
                 float y = 0;
                 switch (lv.engine) {
                     case Engine::Brass: case Engine::Analog: case Engine::Reed: {

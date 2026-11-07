@@ -119,6 +119,10 @@ public:
     void setMix(float space, float echoes, float modulation, float character) noexcept {
         mixSpace.set(space); mixEchoes.set(echoes); mixModulation.set(modulation); mixCharacter.set(character);
     }
+    // The celesta's softer ring: how long the kind's modes ring (their T60 times this, 0.1..1;
+    // 1 = as designed). Their gain follows so a strike wakes them as loudly: the same
+    // glitter, a shorter ring. The instrument sets it per instrument; the effect never does.
+    void setRing(float scale) noexcept { ringScale = std::clamp(std::isfinite(scale) ? scale : 1.0f, 0.1f, 1.0f); }
     void process(float* l, float* r, int n, const Frame&, const Context&) noexcept;
     static const char* kindName(int kind) noexcept;
     // After a journey to another kind: stop taking input (as the amount falls) and ring
@@ -141,7 +145,7 @@ private:
     void configure(int kind, float tone) noexcept;
     double sr = 48000;
     int kind = -1;
-    float tone = 0, toneShift = 1;
+    float tone = 0, toneShift = 1, ringScale = 1, configuredRing = 1;
     const sig::Recipe* recipe = nullptr;
     dsp::Smoothed amount;
     dsp::Smoothed shimmerGain { dsp::shimmerLayerBase, dsp::shimmerLayerBase, 1.0f };

@@ -180,6 +180,12 @@ usage limit or a compaction) continues from the first unticked line. Push to `ma
 - [x] W3. Instruments: Airy Flute (flute + piccolo), Breathy Wind Flute (flute + the wind's octave), Pastoral Oboe (oboe + the recorder on the flute), Orchestral Chord Pad (a soft woodwind choir: flute, clarinet, bassoon, on its own macro); level-matched on the melody loudness test; push `[skip ci]`
 - [x] W4. Tests (`woodwinds` group: in tune across the range with a cents report, dynamics smooth, no clicks at loops, note-offs, legato; level-matched (loudness, melody), distinct from siblings, stand-ins), listening renders (each before vs after, dry and in place) in test-logs, DEVLOG handoff (which instrument uses which woodwinds); final push without `[skip ci]`, CI green
 
+**The celesta's softer ring** (see "The celesta's softer ring" below; GarageBand: the strike better since the hotfix, the ringing after it still clangy; local work as before: recordings `/home/user/deps/samples`, captures `/home/user/deps/irs`, library merged into the recordings, JUCE `/home/user/deps/juce`, built in `build/`)
+
+- [x] R1. Measured, before vs now, what rings after the strike (the bars' modes, the tine, the octave, the piano body, the Diamond Vault's signature modes, its crystal resonator, its space's glints, the shimmer): `--ring-report` (afterring after 100 ms, its inharmonic energy and share, the strike's sparkle, peaks)
+- [x] R2. Fix: the bars' rounder, bell-like decay (ModesCelestaRound), shorter tine and octave, the piano's body short (its hammer kept), the vault's modes / resonator / shimmer / space shares for the celesta (and a per-instrument ring time for the signature's modes), a chord's hammers 0-3 ms apart (no limiter even at full velocity); Celesta and Harp's bars round (ModesCelestaSoft) and less of the chapel's shimmer; the Music Box checked, unchanged; trims re-matched on the loudness test (`--calibrate-ring`)
+- [x] R3. Tests (`ring` group, its own shard after the loudness group), listening renders in test-logs (`celesta-ring/`: the celesta before vs after, alone and in the seven-part piece), DEVLOG handoff; final push without `[skip ci]`, CI green
+
 ---
 
 ## Lessons carried over from DUNGEON CRAWLER (read first)
@@ -3122,3 +3128,178 @@ all"): **2679 passed, 0 failed** (the woodwinds group included, the wall-clock c
 real woodwinds listening renders (24 files and the report) in `test-logs/real-woodwinds/`.
 macOS: build, smoke (the library required and loaded) on arm64 and x86_64, auval and the AU
 harness for both plug-ins, the package uploaded.
+
+## The celesta's softer ring (2026-11-07)
+
+The developer, from GarageBand: the Celesta (Crystal Palace > Diamond Vault) still too clangy.
+The strike is better since the hotfix, but the ringing after it (the metallic afterring) is too
+strong. Wanted: a softer, rounder, bell-like decay; less of the inharmonic metallic ring and the
+piano body under the bars; the sparkle and the place's character kept; level-matched with the
+loudness test; Celesta and Harp and the Music Box checked for the same.
+
+### R1. What rings after the strike (measured)
+
+`LightSeekerTests --ring-report` (new, `Tests/RingTests.h`): each of the three instruments, dry
+and in its own place at its defaults, a C6 and a C5-E5-G5 chord held 2 s at velocities 0.3 /
+0.7 / 1.0, before (the celesta family as it was: `ls::inst::useRingBeforeForTests`, its patches,
+trims and shares) and now, in the same build:
+- **the strike**: RMS of the first 100 ms; **the afterring**: RMS from 100 ms to 2 s, and the
+  afterring against the strike;
+- **the tail's inharmonic energy**: the afterring's power spectrum (Hann frames of 8192) split into
+  what lies within max(3 bins, 4 % of the note) of a harmonic of one of the notes and the rest
+  (0.85 x the lowest note to 18 kHz): the rest as a level (dB) and as a share of the tail;
+- **the sparkle**: the strike's level above 5 kHz (first 60 ms); the sample peak and how much the
+  output's safety limiter took.
+
+What it found (the strongest off-harmonic peaks of the tails, `LS_RING_DUMP` writes the renders):
+- **Dry**, the tail is mostly harmonic (inharmonic share -48 to -53 dB on a note): the clang there
+  is the bars' *length*, a 2.2 s fundamental with an octave and a 3.98 overtone (beating against
+  the other notes' fourth harmonics) and the piano's long notes (-7 dB, T60 2.2 s) under them,
+  whose stretched partials 4-8 (3.2, 4.0, 4.2, 4.8 kHz on the chord) are the dry tail's
+  inharmonic part.
+- **In the Diamond Vault**, a third of the tail is inharmonic (share -4.5 dB on a note): the
+  vault rings everything on **fixed pitches**: its signature's crystal modes (G6 D7 G7 B7 D8,
+  T60 6 s: the strongest peaks, 1570, 2350, 3961, 4705 Hz), its crystal resonator (A5 crystal
+  ratios: it rings only ~0.1 s, its filters' damping is floored, but it drives a chord's strike to
+  -0.3 dBFS, the output limiter: part of the clang) and its space's glints (40 a second around
+  3.5 kHz, ringing 2.2 s); the shimmer (an octave up through the space) smears the tail further
+  and is most of the in-place highs.
+
+### R2. The fix
+
+**The Celesta** (`Source/Synth/Patches.cpp`, `Synth.cpp`):
+- **The bars**: a new mode set, `ModesCelestaRound`: the fundamental twice, a bloom that settles
+  within half a second and a softer hum under it (T60 1.8 s; was 2.2): a round, bell-like decay;
+  the octave and the double octave tuned exactly (3.98 -> 4.0: no beating) and short; the bar's
+  inharmonic overtone (10.6) gone in ~100 ms, the strike's sparkle. Hardness 0.6 -> 0.5.
+- **The tine**: a short sparkle (ring 1.6 -> 0.7 s), a little brighter (0.7 -> 0.8) and louder
+  (-12 -> -11 dB) so the strike keeps its glitter. **The octave** (Character): ring 1.6 -> 0.9 s.
+- **The piano under the bars**: its hammer kept (-7 -> -9 dB, high-pass 280 -> 350 Hz), its body
+  dying in half a second (T60 2.2 -> 0.5 s). Air 2.5 -> 3.5 dB.
+- **The vault's share** (new per-instrument controls, as the Fairy Harp's `spaceCharacter`): 30 %
+  of the vault's crystal modes and resonator (MIX Character on top), **ringing a third as long**
+  (`spaceRing` 0.35: the signature's mode T60s times it, their gain times its square root so a
+  strike still wakes them as brightly: `Signature::setRing`, `Controls::Mix::ring`; the effect
+  never sets it), 60 % of its shimmer (`spaceShimmer`, times the Shimmer control) and 85 % of the
+  space (`space`). The place itself is unchanged (the effect, and every other instrument in it).
+- **A chord's hammers land 0-3 ms apart** (by key; `Layer::strikeSpreadMs`, every layer of a note
+  together): with the strike now carrying more of the note, a full-velocity chord's first peaks
+  added up into the limiter (-1.6 dB on C5-E5-G5); now it never acts, even at velocity 1.0 (it did
+  in the vault before). One note sounds the same.
+
+**Celesta and Harp** (Stained Glass Chapel): its tail is mostly its harp and the chapel's own
+glints (dry it is harmonic: share -46 to -58 dB). Its bars ring round (`ModesCelestaSoft`: the
+same tuned overtones, no bloom: the harp is its body) and a little shorter (2.4 -> 2.0 s), and it
+takes 70 % of the chapel's shimmer. (Tried: the bloom and shorter: its strike got louder after
+level-matching and woke the chapel's glints more, more inharmonic in place; not kept.)
+
+**The Music Box**: checked, unchanged. Its tail is its own tines (inharmonic share -58 to -62 dB
+dry), its celesta bars are a soft character layer; the round bars there changed nothing
+measurable but its peaks (limiter at full velocity -0.55 -> -1.1 dB), so it keeps them.
+
+**Level** (`--calibrate-ring`, new: each as loud as before on the loudness test's arpeggio in its
+place, CI's condition): trims Celesta -5.4 -> -2.4 dB (stand-in -5.1 -> -2.3), Celesta and Harp
+-5.0 -> -4.3, the Music Box -2.7 (unchanged). `levelShift` unchanged (the same loudness).
+
+### The measurements: before -> now (level-matched)
+
+Afterring = RMS after the first 100 ms; inharmonic = that tail's energy away from the notes'
+harmonics; sparkle = the strike's level above 5 kHz. dB.
+
+| Celesta | afterring | afterring vs strike | inharmonic in the tail | inharmonic share | sparkle | peak (dBFS) |
+|---|---|---|---|---|---|---|
+| C6 0.3 dry | -40.5 -> -42.3 | -11.2 -> -15.4 | -88.8 -> -97.8 | -48.3 -> -55.5 | -63.2 -> -64.4 | -19.8 -> -16.6 |
+| C6 0.7 dry | -34.7 -> -36.7 | -12.0 -> -16.4 | -86.4 -> -92.9 | -51.7 -> -56.2 | -57.6 -> -58.9 | -14.3 -> -10.7 |
+| C6 1.0 dry | -31.0 -> -33.4 | -12.4 -> -16.9 | -84.3 -> -89.8 | -53.3 -> -56.4 | -53.5 -> -55.7 | -11.0 -> -7.4 |
+| chord 0.3 dry | -34.5 -> -37.3 | -12.5 -> -16.3 | -70.2 -> -80.4 | -35.7 -> -43.0 | -60.1 -> -61.3 | -11.1 -> -10.6 |
+| chord 0.7 dry | -28.6 -> -31.5 | -12.7 -> -16.8 | -68.0 -> -75.7 | -39.4 -> -44.2 | -57.8 -> -59.2 | -5.5 -> -3.9 |
+| chord 1.0 dry | -25.2 -> -27.9 | -12.7 -> -17.1 | -66.2 -> -72.5 | -41.0 -> -44.7 | -54.3 -> -57.2 | -2.3 -> -0.4 |
+| C6 0.3 vault | -38.9 -> -41.6 | -8.5 -> -13.4 | -43.5 -> -50.9 | -4.6 -> -9.2 | -49.6 -> -53.4 | -20.0 -> -17.7 |
+| C6 0.7 vault | -32.9 -> -35.7 | -8.8 -> -13.9 | -37.3 -> -44.2 | -4.5 -> -8.5 | -43.7 -> -46.9 | -13.8 -> -11.7 |
+| C6 1.0 vault | -29.1 -> -32.2 | -9.0 -> -14.2 | -33.6 -> -40.4 | -4.6 -> -8.2 | -39.9 -> -43.2 | -10.0 -> -8.3 |
+| chord 0.3 vault | -28.8 -> -35.3 | -10.1 -> -14.6 | -48.9 -> -52.8 | -20.2 -> -17.5 | -44.4 -> -51.0 | -9.0 -> -10.9 |
+| chord 0.7 vault | -21.6 -> -29.6 | -9.8 -> -15.0 | -42.7 -> -46.5 | -21.0 -> -16.9 | -38.0 -> -44.7 | -2.4 -> -4.8 |
+| chord 1.0 vault | -18.5 -> -25.8 | -9.9 -> -15.1 | -40.3 -> -42.5 | -21.7 -> -16.7 | -34.5 -> -40.7 | -0.3 (limited) -> -0.8 |
+
+So the afterring is 1.7-2.9 dB lower dry and 2.7-7.9 dB lower in the vault, 3.8-5.2 dB lower
+against the strike everywhere; its inharmonic energy 2.2-10.1 dB lower. In the vault a chord's
+tail is now a *larger share* inharmonic (the harmonic ring fell more than the vault's own glints,
+which stay: the place's character) although there is less of it. The strike is 1-2.4 dB stronger dry
+and on a single note (the loudness is the same, more of it in the strike), a chord's 2-2.8 dB
+weaker in the vault (the vault's resonator no longer drives it); the attack over its own
+decay is 10.8 dB at worst (gate 13; it was 8.7). The sparkle is 1.2-2.9 dB lower dry (the bars'
+long high overtones went with the ring) and 3.2-6.7 dB lower in the vault, where a chord's highs
+were mostly the vault's crystal resonator driven to the limiter: MIX Character brings it back
+(150 % = 45 % of the vault's modes).
+
+| Celesta and Harp | afterring | inharmonic | | Music Box | all measures |
+|---|---|---|---|---|---|
+| dry | 0.4-0.8 dB lower | 0.1-0.5 dB lower | | dry and in place | unchanged (0.0) |
+| in the chapel | 0.6-2.8 dB lower | 0.0-3.6 dB lower | | | |
+
+Loudness test (its arpeggio in its place): Celesta -20.05 -> -20.02 LUFS, Celesta and Harp
+-20.05 -> -20.07, the Music Box -20.05 -> -20.05. The output limiter at velocity 1.0 (the attack
+group): Celesta 0 -> 0 dB, Celesta and Harp -0.41 -> -0.60, the Music Box -0.55 -> -0.55.
+
+### R3. Tests, listening renders
+
+**Tests** (`ring` group, `Tests/RingTests.h`, its own shard after the loudness group in
+`scripts/run-tests-parallel.sh`): the Celesta takes less of the vault's modes, their ring and its
+shimmer; for each of the three instruments, dry and in place, note and chord, 0.3 / 0.7 / 1.0,
+against before: the afterring lower (Celesta by 1.5 dB at least, Celesta and Harp 0.3; the Music
+Box unchanged) and lower against the strike (3.5 / 0.5), the tail's inharmonic energy lower
+(Celesta 2 dB at least; the others never more), its share dry (Celesta 2.5 dB), the sparkle kept
+(Celesta within 3.5 dB dry, 7.5 in the vault), the strike's level kept (within 3 dB), no clipping,
+the output limiter never needed below velocity 1 and at 1.0 no more than before; level-matched
+(within 0.5 LU of before on the loudness test, and on the target); without the recordings the
+Celesta sounds and rings softer too. The `attack` and `loudness` groups gate it as before.
+
+**Listening renders** (CI: `test-logs/celesta-ring/`, `--listen-ring dir`, with
+`celesta-ring.txt`: the levels and the `--ring-report` table):
+- the Celesta alone, a phrase (an arpeggio, chords left to ring, a melody with long notes),
+  before and after, dry and in the Diamond Vault: `celesta-dry-before.wav`, `-dry-after.wav`,
+  `-in-place-before.wav`, `-in-place-after.wav`, and A/B files (`-before-then-after.wav`);
+- the **seven-part test piece** (16 bars at 120 bpm: Concert Harp arpeggios, a Shimmering Strings
+  pad, a Fanfare Trumpets call, Angelic Choir, an Airy Flute melody, a Bouncy Kalimba ostinato, a
+  Grand Organ bass) with a Celesta line on top, every instrument in its own place at its defaults,
+  no fader moved: `piece-before.wav`, `piece-after.wav`, `piece-before-then-after.wav`, the
+  Celesta's line alone (`piece-celesta-line-before/after.wav`) and each other part.
+  Here (integrated): the phrase -20.9 -> -20.6 LUFS dry, -20.3 -> -20.4 in the vault; in the
+  piece the Celesta's line -20.2 -> -20.8 LUFS (it holds notes, which ring less now), the piece
+  -18.2 -> -18.2 LUFS.
+
+**Local run before the final push** (Linux, this container, CI's condition: the developer's
+recordings prepared from `AdrianAbbas/Samples`, read only, the captured spaces, the library):
+the whole suite as CI runs it, **2957 passed, 1 failed**: the failure was "Eco costs less than
+Standard" (14.5 vs 14.2 %, a wall-clock comparison in the basics shard while ten shards share four
+cores); that shard alone: 332 passed, 0 failed. The ring group 279, loudness 240, brass with attack
+and woodwinds 217, instruments 323.
+
+### Handoff: what to listen for in GarageBand
+
+`docs/MANUAL_TEST.md`, "The celesta's softer ring". In short:
+- **Celesta** (Crystal Palace > Diamond Vault), your seven-part piece and chords at full velocity,
+  held: the strike as before (clean), then a round, bell-like decay: a bloom that settles into a
+  soft hum, no metallic ringing, no piano "body" droning under the bars, no limiter clang even at
+  velocity 127. Does it still sparkle? Does it still sound like the vault (glitter, shimmer)? If
+  the vault sounds too dry for you: MIX Character up (150 % gives it half again more of the
+  vault's crystal modes), Shimmer up.
+- **The level**: the same as before in your mix (matched on the loudness test); an old session
+  opens with the new sound at the same level.
+- **Celesta and Harp** (Stained Glass Chapel): a little rounder and shorter on the bars; the harp
+  and the chapel as before. **Music Box**: unchanged on purpose (its tines are its ring).
+- Compare `test-logs/celesta-ring/` from CI: `piece-before-then-after.wav` and
+  `celesta-in-place-before-then-after.wav`.
+
+### Known issues and decisions to revisit
+
+- **The vault's glints stay**: in the Diamond Vault the space's own glints and the shimmer still
+  carry a fixed-pitch shimmer in a chord's tail (its *share* of the tail is higher than before,
+  its level lower). Taking less of the space would make the celesta drier than the vault.
+- **Sparkle**: 1-3 dB less of the strike's highs dry, more in the vault on chords (where the
+  vault's resonator, now at 30 %, was much of it): if the celesta now sounds too soft, raise its
+  tine and air first (`Patches.cpp`), not the vault's share (that brings the ring back).
+- **The hammers' spread** (0-3 ms by key) makes a chord's onset very slightly less exact; at 3 ms
+  it is not heard as an arpeggio. Single notes are unchanged.
+- The new controls (`spaceShimmer`, `spaceRing`, `strikeSpreadMs`, the two mode sets) are used
+  only by the Celesta and Celesta and Harp; every other instrument and the effect are unchanged.

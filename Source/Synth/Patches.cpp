@@ -253,7 +253,11 @@ struct Builder {
     Builder& layerMacro(const char* name) { p.layerMacro = name; return *this; }
 };
 
-std::array<Patch, instrumentCount> build() {
+// The celesta family's trims before the softer ring (InstrumentTrims.h as it was).
+struct RingTrim { const char* name; float trim, standInTrim; };
+constexpr RingTrim ringBeforeTrims[] = { { "Celesta", -5.4f, -5.1f }, { "Celesta and Harp", -5.0f, -5.0f }, { "Music Box", -2.7f, -2.7f } };   // Music Box: unchanged
+
+std::array<Patch, instrumentCount> build(bool ringBefore = false) {
     std::array<Patch, instrumentCount> all {};
     int at = 0;
     const auto put = [&](Builder& b) { all[std::size_t(at++)] = b.p; };
@@ -534,22 +538,32 @@ std::array<Patch, instrumentCount> build() {
         put(p);
     }
     {   // Diamond Vault: a celesta (a tine's sparkle on top).
-        auto a = bell(ModesCelesta, 0.6f, 2.2f);
+        // The softer ring (ringBefore: the celesta as it was before it, for the before/after
+        // tests and renders): the strike kept, the ring after it rounder and shorter. The bars
+        // (ModesCelestaRound) bloom and settle into a softer hum, their overtones tuned (no
+        // more beating) and gone within tens of ms; the tine a short sparkle; the octave
+        // shorter; the piano under them keeps its hammer but its body dies in half a second;
+        // and the vault's crystal modes, resonator and shimmer take less of the tail
+        // (spaceCharacter, spaceRing, spaceShimmer and space below).
+        auto a = ringBefore ? bell(ModesCelesta, 0.6f, 2.2f) : bell(ModesCelestaRound, 0.5f, 1.8f);
         a.release = 0.45f;
-        auto b = layer(Engine::Tine, -12.0f);
-        b.ring = 1.6f;
-        b.bright = 0.7f;
+        auto b = layer(Engine::Tine, ringBefore ? -12.0f : -11.0f);
+        b.ring = ringBefore ? 1.6f : 0.7f;
+        b.bright = ringBefore ? 0.7f : 0.8f;
         b.release = 0.4f;
-        auto c = character(shift(bell(ModesCelesta, 0.65f, 1.6f, -12.0f), 12.0f, 0.0f, 0.2f));
+        auto c = character(shift(ringBefore ? bell(ModesCelesta, 0.65f, 1.6f, -12.0f) : bell(ModesCelestaRound, 0.65f, 0.9f, -12.0f), 12.0f, 0.0f, 0.2f));
         c.release = 0.45f;
         // The developer's piano (its long notes) under the bars: the hammered body of a
         // celesta's keyboard action, high-passed so the bars stay on top.
-        auto d = sample("piano-long", -7.0f);
-        d.highpass = 280.0f;
-        d.p[1] = 2.2f;
+        auto d = sample("piano-long", ringBefore ? -7.0f : -9.0f);
+        d.highpass = ringBefore ? 280.0f : 350.0f;
+        d.p[1] = ringBefore ? 2.2f : 0.5f;
         d.release = 0.45f;
+        // A chord's hammers land up to 3 ms apart (by key): their first peaks no longer add up.
+        if (!ringBefore)
+            for (auto* l : { &a, &b, &c, &d }) l->strikeSpreadMs = 3.0f;
         Builder p("Celesta", "Crystal", "Sparkle");
-        p.add(a).add(b).add(c).add(d).air(2.5f).struck().trim(0.0f);
+        p.add(a).add(b).add(c).add(d).air(ringBefore ? 2.5f : 3.5f).struck().trim(0.0f);
         put(p);
     }
 
@@ -649,7 +663,8 @@ std::array<Patch, instrumentCount> build() {
         put(p);
     }
     {   // Stained Glass Chapel: celesta and harp together.
-        auto a = bell(ModesCelesta, 0.55f, 2.4f);
+        // The softer ring: its bars ring round and a little shorter (no bloom: the harp is its body).
+        auto a = ringBefore ? bell(ModesCelesta, 0.55f, 2.4f) : bell(ModesCelestaSoft, 0.55f, 2.0f);
         a.release = 0.8f;
         auto b = character(pluck(BodyHarp, 0.25f, 0.5f, 3.5f, 0.5f, -3.0f));
         b.release = 1.2f;
@@ -764,6 +779,7 @@ std::array<Patch, instrumentCount> build() {
         a.bright = 0.85f;
         a.release = 1.0f;
         a.velocityGain = 0.5f;
+        // (The celesta's softer ring: checked, unchanged. Its tail is its own tines, harmonic.)
         auto b = character(shift(bell(ModesCelesta, 0.7f, 1.8f, -10.0f), 12.0f, 3.0f, 0.2f));
         b.release = 1.0f;
         Builder p("Music Box", "Courtly", "Celesta");
@@ -1034,6 +1050,19 @@ std::array<Patch, instrumentCount> build() {
     // drove them 3.5 dB into the output's safety limiter. It takes 40 % of them by default.
     for (auto& p : all)
         if (std::string_view(p.name) == "Fairy Harp") p.spaceCharacter = 0.4f;
+    // The celesta's softer ring. The Diamond Vault rings everything on fixed pitches: its
+    // signature's crystal modes (G6 D7 G7 B7 D8, T60 6 s), its crystal resonator (A5, 1 : 2.32 :
+    // 4.25 ...) and its space's glints; under the celesta's notes that is an inharmonic metallic
+    // ring, and its shimmer smears the tail. The celesta takes 30 % of the modes and resonator,
+    // ringing a third as long (a strike still wakes them as brightly), 60 % of the shimmer and
+    // 85 % of the space. Celesta and Harp: 70 % of the chapel's shimmer. Before: the trims they had.
+    for (auto& p : all) {
+        if (std::string_view(p.name) == "Celesta" && !ringBefore) { p.spaceCharacter = 0.3f; p.spaceRing = 0.35f; p.spaceShimmer = 0.6f; p.space = 0.85f; }
+        if (std::string_view(p.name) == "Celesta and Harp" && !ringBefore) p.spaceShimmer = 0.7f;
+        if (!ringBefore) continue;
+        for (const auto& [name, trim, standInTrim] : ringBeforeTrims)
+            if (std::string_view(p.name) == name) { p.trimDb = trim; p.standInTrimDb = standInTrim; }
+    }
     for (auto& p : all) {
         p.sustaining = !p.tremoloMod;
         for (int k = 0; k < p.layerCount; ++k)
@@ -1077,6 +1106,20 @@ void setTrimForTests(int index, float db, bool standIn) noexcept {
 void setSpaceCharacterForTests(int index, float share) noexcept {
     patches()[std::size_t(std::clamp(index, 0, instrumentCount - 1))].spaceCharacter = share;
 }
+
+namespace {
+bool ringBeforeNow = false;
+}
+void useRingBeforeForTests(bool before) noexcept {
+    if (before == ringBeforeNow) return;
+    ringBeforeNow = before;
+    static const auto then = build(true);
+    static const auto now = build(false);
+    for (int i = 0; i < instrumentCount; ++i)
+        for (const auto& r : ringBeforeTrims)
+            if (std::string_view(patches()[std::size_t(i)].name) == r.name) patches()[std::size_t(i)] = (before ? then : now)[std::size_t(i)];
+}
+bool ringBeforeForTests() noexcept { return ringBeforeNow; }
 
 float levelShiftDb(int index, bool standIn) noexcept {
     const auto i = std::size_t(std::clamp(index, 0, instrumentCount - 1));

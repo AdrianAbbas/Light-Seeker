@@ -18,6 +18,8 @@
 //   LightSeekerTests --listen-instruments dir   every instrument dry and in its place, and a travel (WAV)
 //   LightSeekerTests --loudness-report [before]   every instrument's loudness on the test set (BS.1770)
 //   LightSeekerTests --listen-loudness dir   a short mix, every instrument at its defaults, before vs after the rebalance
+//   LightSeekerTests --ring-report           the celesta family's afterring and inharmonic tail, before vs after the softer ring
+//   LightSeekerTests --listen-ring dir       the celesta before vs after the softer ring, alone and in the seven-part piece
 //   LightSeekerTests --listen-changed dir   the instruments the recordings update changed: one melody and chord progression, dry and in place
 #include "PluginEditor.h"
 #include "PluginProcessor.h"
@@ -2798,6 +2800,7 @@ int paintedSnapshots(const juce::String& directory) {
 #include "AttackTests.h"
 #include "LoudnessTests.h"
 #include "WoodwindTests.h"
+#include "RingTests.h"
 
 int main(int argc, char** argv) {
     juce::ScopedJuceInitialiser_GUI gui;
@@ -2833,6 +2836,9 @@ int main(int argc, char** argv) {
         else if (arg == "--calibrate-woodwinds" && i + 1 < argc) return calibrateWoodwinds(argv[i + 1]);
         else if (arg == "--listen-woodwinds" && i + 1 < argc) return listenWoodwinds(argv[i + 1]);
         else if (arg == "--woodwind-level" && i + 2 < argc) return woodwindLevel(argv[i + 1], juce::String(argv[i + 2]).getIntValue());
+        else if (arg == "--ring-report") return ringReport();
+        else if (arg == "--calibrate-ring") return calibrateRing();
+        else if (arg == "--listen-ring" && i + 1 < argc) return listenRing(argv[i + 1]);
         else if (arg == "--brass-call") return brassCall();
         else if (arg == "--brass-range") return brassRange();
         else if (arg == "--brass-tune" && i + 2 < argc) return brassTune(argv[i + 1], juce::String(argv[i + 2]).getIntValue());
@@ -2876,6 +2882,7 @@ int main(int argc, char** argv) {
     if (run("attack")) testAttack(s);
     if (run("loudness")) testLoudness(s);
     if (run("woodwinds")) testWoodwinds(s);
+    if (run("ring")) testRing(s);
     if (only.contains("qa")) testQa(s);   // long (130 journeys): run explicitly
     if (only.contains("cpu")) testCpu(s);   // report only: run explicitly
     std::cout << "\n" << s.passed << " passed, " << s.failed << " failed" << std::endl;

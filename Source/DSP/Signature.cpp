@@ -270,7 +270,8 @@ void Signature::depart() noexcept {
 
 void Signature::configure(int newKind, float newTone) noexcept {
     const bool kindChanged = newKind != kind;
-    if (!kindChanged && std::abs(newTone - tone) < 1.0e-4f) return;
+    if (!kindChanged && std::abs(newTone - tone) < 1.0e-4f && std::abs(ringScale - configuredRing) < 1.0e-4f) return;
+    configuredRing = ringScale;
     if (kindChanged && kind >= 0) {
         // The engine dips the layer out for a kind change: start the new one clean.
         const float a = amount.value, t = amount.target;
@@ -307,12 +308,15 @@ void Signature::configure(int newKind, float newTone) noexcept {
         for (int k = 0; k < rc.modes; ++k) {
             const auto K = static_cast<std::size_t>(k);
             const double hz = std::min(static_cast<double>(rc.modeHz[k] * toneShift), sr * 0.42);
-            const double t60 = std::max(0.05, rc.modeT60 * (1.0 - 0.08 * k));
+            const double t60 = std::max(0.05, rc.modeT60 * (1.0 - 0.08 * k) * static_cast<double>(ringScale));
             const float damping = static_cast<float>(std::clamp(6.9078 / (pi * t60 * hz), 0.0005, 1.0));
             { auto& m = modes[C][K]; const float s1 = m.s1, s2 = m.s2; m.setResonant(hz * (ch == 0 ? 1.0 : 1.0015), sr, damping); m.s1 = s1; m.s2 = s2; }
             // Between unity peak gain (damping) and unity energy: narrow, long modes still
             // ring audibly from ordinary playing; the soft limit catches exact hits.
-            modeGain[K] = std::sqrt(damping) * (rc.modeStruck ? 0.6f : 0.15f) / (1.0f + 0.25f * static_cast<float>(k)) * (hz < sr * 0.41 ? 1.0f : 0.0f);
+            // (A shorter ring, ringScale < 1: the gain times sqrt(ringScale) keeps a strike's
+            // first response, sqrt(damping) times the band's width, as it was.)
+            modeGain[K] = std::sqrt(damping) * (rc.modeStruck ? 0.6f : 0.15f) / (1.0f + 0.25f * static_cast<float>(k)) * (hz < sr * 0.41 ? 1.0f : 0.0f)
+                        * std::sqrt(ringScale);
         }
     }
     // The prism's two crossovers (its colour bands): low | mid | high of the shimmer.

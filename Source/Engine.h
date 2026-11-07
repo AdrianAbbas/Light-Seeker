@@ -26,6 +26,9 @@ struct Controls {
         float lowCutHz = 0;     // 0: off; else 80..600 Hz, a 12 dB/octave high-pass on the reverbs
         float preDelayMs = 0;   // added to the reverbs' pre-delay (-50..+150 ms; the Vault's spaces only later)
         float duck = 0;         // 0..1: the reverbs dip (to -15 dB at 1) while you play, bloom in the gaps
+        // The instrument only (the celesta's softer ring): how long the signature's modes ring
+        // (their T60 times this, 0.1..1; a strike still wakes them as loudly). 1 = as designed.
+        float ring = 1;
         bool operator==(const Mix&) const = default;
     };
     Mix mix;

@@ -238,6 +238,7 @@ void Engine::setControls(const Controls& c) noexcept {
     {
         const auto scale = [](float v) { return std::clamp(std::isfinite(v) ? v : 1.0f, 0.0f, 1.5f); };
         for (auto& sig : signatures) sig.setMix(scale(c.mix.reverb), scale(c.mix.echoes), scale(c.mix.modulation), scale(c.mix.character));
+        for (auto& sig : signatures) sig.setRing(c.mix.ring);
         mixNow = c.mix;
         mixNow.duck = std::isfinite(c.mix.duck) ? dsp::clamp01(c.mix.duck) : 0.0f;
         mixNow.lowCutHz = std::isfinite(c.mix.lowCutHz) && c.mix.lowCutHz >= 20.0f ? std::clamp(c.mix.lowCutHz, 20.0f, 1000.0f) : 0.0f;

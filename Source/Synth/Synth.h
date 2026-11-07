@@ -52,7 +52,10 @@ inline constexpr int stackCount = 3;
 inline constexpr std::array<const char*, stackCount> vowelStacks { "choir-mm", "choir-ooh", "choir-aah" };
 
 // Mode sets for Bell and Bowed.
-enum Modes : int { ModesChime, ModesGlass, ModesGlock, ModesCelesta, ModesBell, ModesGlassHarp, ModesHarmonic, ModesCrystal, ModesCount };
+// ModesCelestaRound (the celesta's softer ring): the bars' rounder decay, a bell-like bloom;
+// ModesCelestaSoft the same without the bloom (Celesta and Harp); ModesCelesta is the set
+// before it (kept for the before/after renders).
+enum Modes : int { ModesChime, ModesGlass, ModesGlock, ModesCelesta, ModesBell, ModesGlassHarp, ModesHarmonic, ModesCrystal, ModesCelestaRound, ModesCelestaSoft, ModesCount };
 
 // When a layer plays, given the recordings: always, only when its recording is loaded
 // (a Sample layer), or only when it is not (its synthesised stand-in). The library brass
@@ -140,6 +143,9 @@ struct Layer {
     // One note sounds the same; a chord's notes, plucked on the same sample, no longer add
     // their first peaks together (the Fairy Harp's chords reached the safety limiter).
     bool alternatePolarity = false;
+    // The celesta's softer ring: a chord's notes strike up to this far apart (ms, by key; one
+    // note sounds the same), so their first peaks no longer add up (0: all together, as before).
+    float strikeSpreadMs = 0;
     // A run of grace notes before the note (a harp's glissando, Direction Update 2): how
     // many (at Character 0.5) and the time between them. The run sweeps up through the
     // notes held (chord tones and their octaves; one note alone: its octaves and fifth)
@@ -193,6 +199,13 @@ struct Patch {
     // control) it takes: the Fairy Harp's chords set the Fairy Court's sympathetic strings
     // ringing into the output limiter at full share.
     float spaceCharacter = 1.0f;
+    // The celesta's softer ring: how much of the place's shimmer it takes (times the Shimmer
+    // control): the bars' tail no longer feeds the shimmer at full share.
+    float spaceShimmer = 1.0f;
+    // ... and how long the place's signature modes ring under it (their T60 times this; the
+    // Diamond Vault's crystal modes ring 6 s on fixed pitches: under the celesta's notes an
+    // inharmonic metallic ring). A strike still wakes them as loudly.
+    float spaceRing = 1.0f;
     float punchDb = 0;
     // GarageBand hotfix: the Punch this instrument had in the Mix and Punch release (older
     // sessions with a Punch the user had moved keep their dB, see the processor's state).
@@ -212,6 +225,11 @@ float legacyTrimDb(int index, bool standIn = false) noexcept;
 // How much louder an instrument's own part is than before the rebalance (LU).
 float levelShiftDb(int index, bool standIn = false) noexcept;
 void setSpaceCharacterForTests(int index, float share) noexcept;
+// The celesta's softer ring: the celesta family (Celesta, Celesta and Harp, Music Box) as it
+// was before it (its ring, its trims and its share of the place), for the before/after tests
+// and listening renders; false restores the current one. Not while a render runs.
+void useRingBeforeForTests(bool before) noexcept;
+bool ringBeforeForTests() noexcept;
 // Instruments follow the world's place order: Celestial Citadel's four, then three per location.
 int instrumentIndex(int location, int sub) noexcept;
 void instrumentPlace(int index, int& location, int& sub) noexcept;

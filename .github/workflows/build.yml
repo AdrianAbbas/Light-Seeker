@@ -262,6 +262,16 @@ jobs:
           build/LightSeekerTests_artefacts/Release/LightSeekerTests --listen-woodwinds build/test-logs/real-woodwinds > build/test-logs/woodwinds-report.txt
           mv build/test-logs/woodwinds-report.txt build/test-logs/real-woodwinds/
           cp "${{ runner.temp }}/samples/report-vsco.json" build/test-logs/real-woodwinds/ || true
+      # The celesta's softer ring: the celesta before and after, alone (dry and in the Diamond Vault)
+      # and in the seven-part test piece; the afterring and inharmonic-tail report.
+      - name: Celesta ring listening renders (the celesta before and after, alone and in the seven-part piece)
+        if: always()
+        env:
+          LIGHTSEEKER_SAMPLES: ${{ runner.temp }}/samples
+        run: |
+          build/LightSeekerTests_artefacts/Release/LightSeekerTests --listen-ring build/test-logs/celesta-ring > build/test-logs/celesta-ring.txt
+          build/LightSeekerTests_artefacts/Release/LightSeekerTests --ring-report >> build/test-logs/celesta-ring.txt
+          mv build/test-logs/celesta-ring.txt build/test-logs/celesta-ring/
       - name: Upload test logs
         if: always()
         uses: actions/upload-artifact@v4

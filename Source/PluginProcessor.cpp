@@ -674,6 +674,8 @@ void LightSeekerProcessor::process(juce::AudioBuffer<float>& buffer, bool forced
     steered.store(steering, std::memory_order_relaxed);
     controls.intensity = amount;
     controls.shimmer = juce::jlimit(0.0f, dc::dsp::shimmerMax, finiteOr(shimmer->load(), 1.0f));
+    // The instrument's share of the place's shimmer (the celesta's softer ring).
+    if (instrumentMode) controls.shimmer *= juce::jlimit(0.0f, 1.0f, ls::inst::patch(synth->patchIndex()).spaceShimmer);
     // Mix: the MIX groups and the reverb helpers. The instrument adds its own: how much
     // of the place's reverbs it takes, and the pre-delay and duck that put its dry hit first.
     {
@@ -692,6 +694,7 @@ void LightSeekerProcessor::process(juce::AudioBuffer<float>& buffer, bool forced
             mx.character = juce::jlimit(0.0f, dc::mixMax, mx.character * patch.spaceCharacter);
             mx.preDelayMs = juce::jlimit(dc::preDelayMin, dc::preDelayMax, mx.preDelayMs + patch.spacePreDelayMs);
             mx.duck = 1.0f - (1.0f - mx.duck) * (1.0f - juce::jlimit(0.0f, 1.0f, patch.spaceDuck));
+            mx.ring = juce::jlimit(0.1f, 1.0f, patch.spaceRing);
         }
     }
     for (std::size_t m = 0; m < macros.size(); ++m) controls.macros[m] = juce::jlimit(0.0f, 1.0f, finiteOr(macros[m]->load(), 0.5f));

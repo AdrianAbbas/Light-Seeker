@@ -26,6 +26,8 @@ wait
 # every core itself: alone after the shards, so it neither slows their wall-clock checks nor
 # is slowed by them.
 "$tests" --only loudness > "$logs/9-loudness.txt" 2>&1
+# The celesta's softer ring (before vs after, renders on every core itself): alone too.
+"$tests" --only ring > "$logs/9-ring.txt" 2>&1
 "$tests" --only cpu > "$logs/4-cpu.txt" 2>&1
 
 passed=0
