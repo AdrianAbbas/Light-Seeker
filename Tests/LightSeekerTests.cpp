@@ -41,6 +41,7 @@
 #include <atomic>
 #include <optional>
 #include <string>
+#include <time.h>
 #include <vector>
 
 // Count C++ allocations on the calling thread while enabled.
@@ -2010,12 +2011,26 @@ void testWorkflow(Suite& s) {
             h.go(dc::FloatingIsles, 1);   // the Windswept Isle: a spectral (Aura) layer, which Eco cheapens
             h.set(dc::ids::quality, static_cast<float>(quality));
             h.render(0.5, sawChord(0.3f));
-            const auto begin = std::chrono::steady_clock::now();
-            h.render(5.0, sawChord(0.3f));
-            const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - begin).count();
-            return std::make_pair(ms / 5000.0 * 100.0, h.finite() && h.peak(0, h.end()) < 0.98);
+            // This thread's own CPU time, not the wall clock: the CI shards share the cores, and
+            // time spent waiting for one is not the quality's cost (the margin is ~15 %).
+            const auto cpuMs = [] {
+                timespec t {};
+                clock_gettime(CLOCK_THREAD_CPUTIME_ID, &t);
+                return double(t.tv_sec) * 1000.0 + double(t.tv_nsec) * 1.0e-6;
+            };
+            const double begin = cpuMs();
+            h.render(2.5, sawChord(0.3f));
+            const double ms = cpuMs() - begin;
+            return std::make_pair(ms / 2500.0 * 100.0, h.finite() && h.peak(0, h.end()) < 0.98);
         };
-        const auto eco = cost(0), standard = cost(1);
+        // Eco and Standard are timed in turn, three times each, and each one's cheapest run is
+        // compared (a busy moment, caches shared with other shards, slows only one run).
+        auto eco = cost(0), standard = cost(1);
+        for (int round = 1; round < 3; ++round) {
+            const auto e = cost(0), st = cost(1);
+            eco = { std::min(eco.first, e.first), eco.second && e.second };
+            standard = { std::min(standard.first, st.first), standard.second && st.second };
+        }
         s.metric("Windswept Isle CPU, Eco", eco.first, " % of one core");
         s.metric("Windswept Isle CPU, Standard", standard.first, " % of one core");
         s.check(eco.second && standard.second, "Eco and Standard both sound (finite, below 0 dBFS)");

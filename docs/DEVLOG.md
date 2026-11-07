@@ -3275,6 +3275,14 @@ Standard" (14.5 vs 14.2 %, a wall-clock comparison in the basics shard while ten
 cores); that shard alone: 332 passed, 0 failed. The ring group 279, loudness 240, brass with attack
 and woodwinds 217, instruments 323.
 
+**CI, first push (`940b70b`, run `42408006591`)**: macOS green; Linux 2957 passed, 1 failed: the
+same "Eco costs less than Standard" (25.6 vs 22.9 %). Not this change: the commit before it, built
+here, costs exactly the same (Eco 5.9-6.5 %, Standard 7.2-7.8 % alone, both builds), and under the
+shards' load either build can flip (Eco 12.4 vs Standard 10.0 seen with this one; the margin is
+~15 %, one 5 s wall-clock sample each). The check now measures the rendering thread's own CPU time
+(`CLOCK_THREAD_CPUTIME_ID`: waiting for a core is not the quality's cost), Eco and Standard in
+turn, three times, each one's cheapest: under the same load 6.2-6.4 vs 7.6-7.8 %, three runs.
+
 ### Handoff: what to listen for in GarageBand
 
 `docs/MANUAL_TEST.md`, "The celesta's softer ring". In short:
