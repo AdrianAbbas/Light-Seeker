@@ -136,7 +136,8 @@ jobs:
           if-no-files-found: warn
   linux:
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    # The suite, the celesta ring shard and eight listening renders: about 50 minutes on a slow runner.
+    timeout-minutes: 90
     env:
       LS_REQUIRE_CAPTURES: ${{ secrets.SAMPLES_TOKEN != '' }}
       LS_REQUIRE_SAMPLES: ${{ secrets.SAMPLES_TOKEN != '' }}
