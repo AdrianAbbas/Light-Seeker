@@ -3311,3 +3311,15 @@ turn, three times, each one's cheapest: under the same load 6.2-6.4 vs 7.6-7.8 %
   it is not heard as an arpeggio. Single notes are unchanged.
 - The new controls (`spaceShimmer`, `spaceRing`, `strikeSpreadMs`, the two mode sets) are used
   only by the Celesta and Celesta and Harp; every other instrument and the effect are unchanged.
+
+**CI, final push (`41d71ec`, run `42440714411`): green.** On the way: the Eco/Standard check
+hardened (above, `54c0975`); that run's Linux job reached its 60-minute limit on a slow runner
+(its logs were lost with the cancellation), so the Linux job's limit is now 90 minutes, as the
+macOS job's. In run `42440714411` Linux passed first time (the whole suite with the ring group,
+every listening render, `test-logs/celesta-ring/`); macOS failed once on the AU harness's
+x86_64 out-of-process instrument check "Intensity 0: the instrument plays dry" (exact silence
+for its one note across the process boundary under Rosetta, every other check of that route
+passing; no plug-in code had changed since `940b70b`, whose macOS job passed it), and its re-run
+passed: build, smoke on arm64 and x86_64, auval and the AU harness for both plug-ins, the package.
+If that check flakes again it wants a retry of the note (the out-of-process route can drop an
+event), not a sound change.
