@@ -3445,6 +3445,20 @@ passed; the basics shard with it 355 passed, 0 failed; instrument, instruments a
 passed, 0 failed. The fixtures round-trip identically through the old build too (written twice,
 byte-identical).
 
+**CI on the way.** Four small fixes after the first push: the test fixtures found by an absolute
+path (ccache's base dir made `__FILE__` relative on macOS); the old-session compare to float
+precision (above); `package-mac.sh`'s package name had shared its variable with the bundle loop;
+the install test named the effect's fixture wrongly. With those, macOS passed everything: the old
+copies removed, the presets migrated, the registry listing each plug-in once as "Windward Audio:
+…" on arm64 and x86_64, auval reporting 1.0.0 and Windward Audio, every harness route and the old
+sessions of both plug-ins. (On that runner the plug-in's own first-launch copy ran before the
+installer's, when step 2's auval opened the quarantined copy: the installer found the note and
+left it.) Linux twice failed one wall-clock check, "a full repaint with the drawer fits in a 30 fps
+frame" (35.9 and 34.0 ms; the limit is 33). Not this change: built here, the commit before and this
+one cost the same under the same load (six heavy shards on four cores: 14.7-22.9 vs 15.5-19.0 ms,
+alternating; 6-10 ms alone). One sample under the shards' load had too little margin; the check now
+takes the best of three repaints, as the Eco/Standard check does.
+
 ### Handoff: the GarageBand check
 
 `docs/MANUAL_TEST.md`, "1.0.0: Windward Audio". On your Mac, with an old GarageBand project that
