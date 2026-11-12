@@ -10,9 +10,9 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 build="$1"
 dist="$2"
 version=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$build/LightSeeker_artefacts/Release/AU/LightSeeker.component/Contents/Info.plist")
-name="${3:-WindwardAudio-LightSeeker-$version-macOS-Universal}"
-stage="$dist/$name"
-rm -rf "$stage" "$dist/$name.zip"
+package="${3:-WindwardAudio-LightSeeker-$version-macOS-Universal}"
+stage="$dist/$package"
+rm -rf "$stage" "$dist/$package.zip"
 mkdir -p "$stage"
 
 for name in LightSeeker LightSeekerFX; do
@@ -31,6 +31,6 @@ done
 install -m 755 "$here/scripts/install-mac.sh" "$here/scripts/uninstall-mac.sh" "$here/scripts/diagnose-mac.sh" "$stage/"
 install -m 644 "$here/packaging/INSTALL.txt" "$here/CHANGELOG.md" "$stage/"
 # ditto keeps permissions and bundle metadata, unlike a plain zip of the artifact.
-/usr/bin/ditto -c -k --sequesterRsrc --keepParent "$stage" "$dist/$name.zip"
-echo "Packaged $dist/$name.zip (version $version)"
-/usr/bin/unzip -l "$dist/$name.zip" | /usr/bin/grep -E "install|INSTALL|CHANGELOG|MacOS/LightSeeker(FX)?$"
+/usr/bin/ditto -c -k --sequesterRsrc --keepParent "$stage" "$dist/$package.zip"
+echo "Packaged $dist/$package.zip (version $version)"
+/usr/bin/unzip -l "$dist/$package.zip" | /usr/bin/grep -E "install|INSTALL|CHANGELOG|MacOS/LightSeeker(FX)?$"
