@@ -5,7 +5,7 @@ if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Darwin")
     set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "Target architectures")
     set(CMAKE_OSX_DEPLOYMENT_TARGET "10.15" CACHE STRING "Minimum macOS version")
 endif()
-project(LIGHT_SEEKER VERSION 0.1.0 LANGUAGES C CXX)
+project(LIGHT_SEEKER VERSION 1.0.0 LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
@@ -27,11 +27,14 @@ endif()
 # Two plug-ins from the same sources (Direction Update 1):
 #   LIGHT SEEKER     the instrument (AU aumu Lski Veil, VST3 instrument): LightSeeker.*
 #   LIGHT SEEKER FX  the effect     (AU aufx Lsek Veil, VST3 effect):     LightSeekerFX.*
-# File and bundle names have no space (simpler scripts); hosts show "Veil Audio: LIGHT
-# SEEKER" and "Veil Audio: LIGHT SEEKER FX". DUNGEON CRAWLER (Dgcr) never clashes.
+# File and bundle names have no space (simpler scripts); hosts show "Windward Audio: LIGHT
+# SEEKER" and "Windward Audio: LIGHT SEEKER FX" (1.0: the company name users see). The AU
+# manufacturer code stays Veil, and every parameter ID stays as it was, so projects and
+# presets saved by earlier builds still find and load both plug-ins. DUNGEON CRAWLER
+# (Dgcr) never clashes.
 set(LS_SAMPLES_DIR "" CACHE PATH "Prepared recordings (tools/sample-prep) to ship in the instrument's bundles")
 set(LS_SHARED_SOURCES
-    Source/PluginProcessor.cpp Source/PluginEditor.cpp Source/Engine.cpp
+    Source/PluginProcessor.cpp Source/PluginEditor.cpp Source/Engine.cpp Source/UserData.cpp
     Source/DSP/Abyss.cpp Source/DSP/AncientBlood.cpp Source/DSP/Choir.cpp
     Source/DSP/Wraith.cpp Source/DSP/Echoes.cpp Source/DSP/Crypt.cpp
     Source/DSP/Relics.cpp Source/DSP/Signature.cpp Source/DSP/Vault.cpp Source/DSP/Convolver.cpp Source/DSP/Ensemble.cpp Source/DSP/Atmosphere.cpp Source/World/Locations.cpp
@@ -82,8 +85,10 @@ function(ls_add_plugin target)
         set(ls_is_synth FALSE)
     endif()
     juce_add_plugin(${target}
-        COMPANY_NAME "Veil Audio"
+        COMPANY_NAME "Windward Audio"
+        COMPANY_COPYRIGHT "Copyright 2026 Windward Audio"
         BUNDLE_ID "${LS_BUNDLE}"
+        # The code hosts store in projects: never change it (see the note above).
         PLUGIN_MANUFACTURER_CODE Veil
         PLUGIN_CODE ${LS_CODE}
         PRODUCT_NAME "${LS_PRODUCT}"
@@ -144,11 +149,11 @@ function(ls_add_plugin target)
 endfunction()
 
 ls_add_plugin(LightSeeker SYNTH
-    PRODUCT "LightSeeker" NAME "LIGHT SEEKER" CODE Lski BUNDLE "audio.veil.lightseeker"
+    PRODUCT "LightSeeker" NAME "LIGHT SEEKER" CODE Lski BUNDLE "com.windwardaudio.lightseeker"
     PREFIX LightSeekerAU DESCRIPTION "Light-fantasy location instrument"
     AUTYPE kAudioUnitType_MusicDevice CATEGORIES Instrument Synth)
 ls_add_plugin(LightSeekerFX
-    PRODUCT "LightSeekerFX" NAME "LIGHT SEEKER FX" CODE Lsek BUNDLE "audio.veil.lightseeker.fx"
+    PRODUCT "LightSeekerFX" NAME "LIGHT SEEKER FX" CODE Lsek BUNDLE "com.windwardaudio.lightseekerfx"
     PREFIX LightSeekerFXAU DESCRIPTION "Light-fantasy location effect"
     AUTYPE kAudioUnitType_Effect CATEGORIES Fx Reverb)
 if(LS_BUILD_TESTS)

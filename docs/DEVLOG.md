@@ -186,6 +186,13 @@ usage limit or a compaction) continues from the first unticked line. Push to `ma
 - [x] R2. Fix: the bars' rounder, bell-like decay (ModesCelestaRound), shorter tine and octave, the piano's body short (its hammer kept), the vault's modes / resonator / shimmer / space shares for the celesta (and a per-instrument ring time for the signature's modes), a chord's hammers 0-3 ms apart (no limiter even at full velocity); Celesta and Harp's bars round (ModesCelestaSoft) and less of the chapel's shimmer; the Music Box checked, unchanged; trims re-matched on the loudness test (`--calibrate-ring`)
 - [x] R3. Tests (`ring` group, its own shard after the loudness group), listening renders in test-logs (`celesta-ring/`: the celesta before vs after, alone and in the seven-part piece), DEVLOG handoff; final push without `[skip ci]`, CI green
 
+**1.0.0: Windward Audio and the release freeze** (see "1.0.0" below; nothing else in the sound or the UI changes)
+
+- [x] F1. Company name hosts show: Windward Audio for both plug-ins (AU and VST3), bundle IDs `com.windwardaudio.lightseeker` / `com.windwardaudio.lightseekerfx`; AU codes (`Veil` manufacturer, `Lski`, `Lsek`) and every parameter ID unchanged; About screen; README, manual, installer, scripts, CI artifact names; the old company name out of every user-facing text
+- [x] F2. User data in `~/Library/Windward Audio/LIGHT SEEKER/` and `/LIGHT SEEKER FX/`, copied from the old folders on first launch (originals kept); the installer removes copies under the old bundle IDs and makes the same copy
+- [x] F3. Version 1.0.0 everywhere; CHANGELOG.md, docs/ROADMAP.md ("1.1 ideas"); 1.0 frozen (bug fixes only)
+- [x] F4. Tests (`release` group on Linux and macOS; registry, auval, AU harness identity and old sessions in the install test), DEVLOG handoff; final push without `[skip ci]`, CI green, tag `v1.0.0`
+
 ---
 
 ## Lessons carried over from DUNGEON CRAWLER (read first)
@@ -3323,3 +3330,143 @@ passing; no plug-in code had changed since `940b70b`, whose macOS job passed it)
 passed: build, smoke on arm64 and x86_64, auval and the AU harness for both plug-ins, the package.
 If that check flakes again it wants a retry of the note (the out-of-process route can drop an
 event), not a sound change.
+
+## 1.0.0: Windward Audio, and 1.0 is frozen (2026-11-12)
+
+**1.0 is frozen.** From this tag (`v1.0.0`) the 1.0 line takes **bug fixes only**: something
+broken, crashing, failing validation or losing work. Nothing that changes the sound, the look or
+the controls. New ideas go to the **"1.1 ideas"** list in [ROADMAP.md](ROADMAP.md), one line
+each; [CHANGELOG.md](../CHANGELOG.md) has the 1.0.0 entry (what is in it).
+
+The release changes only what users see of the company and the version. The brief: hosts list
+both plug-ins under the company brand, Windward Audio; existing projects and presets still load;
+the version is 1.0.0 everywhere.
+
+### What users see, and what stays
+
+| | Before | 1.0.0 |
+|---|---|---|
+| Company in hosts (AU name, VST3 vendor, Info.plist) | the old company | **Windward Audio** ("Windward Audio: LIGHT SEEKER", "Windward Audio: LIGHT SEEKER FX") |
+| Bundle IDs | `audio.veil.lightseeker`, `audio.veil.lightseeker.fx` | `com.windwardaudio.lightseeker`, `com.windwardaudio.lightseekerfx` |
+| Version (AU component version, bundle versions, About) | 0.1.0 (`0x100`) | **1.0.0** (`0x10000`) |
+| AU type / subtype / manufacturer codes | `aumu Lski Veil`, `aufx Lsek Veil` | **unchanged** |
+| Parameter IDs, state format (version 4) | | **unchanged** |
+| VST3 class IDs (derived from the codes) | | **unchanged** |
+| File names (`LightSeeker.component`, …) | | unchanged |
+
+Hosts find a saved project's plug-in by the AU codes (the VST3 class ID derives from them), and
+the state is the processor's XML keyed by parameter ID: none of it changed, so a project opens
+with the same plug-in and the same settings. Only `COMPANY_NAME`, `BUNDLE_ID`, the project
+version and a copyright line changed in `CMakeLists.txt`. Internal code names (the `Veil`
+manufacturer code, comments about VEIL's modules) stay; the old company name is gone from every
+text a user reads: the plug-ins (a test reads every parameter name, label and choice, every
+preset and the About text), the installer's output, README, INSTALL.txt, the manual and the
+changelog. That check found one: the Windswept Isle's signature effect was called "Wind Veil";
+it is now **"Wind Shroud"** (the same effect; a choice is saved by its index, so saved settings
+keep it).
+
+**About screen.** There was none: ⚙ (the settings menu) now ends with "About LIGHT SEEKER…" /
+"About LIGHT SEEKER FX…", a plain message box with the name, "version 1.0.0", the company, the
+data folder and the credits (the CC0 orchestral library, the SIL OFL typefaces). Its text is
+`LightSeekerView::aboutText` (tested).
+
+### Presets and user data
+
+Before 1.0 both plug-ins shared `~/Library/Application Support/LightSeeker` (`Presets/` for the
+effect, `Instrument Presets/` for the instrument, `scenes/` drop-in art for both), and hosts saved
+their own `.aupreset` files under the old company name in `~/Library/Audio/Presets`. Now
+(`Source/UserData.h`):
+
+- `~/Library/Windward Audio/LIGHT SEEKER/` (the instrument) and `~/Library/Windward Audio/LIGHT
+  SEEKER FX/` (the effect), each with `Presets/` and `Scenes/`.
+- **First launch**: each plug-in copies its own old presets, the shared scenes and its host
+  presets (to `~/Library/Audio/Presets/Windward Audio/<name>`, where Logic and GarageBand now
+  look) into its folder. Copy, never move; a file already in the new place is never overwritten;
+  other plug-ins' host presets are left alone. A note, `MIGRATED.txt`, records the copy so it
+  runs once; a copy that fails part-way is not recorded, so the next launch finishes it. With
+  nothing old it creates nothing. Once per process, a few file checks after that.
+- **The installer** makes the same copy (outside any host's sandbox, so a sandboxed host that
+  cannot reach the old folders still finds the presets) and writes the same note.
+- `uninstall-mac.sh --purge` removes the new folders and the kept old ones.
+
+Fixed on the way (a bug fix): the instrument's "Your presets" menu listed `*.lspreset` only, but
+the instrument saves `.lsinst`, so its own presets never appeared there.
+
+### Installer: each plug-in listed once
+
+The bundle files keep their names, so a normal update overwrites them. But a Mac can hold an
+earlier copy under another name (renamed, a second download, `/Library`): with the same AU codes
+it would be listed twice, under the old company. Step 0 of `install-mac.sh` now removes, from the
+user's and the system's Components and VST3 folders, every bundle with an old bundle ID and every
+component with these AU codes (`Veil` with `Lski` or `Lsek`, so DUNGEON CRAWLER's are never
+touched) that is not a 1.0 bundle; a copy in `/Library` it may not remove is printed with its
+`sudo rm` command. After the registrar restart it checks the registry lists each plug-in **once**
+and as "Windward Audio: …". `uninstall-mac.sh` finds copies the same way.
+
+CI artifacts: `WindwardAudio-LightSeeker-1.0.0-macOS-Universal` (the zip, the folder inside and the
+artifact share the name; `CHANGELOG.md` is in it), `WindwardAudio-LightSeeker-macOS-diagnostics`,
+`WindwardAudio-LightSeeker-linux-test-logs`; the release job publishes the zip for a `v*` tag.
+
+### Tests
+
+- **Linux and macOS, `release` group** (`Tests/ReleaseTests.h`; Linux basics shard, both macOS
+  slices): version 1.0.0 and code `0x10000`, the company, the unchanged codes, the names; no old
+  company name in any parameter, choice, preset or About text; the About text; **an old session
+  of each plug-in loads unchanged**: `Tests/fixtures/old-session-fx.xml` and
+  `old-session-instrument.xml` were saved by the build before this change (`3a8bedd`, built here,
+  a scratch `--dump-sessions` hook not committed: the effect in a place with its controls moved,
+  a three-stop journey, the window open on the MIX section at 125 %; the instrument with the organ
+  locked and carried into the Sanctum, its tone, release, level, Punch, echoes and octave moved, a
+  journey), loaded and saved again, compared element by element and attribute by attribute (and
+  every parameter ID found with its saved value); **presets migrate** (a scratch library: each
+  plug-in's own presets, the shared scenes and the host presets copied, an existing file kept,
+  originals kept, once, other plug-ins' presets untouched, nothing created without old data);
+  each plug-in's own preset folder.
+- **macOS bundle gate** (`ci-check-bundles.sh`): every bundle's `CFBundleIdentifier`,
+  `CFBundleShortVersionString` and `CFBundleVersion` 1.0.0, no old company in any Info.plist; the
+  AU entry's name "Windward Audio: …", version 65536, manufacturer still `Veil`.
+- **macOS install test** (`ci-user-install-test.sh`): before installing, the runner is made to
+  look like a Mac with a build before 1.0: a copy of each plug-in under its old bundle ID and
+  company name with another file name, old presets (the fixtures) and a host preset in the old
+  folders. After `install-mac.sh --ci`: the old copies are gone, the presets are in the new
+  folders and still in the old ones (`migration.txt`), and the registry, arm64 and x86_64, lists
+  each plug-in **once** as "Windward Audio: LIGHT SEEKER" / "Windward Audio: LIGHT SEEKER FX"
+  (`registry.txt`). Then for both plug-ins, both architectures: auval (which must also report
+  version 1.0.0 and the company), the AU harness's three hosting routes, each checking the
+  registry name and version (`--expect-name`, `--expect-version 0x10000`), and the new
+  **`old-session`** suite: the fixture put into the plug-in as a host restores a project (its
+  ClassInfo with the session's `jucePluginState`, out-of-process, then in-process), saved again
+  and compared element by element (the saved ClassInfo keeps manufacturer `Veil`).
+
+**Local run** (Linux, this container, no private recordings: stand-ins): the `release` group 31
+passed; the basics shard with it 355 passed, 0 failed; instrument, instruments and search 466
+passed, 0 failed. The fixtures round-trip identically through the old build too (written twice,
+byte-identical).
+
+### Handoff: the GarageBand check
+
+`docs/MANUAL_TEST.md`, "1.0.0: Windward Audio". On your Mac, with an old GarageBand project that
+uses both plug-ins and a preset saved in each:
+1. Unzip `WindwardAudio-LightSeeker-1.0.0-macOS-Universal`, run `bash install-mac.sh`: step 0
+   removes any earlier copy and copies your presets; it ends with "macOS lists Windward Audio:
+   LIGHT SEEKER" / "…: LIGHT SEEKER FX" and "installed and validated".
+2. Restart GarageBand. The instrument slot → Audio Units → **Windward Audio → LIGHT SEEKER**;
+   an Audio Effect slot → Audio Units → **Windward Audio → LIGHT SEEKER FX**. Each listed once,
+   and no folder under the old company name left in the menu (if one is, a copy lives in
+   `/Library`: run the `sudo rm` line the installer printed).
+3. Open the old project: both plug-ins load with the same places, the locked instrument, the
+   journeys and the window as you left it, and sound the same.
+4. The preset menu → Your presets: your earlier presets are there, in both.
+5. ⚙ → About: "version 1.0.0", Windward Audio, your data folder. (Logic: Plug-in Manager shows
+   1.0.0.)
+
+### Known issues and decisions to revisit
+
+- A host may keep its own cache of plug-in names until it rescans: the version change (0.1.0 →
+  1.0.0) makes Logic and GarageBand rescan; if one still shows the old company, restart the Mac
+  (the registrar restart covers the system's list).
+- In a sandboxed host the first-launch copy may be refused the old folders; the installer's copy
+  covers that, and the plug-in retries on the next launch until a copy completes.
+- The old folders are kept on purpose (the brief: keep a copy); `uninstall-mac.sh --purge`
+  removes them.
+

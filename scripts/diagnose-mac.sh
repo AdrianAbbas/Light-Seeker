@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Read-only diagnostics for "LIGHT SEEKER is silent / shows generic sliders in GarageBand".
+# Read-only diagnostics for "LIGHT SEEKER is silent / shows generic sliders in GarageBand"
+# (LIGHT SEEKER and LIGHT SEEKER FX by Windward Audio).
 #
 # It changes nothing on your Mac. It only reads files, asks Apple's tools
 # questions and writes one report file, by default ~/Desktop/LightSeeker-diagnostics.txt.
@@ -100,6 +101,12 @@ for plugin in "aumu Lski instrument" "aufx Lsek effect"; do
         echo "exit $?"
         /usr/bin/grep -E 'FATAL|ERROR|VALIDATION|architecture|Time to open' "/tmp/lightseeker-auval-$kind-x86.txt" | /usr/bin/head -15
     fi
+done
+
+section "Your data (presets and drop-in scenes)"
+for data in "$HOME/Library/Windward Audio/LIGHT SEEKER" "$HOME/Library/Windward Audio/LIGHT SEEKER FX" \
+            "$HOME/Library/Application Support/LightSeeker"; do
+    if [[ -d "$data" ]]; then printf '%s: %s files\n' "$data" "$(/usr/bin/find "$data" -type f | /usr/bin/wc -l | /usr/bin/tr -d ' ')"; else echo "$data: none"; fi
 done
 
 section "Audio Unit caches"

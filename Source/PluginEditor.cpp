@@ -1,4 +1,5 @@
 #include "PluginEditor.h"
+#include "UserData.h"
 #include "World/Presets.h"
 
 using namespace dc::ui;
@@ -941,7 +942,8 @@ void LightSeekerView::showPresetMenu() {
         groups[static_cast<std::size_t>(g)].addItem(1 + k, presets[static_cast<std::size_t>(k)].name, true, processor.presetIndex == k);
     }
     for (int g = 0; g < categories.size(); ++g) menu.addSubMenu(categories[g], groups[static_cast<std::size_t>(g)]);
-    const auto files = processor.userPresetFolder().findChildFiles(juce::File::findFiles, false, "*.lspreset");
+    // The instrument saves .lsinst, the effect .lspreset (saveUserPreset).
+    const auto files = processor.userPresetFolder().findChildFiles(juce::File::findFiles, false, processor.isInstrument() ? "*.lsinst" : "*.lspreset");
     juce::Array<juce::File> sorted(files);
     sorted.sort();
     for (int k = 0; k < sorted.size(); ++k) user.addItem(1000 + k, sorted[k].getFileNameWithoutExtension());
@@ -983,9 +985,12 @@ void LightSeekerView::showSettingsMenu() {
     for (int k = 0; k < 3; ++k) quality.addItem(10 + k, names[k], true, processor.qualityMode() == k);
     menu.addSubMenu("Window size", size);
     menu.addSubMenu("Quality", quality);
+    menu.addSeparator();
+    menu.addItem(20, juce::String("About ") + processor.getName() + "...");
     menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(&settingsButton),
         [safe = juce::Component::SafePointer<LightSeekerView>(this), scales](int result) {
             if (safe == nullptr || result == 0) return;
+            if (result == 20) { safe->showAbout(); return; }
             if (result >= 1 && result <= 5) { if (safe->onScaleChosen) safe->onScaleChosen(scales[result - 1]); }
             else if (result >= 10 && result <= 12) {
                 if (auto* q = safe->processor.parameters.getParameter(dc::ids::quality)) q->setValueNotifyingHost(q->convertTo0to1(static_cast<float>(result - 10)));
@@ -993,6 +998,32 @@ void LightSeekerView::showSettingsMenu() {
                 safe->resized();   // the art is re-rendered at the new quality's size
             }
         });
+}
+
+juce::String LightSeekerView::aboutText(bool instrument) {
+    // The About screen (the settings menu): name, version and company as hosts show them,
+    // where the user's data lives, and the credits.
+    juce::String text;
+    text << (instrument ? "LIGHT SEEKER" : "LIGHT SEEKER FX") << "  version " << JucePlugin_VersionString << "\n"
+         << (instrument ? "Light-fantasy location instrument" : "Light-fantasy location effect") << "\n"
+         << JucePlugin_Manufacturer << "\n\n"
+         << "Your presets and drop-in scenes:\n" << ls::data::pluginFolder(instrument).getFullPathName() << "\n\n"
+         << "Credits\n"
+         << "Brass and woodwind recordings: an orchestral sample library released into the\n"
+         << "public domain (CC0 1.0).\n"
+         << "Typefaces: Cinzel and Cormorant Garamond (SIL Open Font License 1.1).\n\n"
+         << "Copyright 2026 " << JucePlugin_Manufacturer << ".";
+    return text;
+}
+
+void LightSeekerView::showAbout() {
+    juce::AlertWindow::showAsync(juce::MessageBoxOptions()
+                                     .withIconType(juce::MessageBoxIconType::NoIcon)
+                                     .withTitle(juce::String("About ") + processor.getName())
+                                     .withMessage(aboutText(processor.isInstrument()))
+                                     .withButton("Close")
+                                     .withAssociatedComponent(this),
+                                 nullptr);
 }
 
 void LightSeekerView::followSteering() {

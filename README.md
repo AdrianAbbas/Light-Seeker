@@ -1,18 +1,22 @@
 # LIGHT SEEKER
 
+**Version 1.0.0, by Windward Audio.** **1.0 is frozen**: from now on only bug fixes go in;
+new ideas go to the "1.1 ideas" list in [docs/ROADMAP.md](docs/ROADMAP.md). What is in 1.0:
+[CHANGELOG.md](CHANGELOG.md).
+
 **LIGHT SEEKER** is a light-fantasy **software instrument**, and **LIGHT SEEKER FX** the same
 world as an **audio effect** (AU + VST3, macOS; GarageBand and Logic Pro). Both are built from
 this repository: the bright, majestic twin of DUNGEON CRAWLER. A painterly, sunlit fantasy
 **map**; click a **location** to zoom in, click again for its **places**. Sky castles,
 crystal palaces, blossom meadows, golden cathedrals: uplifting, shimmering and majestic.
 
-- **LIGHT SEEKER** (instrument, `aumu Lski Veil`): **every place has its own instrument**,
+- **LIGHT SEEKER** (instrument; hosts list it as *Windward Audio: LIGHT SEEKER*): **every place has its own instrument**,
   played from your keyboard or the piano roll **inside that place's space**: fanfare
   trumpets at the Gates of Dawn, a glass harp at the Moonwell, a grand organ in the Nave of
   Light, a kalimba in the Butterfly Glade. Travel and the space morphs while held notes play
   on; **Lock instrument** carries one instrument through every space. One instrument per
   instance, one instance per track, like any software instrument.
-- **LIGHT SEEKER FX** (effect, `aufx Lsek Veil`): every place transforms any track's sound,
+- **LIGHT SEEKER FX** (effect; *Windward Audio: LIGHT SEEKER FX*): every place transforms any track's sound,
   with one signature effect no other place uses, level-matched and musical on guitar, synth,
   piano and voice. (This is the plug-in that was called LIGHT SEEKER before the instrument
   edition; projects that used it find it again.)
@@ -100,7 +104,7 @@ Nave of Light, a chorus hall in the Rose Garden), measured and rebuilt as impuls
 
 One download installs both plug-ins.
 
-1. Download the `LightSeeker-macOS-Universal` artifact of a green run (GitHub → Actions →
+1. Download the `WindwardAudio-LightSeeker-1.0.0-macOS-Universal` artifact of a green run (GitHub → Actions →
    Native build → the run → Artifacts) or a release, and unzip it.
 2. Quit GarageBand and Logic. In Terminal type `bash ` (with a space), drag
    `install-mac.sh` from the unzipped folder into the window, press Return.
@@ -112,21 +116,33 @@ refreshes the Audio Unit list and runs Apple's validator. Details and a manual i
 [packaging/INSTALL.txt](packaging/INSTALL.txt). Uninstall: `bash uninstall-mac.sh`
 (`--purge` also deletes your presets and drop-in scenes).
 
-LIGHT SEEKER (`aumu Lski Veil`, `LightSeeker.component`, bundle ID `audio.veil.lightseeker`)
-and LIGHT SEEKER FX (`aufx Lsek Veil`, `LightSeekerFX.component`, `audio.veil.lightseeker.fx`)
-install **side by side with DUNGEON CRAWLER** (`aufx Dgcr Veil`); no script touches the
-other plug-ins' files.
+**Updating from a build before 1.0.** The company name hosts show is now *Windward Audio*.
+Run `install-mac.sh` as above: it removes the earlier copies (so GarageBand and Logic list
+each plug-in once, under Windward Audio) and copies your presets and drop-in scenes into the
+new folders. Projects and presets made with earlier builds open unchanged: the Audio Unit
+codes and every parameter are the same.
+
+Your data: `~/Library/Windward Audio/LIGHT SEEKER/` (the instrument) and
+`~/Library/Windward Audio/LIGHT SEEKER FX/` (the effect), each with `Presets/` and
+`Scenes/`. On its first launch each plug-in copies anything it finds in the old folders
+(`~/Library/Application Support/LightSeeker`, and the presets hosts saved under the old
+company name in `~/Library/Audio/Presets`) into its new folder; the old folders are kept as
+they were. ⚙ → About shows the version and where your data lives.
+
+LIGHT SEEKER (`LightSeeker.component`, bundle ID `com.windwardaudio.lightseeker`) and LIGHT
+SEEKER FX (`LightSeekerFX.component`, `com.windwardaudio.lightseekerfx`) install **side by
+side with DUNGEON CRAWLER**; no script touches the other plug-ins' files.
 
 ## Using it
 
 **The instrument.** GarageBand: a Software Instrument track → Smart Controls (B) → Plug-ins →
-the instrument slot → Audio Units → Veil Audio → LIGHT SEEKER. Logic Pro: a Software
-Instrument track → the Instrument slot → AU Instruments → Veil Audio → LIGHT SEEKER. Play
+the instrument slot → Audio Units → Windward Audio → LIGHT SEEKER. Logic Pro: a Software
+Instrument track → the Instrument slot → AU Instruments → Windward Audio → LIGHT SEEKER. Play
 your keyboard or the piano roll; choose places on the map and play their instruments.
 
 **The effect.** GarageBand: select a track → Smart Controls (B) → Plug-ins → an empty Audio
-Effect slot → Audio Units → Veil Audio → LIGHT SEEKER FX. Logic Pro: an Audio FX slot →
-Audio Units → Veil Audio → LIGHT SEEKER FX. Double-click the slot to open the window (if you
+Effect slot → Audio Units → Windward Audio → LIGHT SEEKER FX. Logic Pro: an Audio FX slot →
+Audio Units → Windward Audio → LIGHT SEEKER FX. Double-click the slot to open the window (if you
 see plain sliders, switch the window's view menu from "Controls" to "Editor").
 
 The map and the controls below are the same in both:
@@ -264,6 +280,7 @@ Flight of the Dragon, Elven Night; roaming: Fairy Dance, Drifting Isles, Meadow 
 | An instrument says "synthesised (recordings not found)" | That build was made without the private recordings (see Build); the instrument plays its modelled stand-in. |
 | Silent slot with plain sliders in GarageBand | The quarantine flag: run `install-mac.sh` again (from the unzipped folder), restart GarageBand. |
 | Plug-in missing from the list | GarageBand: Settings → Audio/MIDI → tick "Audio Units", restart. Logic: Plug-in Manager → Reset & Rescan. |
+| A plug-in listed twice, or still under its old company name | Run `install-mac.sh` again: it removes the copies from before 1.0. A copy in `/Library` needs the `sudo rm` command it prints. Then restart GarageBand. |
 | Plain sliders instead of the map | The window's view menu: "Editor", not "Controls". |
 | "travelling…" for a moment | A scene is prepared the first time it is shown (a fraction of a second); after that it is cached. |
 | CPU too high on a laptop | ⚙ → Quality → Eco. |
@@ -304,7 +321,10 @@ macOS builds, `auval`, the AU host harness (in- and out-of-process, arm64 and x8
 plug-ins: the instrument played over MIDI, the effect on a sine) and packaging run on GitHub
 Actions (`macos-15`); the Linux job runs the full suite and writes the listening renders
 (every place dry vs processed, a journey, the atmosphere; every instrument dry and in its
-place, a chord travelling through the world) into the `LightSeeker-linux-test-logs` artifact. Art: `python3 tools/painted/build.py` (see
+place, a chord travelling through the world) into the `WindwardAudio-LightSeeker-linux-test-logs` artifact.
+The `release` test group (both jobs) and the install test check the 1.0 freeze: the company
+and version 1.0.0 hosts see, the registry listing each plug-in once, sessions saved before
+1.0 (`Tests/fixtures`) loading unchanged, and the presets' migration. Art: `python3 tools/painted/build.py` (see
 [tools/painted/README.md](tools/painted/README.md)); captures: [tools/captures/README.md](tools/captures/README.md).
 
 ## Layout
@@ -312,7 +332,7 @@ place, a chord travelling through the world) into the `LightSeeker-linux-test-lo
 `Source/` (processor, engine, DSP modules, world, editor, art; `Synth/` the instruments and
 `Synth/wb` WORLDBUILDER's sound engine, copied), `Tests/`, `tools/` (AU harness, painted art
 pipeline, capture tools, sample preparation, icon), `scripts/` (CI, install), `packaging/`,
-`assets/` (fonts, icon, captured impulse responses, painted art), `docs/` (DEVLOG, manual
-test, art sources, snapshots).
+`assets/` (fonts, icon, captured impulse responses, painted art), `docs/` (DEVLOG, roadmap,
+manual test, art sources, snapshots), `CHANGELOG.md`.
 
 Fonts: Cinzel and Cormorant Garamond (SIL Open Font License, `assets/fonts`).

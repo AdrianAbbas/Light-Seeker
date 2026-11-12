@@ -1,6 +1,7 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 #include "World/Presets.h"
+#include "UserData.h"
 #include <cmath>
 #include <optional>
 
@@ -68,6 +69,9 @@ LightSeekerProcessor::LightSeekerProcessor(bool instrumentEdition)
     // The developer's recordings load on a background thread (once per process): the
     // instrument's, or in the effect only what its Atmosphere layer plays (the breaths).
     lswb::samples::Bank::get().load();
+    // 1.0: the user's presets and drop-in scenes from earlier builds are copied into this
+    // plug-in's own folder on its first launch (UserData.h; once per process, cheap after).
+    ls::data::migrateOnce(instrumentMode);
     markPresetBaseline();   // a new instance is "Init", unmodified
 }
 
@@ -376,11 +380,8 @@ void LightSeekerProcessor::applyFactoryPreset(int index) {
 }
 
 juce::File LightSeekerProcessor::userPresetFolder() const {
-    auto base = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory);
-   #if JUCE_MAC
-    base = base.getChildFile("Application Support");
-   #endif
-    return base.getChildFile("LightSeeker").getChildFile(instrumentMode ? "Instrument Presets" : "Presets");
+    // ~/Library/Windward Audio/LIGHT SEEKER/Presets (the instrument) or .../LIGHT SEEKER FX/Presets.
+    return ls::data::presetsFolder(instrumentMode);
 }
 
 bool LightSeekerProcessor::saveUserPreset(const juce::String& name) {

@@ -833,7 +833,8 @@ void testInstrumentPresets(Suite& s) {
                     && h2.p->engine().destination() == dc::SkyTemple,
                 "... with its locked instrument and its place (the organ in the Sanctum)");
         file.deleteFile();
-        s.check(h.p->userPresetFolder().getFileName() == "Instrument Presets", "instrument presets live in their own folder");
+        s.check(h.p->userPresetFolder() == ls::data::presetsFolder(true) && h.p->userPresetFolder() != Host().p->userPresetFolder(),
+                "instrument presets live in their own folder (Windward Audio/LIGHT SEEKER/Presets)");
     }
     {   // CPU (report only): a four-note chord held in each location's arrival place.
         double worst = 0, sum = 0;

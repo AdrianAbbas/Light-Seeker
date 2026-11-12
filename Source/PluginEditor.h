@@ -31,6 +31,9 @@ public:
     std::function<void(float)> onScaleChosen;
     // The window's 10 Hz UI timer (the follower): the editor's hover guard runs on it.
     std::function<void()> onUiTick;
+    // The About screen (settings menu > About): its text, and opening it.
+    static juce::String aboutText(bool instrument);
+    void showAbout();
     void paint(juce::Graphics&) override;
     void resized() override;
     // Panels close on Esc and on a click outside them (Hotfix 2).

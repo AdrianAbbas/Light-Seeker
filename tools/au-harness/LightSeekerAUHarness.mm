@@ -19,9 +19,16 @@
 // the note dying away after its release, Intensity 0 (the instrument dry) still
 // sounding, another sample rate, the state round trip and the editor view.
 //
+// 1.0: the registry entry (--expect-name, --expect-version: the company and version hosts
+// list) and an old session (--only old-session --old-session <file>): a session saved by the
+// build before 1.0 (Tests/fixtures, the processor's saved state as XML) is put into the
+// plug-in as a host restores a project (kAudioUnitProperty_ClassInfo, out-of-process then
+// in-process), saved again, and the two states compared element by element.
+//
 // Usage:
 //   LightSeekerAUHarness [--strict] [--no-window] [--component aumu:Lski:Veil | aufx:Lsek:Veil]
-//                 [--only v2-oop|v2-inproc|auaudiounit]
+//                 [--only v2-oop|v2-inproc|auaudiounit|old-session] [--old-session file.xml]
+//                 [--expect-name "Windward Audio: LIGHT SEEKER"] [--expect-version 0x10000]
 //
 // Without --strict the harness reports and exits 0 (used to characterise an
 // old build). With --strict any FAIL gives exit code 1. Exit code 2 means the
@@ -1316,6 +1323,114 @@ void auAudioUnitInstrumentSuite(Report& r, AudioComponentDescription description
 }
 
 //==============================================================================
+// An old session (1.0). JUCE keeps the processor's state in the ClassInfo dictionary under
+// "jucePluginState", as its binary XML: a magic number, the length, the text, a zero.
+NSData* juceStateFromXml(NSData* xmlText) {
+    NSMutableData* data = [NSMutableData data];
+    // The length is the text's, without the closing zero (AudioProcessor::copyXmlToBinary).
+    const uint32_t magic = CFSwapInt32HostToLittle(0x21324356), length = CFSwapInt32HostToLittle(uint32_t(xmlText.length));
+    [data appendBytes: &magic length: 4];
+    [data appendBytes: &length length: 4];
+    [data appendData: xmlText];
+    const uint8_t zero = 0;
+    [data appendBytes: &zero length: 1];
+    return data;
+}
+
+NSXMLDocument* juceStateDocument(NSData* state, std::string& error) {
+    if (state.length < 9) { error = "state too short"; return nil; }
+    uint32_t length = 0;
+    [state getBytes: &length range: NSMakeRange(4, 4)];
+    length = CFSwapInt32LittleToHost(length);
+    if (length < 1 || 8 + NSUInteger(length) > state.length) { error = "bad state length"; return nil; }
+    NSData* text = [state subdataWithRange: NSMakeRange(8, length)];
+    NSError* e = nil;
+    NSXMLDocument* doc = [[NSXMLDocument alloc] initWithData: text options: 0 error: &e];
+    if (doc == nil) { error = "state is not XML: " + toString(e.localizedDescription); return nil; }
+    return doc;
+}
+
+// The first difference between two saved states: tags, attributes, child elements (in order).
+std::string firstDifference(NSXMLElement* a, NSXMLElement* b) {
+    if (![a.name isEqualToString: b.name]) return "tag " + toString(a.name) + " vs " + toString(b.name);
+    NSMutableDictionary<NSString*, NSString*>* left = [NSMutableDictionary dictionary];
+    NSMutableDictionary<NSString*, NSString*>* right = [NSMutableDictionary dictionary];
+    for (NSXMLNode* n in a.attributes) left[n.name] = n.stringValue;
+    for (NSXMLNode* n in b.attributes) right[n.name] = n.stringValue;
+    if (![left isEqualToDictionary: right]) {
+        NSMutableSet<NSString*>* names = [NSMutableSet setWithArray: left.allKeys];
+        [names addObjectsFromArray: right.allKeys];
+        for (NSString* name in names)
+            if (!(left[name] != nil && right[name] != nil && [left[name] isEqualToString: right[name]]))
+                return toString(a.name) + " " + (left[@"id"] != nil ? toString(left[@"id"]) + " " : std::string()) + toString(name) + ": "
+                       + (left[name] != nil ? toString(left[name]) : std::string("(absent)")) + " vs " + (right[name] != nil ? toString(right[name]) : std::string("(absent)"));
+    }
+    const auto elements = [](NSXMLElement* e) {
+        NSMutableArray<NSXMLElement*>* list = [NSMutableArray array];
+        for (NSXMLNode* n in e.children)
+            if (n.kind == NSXMLElementKind) [list addObject: (NSXMLElement*) n];
+        return list;
+    };
+    NSArray<NSXMLElement*>* ac = elements(a);
+    NSArray<NSXMLElement*>* bc = elements(b);
+    if (ac.count != bc.count) return toString(a.name) + strf(": %lu vs %lu child elements", (unsigned long) ac.count, (unsigned long) bc.count);
+    for (NSUInteger i = 0; i < ac.count; ++i)
+        if (auto d = firstDifference(ac[i], bc[i]); !d.empty()) return d;
+    return {};
+}
+
+void oldSessionSuite(Report& r, AudioComponent component, const std::string& path, bool outOfProcess) {
+    r.scope = outOfProcess ? "old session, out-of-process" : "old session, in-process";
+    NSData* xmlText = [NSData dataWithContentsOfFile: [NSString stringWithUTF8String: path.c_str()]];
+    if (!r.check(xmlText != nil, "old session file readable", path)) return;
+    NSError* e = nil;
+    NSXMLDocument* expectedDocument = [[NSXMLDocument alloc] initWithData: xmlText options: 0 error: &e];
+    NSXMLElement* expected = expectedDocument.rootElement;
+    if (!r.check(expected != nil, "old session file is XML", toString(e.localizedDescription))) return;
+    OSStatus s = noErr;
+    AudioComponentInstance unit = instantiate(component, outOfProcess, s);
+    if (!r.check(unit != nullptr, "instantiate", statusText(s))) return;
+    // The ClassInfo a host saved in a project before 1.0: this component's dictionary (type,
+    // subtype, the unchanged manufacturer code) with that session's state and preset name.
+    CFPropertyListRef fresh = nullptr;
+    UInt32 size = sizeof(fresh);
+    s = AudioUnitGetProperty(unit, kAudioUnitProperty_ClassInfo, kAudioUnitScope_Global, 0, &fresh, &size);
+    if (r.check(s == noErr && fresh != nullptr, "ClassInfo readable", statusText(s))) {
+        NSMutableDictionary* session = [(__bridge NSDictionary*) fresh mutableCopy];
+        CFRelease(fresh);
+        session[@"jucePluginState"] = juceStateFromXml(xmlText);
+        NSString* presetName = [expected attributeForName: @"presetName"].stringValue;
+        if (presetName != nil) session[@"name"] = presetName;
+        CFPropertyListRef sessionRef = (__bridge CFPropertyListRef) session;
+        s = AudioUnitSetProperty(unit, kAudioUnitProperty_ClassInfo, kAudioUnitScope_Global, 0, &sessionRef, sizeof(sessionRef));
+        r.check(s == noErr, "the old session is accepted (ClassInfo restored)", statusText(s));
+        s = AudioUnitInitialize(unit);
+        r.check(s == noErr, "initialise after loading", statusText(s));
+        pump(0.3);
+        CFPropertyListRef saved = nullptr;
+        size = sizeof(saved);
+        s = AudioUnitGetProperty(unit, kAudioUnitProperty_ClassInfo, kAudioUnitScope_Global, 0, &saved, &size);
+        if (r.check(s == noErr && saved != nullptr, "saved again (ClassInfo)", statusText(s))) {
+            NSDictionary* again = (__bridge NSDictionary*) saved;
+            NSNumber* manufacturer = again[@"manufacturer"];
+            r.check(manufacturer != nil && OSType(manufacturer.unsignedIntValue) == fourCC("Veil"), "the session keeps the manufacturer code hosts stored (Veil)");
+            std::string error;
+            NSData* state = again[@"jucePluginState"];
+            NSXMLDocument* savedDocument = state != nil ? juceStateDocument(state, error) : nil;
+            NSXMLElement* root = savedDocument.rootElement;
+            if (state == nil) error = "no jucePluginState";
+            const auto difference = root != nil ? firstDifference(expected, root) : error;
+            r.check(difference.empty(), "the old session loads unchanged (state compare)",
+                    difference.empty() ? strf("%lu parameters and the view identical", (unsigned long) [expected elementsForName: @"PARAM"].count) : difference);
+            CFRelease(saved);
+        }
+        AudioUnitUninitialize(unit);
+    }
+    AudioComponentInstanceDispose(unit);
+    pump(0.3);
+}
+
+//==============================================================================
 void describeComponent(Report& r, AudioComponent component) {
     CFStringRef name = nullptr;
     AudioComponentCopyName(component, &name);
@@ -1337,13 +1452,17 @@ void describeComponent(Report& r, AudioComponent component) {
 int main(int argc, const char* argv[]) {
     @autoreleasepool {
         bool strict = false, useWindow = true;
-        std::string only, componentText = "aumu:Lski:Veil";
+        std::string only, componentText = "aumu:Lski:Veil", oldSession, expectName;
+        long expectVersion = -1;
         for (int i = 1; i < argc; ++i) {
             const std::string a = argv[i];
             if (a == "--strict") strict = true;
             else if (a == "--no-window") useWindow = false;
             else if (a == "--only" && i + 1 < argc) only = argv[++i];
             else if (a == "--component" && i + 1 < argc) componentText = argv[++i];
+            else if (a == "--old-session" && i + 1 < argc) oldSession = argv[++i];
+            else if (a == "--expect-name" && i + 1 < argc) expectName = argv[++i];
+            else if (a == "--expect-version" && i + 1 < argc) expectVersion = std::strtol(argv[++i], nullptr, 0);
             else { std::fprintf(stderr, "unknown argument %s\n", a.c_str()); return 64; }
         }
         // The editor's hover guard logs what it receives (report-only, see hoverProbe).
@@ -1381,6 +1500,26 @@ int main(int argc, const char* argv[]) {
         for (AudioComponent c = nullptr; (c = AudioComponentFindNext(c, &description)) != nullptr;) ++matches;
         r.check(matches == 1, "exactly one registered component matches", strf("%d", matches));
         describeComponent(r, component);
+        if (!expectName.empty() || expectVersion >= 0) {
+            CFStringRef name = nullptr;
+            AudioComponentCopyName(component, &name);
+            const std::string listed = toString(name);
+            if (name != nullptr) CFRelease(name);
+            UInt32 version = 0;
+            AudioComponentGetVersion(component, &version);
+            if (!expectName.empty()) r.check(listed == expectName, "registry lists it as '" + expectName + "'", listed);
+            if (expectVersion >= 0) r.check(long(version) == expectVersion, strf("version reported to hosts is 0x%lx", expectVersion), strf("0x%x", unsigned(version)));
+        }
+        if (only == "old-session") {
+            if (r.check(!oldSession.empty(), "--old-session names the saved session", "")) {
+                oldSessionSuite(r, component, oldSession, true);
+                oldSessionSuite(r, component, oldSession, false);
+            }
+            r.scope = "summary";
+            std::printf("SUMMARY passed=%d failed=%d skipped=%d\n", r.passed, r.failed, r.skipped);
+            std::fflush(stdout);
+            return strict && r.failed > 0 ? 1 : 0;
+        }
 
         const bool instrument = description.componentType == kAudioUnitType_MusicDevice;
         pluginImageNeedle = instrument ? "LightSeeker.component/Contents/MacOS/" : "LightSeekerFX.component/Contents/MacOS/";

@@ -23,6 +23,7 @@
 //   LightSeekerTests --listen-changed dir   the instruments the recordings update changed: one melody and chord progression, dry and in place
 #include "PluginEditor.h"
 #include "PluginProcessor.h"
+#include "UserData.h"
 #include "UI/Scenes.h"
 #include "UI/Painted.h"
 #include "World/Presets.h"
@@ -2816,6 +2817,7 @@ int paintedSnapshots(const juce::String& directory) {
 #include "LoudnessTests.h"
 #include "WoodwindTests.h"
 #include "RingTests.h"
+#include "ReleaseTests.h"
 
 int main(int argc, char** argv) {
     juce::ScopedJuceInitialiser_GUI gui;
@@ -2898,6 +2900,7 @@ int main(int argc, char** argv) {
     if (run("loudness")) testLoudness(s);
     if (run("woodwinds")) testWoodwinds(s);
     if (run("ring")) testRing(s);
+    if (run("release")) testRelease(s);
     if (only.contains("qa")) testQa(s);   // long (130 journeys): run explicitly
     if (only.contains("cpu")) testCpu(s);   // report only: run explicitly
     std::cout << "\n" << s.passed << " passed, " << s.failed << " failed" << std::endl;

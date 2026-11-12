@@ -1,5 +1,6 @@
 #include "Scenes.h"
 #include "Painted.h"
+#include "../UserData.h"
 
 // The fallback art: a luminous wash per place (sky, sun glow, soft clouds, a horizon in
 // the location's colours) with the place's name, and a simple bright map. It is shown
@@ -206,12 +207,13 @@ juce::String sceneSlug(SceneId id) {
 }
 
 juce::File overrideFile(SceneId id) {
-    // macOS: ~/Library/Application Support/LightSeeker/scenes (JUCE's user data
-    // folder there is ~/Library itself).
-    auto base = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory);
-   #if JUCE_MAC
-    base = base.getChildFile("Application Support");
+    // macOS: ~/Library/Windward Audio/LIGHT SEEKER/Scenes, or .../LIGHT SEEKER FX/Scenes in
+    // the effect (UserData.h; each plug-in is its own binary, so the build decides).
+   #ifdef JucePlugin_IsSynth
+    constexpr bool instrument = JucePlugin_IsSynth != 0;
+   #else
+    constexpr bool instrument = true;
    #endif
-    return base.getChildFile("LightSeeker").getChildFile("scenes").getChildFile(sceneSlug(id) + ".png");
+    return ls::data::scenesFolder(instrument).getChildFile(sceneSlug(id) + ".png");
 }
 }

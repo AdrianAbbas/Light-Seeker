@@ -120,7 +120,7 @@ const Recipe recipes[Signature::kinds] = {
     // 20 Cloud Bridge, Cloud Swirl: echoes swirling around the listener.
     { .taps = 6, .tapMs = { 60, 120, 180, 240, 300, 360 }, .tapGain = { .6f, .52f, .45f, .38f, .3f, .24f },
       .tapLp = 10000, .tapDarken = .92f, .tapMode = TapsCircle, .tapRate = .2f, .swirlDepth = 1, .swirlHz = .13f },
-    // 21 Windswept Isle, Wind Veil: the sound thinned and blown about by the wind.
+    // 21 Windswept Isle, Wind Shroud (named Wind Veil before 1.0): the sound thinned and blown about by the wind.
     { .tone = ToneHigh, .toneHz = 380, .toneQ = .7f, .wobbleMs = 1.5f, .wobbleHz = .5f, .wobbleShape = SmoothRandom, .wobbleMix = .5f,
       .tremDepth = .3f, .tremHz = .4f, .tremShape = SmoothRandom },
     // 22 Sky Harbour, Soaring Echoes: echoes that soar a fifth higher as they sail away

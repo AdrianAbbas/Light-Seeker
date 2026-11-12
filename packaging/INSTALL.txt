@@ -1,5 +1,6 @@
-LIGHT SEEKER - Light-fantasy location instrument and effect
-(macOS, Apple Silicon and Intel, macOS 10.15+)
+LIGHT SEEKER 1.0.0 - Light-fantasy location instrument and effect
+Windward Audio
+(macOS, Apple Silicon and Intel, macOS 10.15+; what is new: CHANGELOG.md)
 
 Two plug-ins:
   LIGHT SEEKER      the instrument: every place in the world has its own instrument,
@@ -22,7 +23,7 @@ INSTALL
 GARAGEBAND: THE INSTRUMENT
   Settings > Audio/MIDI: tick "Audio Units". Restart GarageBand.
   Add a Software Instrument track. Smart Controls (B) > Plug-ins > the instrument slot >
-  Audio Units > Veil Audio > LIGHT SEEKER.
+  Audio Units > Windward Audio > LIGHT SEEKER.
   The window opens on the painted map with the instrument panel underneath. Click a
   landmark, then a place: its instrument plays inside its space. Hold a chord while you
   travel: it carries on in the new instrument. "Lock instrument" keeps the instrument and
@@ -30,7 +31,7 @@ GARAGEBAND: THE INSTRUMENT
 
 GARAGEBAND: THE EFFECT
   Select a track. Smart Controls (B) > Plug-ins > an empty Audio Effect slot >
-  Audio Units > Veil Audio > LIGHT SEEKER FX.
+  Audio Units > Windward Audio > LIGHT SEEKER FX.
   If you see sliders instead of the interface, switch the plug-in window's view menu
   from "Controls" to "Editor".
 
@@ -39,23 +40,33 @@ MIDI TRAVEL (the effect)
   button) or automate Location / Sub-location instead. See README for other hosts.
 
 LOGIC PRO
-  Settings > Plug-in Manager > Veil Audio > LIGHT SEEKER and LIGHT SEEKER FX. If one is
+  Settings > Plug-in Manager > Windward Audio > LIGHT SEEKER and LIGHT SEEKER FX. If one is
   marked failed, select it and click "Reset & Rescan Selection".
   The instrument: a Software Instrument track's Instrument slot > AU Instruments >
-  Veil Audio > LIGHT SEEKER. The effect: any Audio FX slot > Audio Units > Veil Audio >
-  LIGHT SEEKER FX.
+  Windward Audio > LIGHT SEEKER. The effect: any Audio FX slot > Audio Units >
+  Windward Audio > LIGHT SEEKER FX.
+
+UPDATING FROM A BUILD BEFORE 1.0
+  Hosts now list both plug-ins under Windward Audio. Run install-mac.sh as above: it
+  removes the earlier copies, so each plug-in is listed once, and copies your presets
+  and drop-in scenes into the new folders (the old folders are kept as they were).
+  Projects and presets made with earlier builds open unchanged.
+
+YOUR PRESETS AND SCENES
+  ~/Library/Windward Audio/LIGHT SEEKER/      the instrument (Presets, Scenes)
+  ~/Library/Windward Audio/LIGHT SEEKER FX/   the effect (Presets, Scenes)
+  The settings menu (gear) > About shows the version and this folder.
 
 SIDE BY SIDE WITH DUNGEON CRAWLER
-  All can be installed at once: LIGHT SEEKER is aumu Lski Veil (LightSeeker.component,
-  audio.veil.lightseeker), LIGHT SEEKER FX is aufx Lsek Veil (LightSeekerFX.component,
-  audio.veil.lightseeker.fx); DUNGEON CRAWLER is aufx Dgcr Veil. The scripts of one
-  never touch the other's files.
+  All can be installed at once: LIGHT SEEKER is LightSeeker.component
+  (com.windwardaudio.lightseeker), LIGHT SEEKER FX is LightSeekerFX.component
+  (com.windwardaudio.lightseekerfx). The scripts of one never touch the other's files.
   Projects made with the earlier effect-only LIGHT SEEKER find LIGHT SEEKER FX (the same
-  Audio Unit codes, aufx Lsek Veil).
+  Audio Unit codes).
 
 UNINSTALL
   bash uninstall-mac.sh            (add --purge to also delete your presets and
-                                    drop-in scenes in ~/Library/Application Support/LightSeeker)
+                                    drop-in scenes in ~/Library/Windward Audio)
 
 MANUAL INSTALL (if you prefer not to run the script)
   for p in LightSeeker LightSeekerFX; do
@@ -64,5 +75,5 @@ MANUAL INSTALL (if you prefer not to run the script)
     codesign --force --deep --sign - ~/Library/Audio/Plug-Ins/Components/$p.component
   done
   killall -9 AudioComponentRegistrar
-  auval -v aumu Lski Veil
-  auval -v aufx Lsek Veil
+  Then check both with Apple's validator: bash diagnose-mac.sh (it runs auval on both
+  and writes a report to the Desktop).

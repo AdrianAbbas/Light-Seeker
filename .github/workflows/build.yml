@@ -7,6 +7,8 @@ permissions:
   contents: read
 env:
   JUCE_COMMIT: ea77444750de45e036e0279bb0291144bf8e3688 # JUCE 8.0.16, as in CMakeLists.txt
+  # The installable package (1.0.0): its zip, the folder inside and the artifact share the name.
+  PACKAGE: WindwardAudio-LightSeeker-1.0.0-macOS-Universal
 jobs:
   macos:
     runs-on: macos-15
@@ -83,14 +85,14 @@ jobs:
       # The full processor suite runs in the Linux job. Here a short smoke group checks
       # each slice of the universal binary, and the cpu group reports (never fails on)
       # the cost of every location on this runner.
-      - name: Smoke test, instrument checks and CPU report (arm64)
+      - name: Smoke test, instrument and release checks and CPU report (arm64)
         env:
           LIGHTSEEKER_SAMPLES: ${{ runner.temp }}/samples
-        run: /usr/bin/arch -arm64 build/LightSeekerTests_artefacts/Release/LightSeekerTests --only smoke,instrument,cpu
-      - name: Smoke test, instrument checks and CPU report (x86_64 under Rosetta)
+        run: /usr/bin/arch -arm64 build/LightSeekerTests_artefacts/Release/LightSeekerTests --only smoke,instrument,release,cpu
+      - name: Smoke test, instrument and release checks and CPU report (x86_64 under Rosetta)
         env:
           LIGHTSEEKER_SAMPLES: ${{ runner.temp }}/samples
-        run: /usr/bin/arch -x86_64 build/LightSeekerTests_artefacts/Release/LightSeekerTests --only smoke,instrument,cpu
+        run: /usr/bin/arch -x86_64 build/LightSeekerTests_artefacts/Release/LightSeekerTests --only smoke,instrument,release,cpu
       - name: Universal binary and Info.plist gate (both plug-ins)
         run: bash scripts/ci-check-bundles.sh build
       - name: Developer ID signing and notarisation (optional, untested)
@@ -104,15 +106,15 @@ jobs:
           NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
         run: bash scripts/ci-developer-id.sh build
       - name: Sign, verify and package (both plug-ins)
-        run: bash scripts/package-mac.sh build dist
+        run: bash scripts/package-mac.sh build dist "$PACKAGE"
       - name: Build AU host harness
         run: bash scripts/build-au-harness.sh build/LightSeekerAUHarness
-      - name: Install a quarantined download with install-mac.sh, then auval and harness for both plug-ins (arm64 + x86_64)
-        run: bash scripts/ci-user-install-test.sh dist/LightSeeker-macOS-Universal.zip build/LightSeekerAUHarness build/ci-logs
+      - name: Install a quarantined download over a pre-1.0 install, then registry, auval, harness and old sessions for both plug-ins (arm64 + x86_64)
+        run: bash scripts/ci-user-install-test.sh "dist/$PACKAGE.zip" build/LightSeekerAUHarness build/ci-logs
       # Annotations are readable through the REST API; GitHub keeps at most 10 per step.
       - name: Publish install and arm64 harness logs as annotations
         if: always()
-        run: bash scripts/ci-annotate.sh --condense build/ci-logs/quarantine.txt build/ci-logs/install-mac.txt build/ci-logs/harness-arm64-*.txt
+        run: bash scripts/ci-annotate.sh --condense build/ci-logs/quarantine.txt build/ci-logs/install-mac.txt build/ci-logs/registry.txt build/ci-logs/migration.txt build/ci-logs/harness-arm64-*.txt
       - name: Publish x86_64 harness and auval logs as annotations
         if: always()
         run: |
@@ -123,14 +125,14 @@ jobs:
       - name: Upload installable package (only when every check passed)
         uses: actions/upload-artifact@v4
         with:
-          name: LightSeeker-macOS-Universal
-          path: dist/LightSeeker-macOS-Universal.zip
+          name: ${{ env.PACKAGE }}
+          path: dist/${{ env.PACKAGE }}.zip
           if-no-files-found: error
       - name: Upload diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: LightSeeker-macOS-diagnostics
+          name: WindwardAudio-LightSeeker-macOS-diagnostics
           path: |
             build/ci-logs/
           if-no-files-found: warn
@@ -277,7 +279,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: LightSeeker-linux-test-logs
+          name: WindwardAudio-LightSeeker-linux-test-logs
           path: build/test-logs/
           if-no-files-found: warn
   release:
@@ -290,8 +292,8 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: LightSeeker-macOS-Universal
+          name: ${{ env.PACKAGE }}
       - name: Create release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" LightSeeker-macOS-Universal.zip --repo "$GITHUB_REPOSITORY" --title "LIGHT SEEKER $GITHUB_REF_NAME" --generate-notes
+        run: gh release create "$GITHUB_REF_NAME" "$PACKAGE.zip" --repo "$GITHUB_REPOSITORY" --title "LIGHT SEEKER $GITHUB_REF_NAME (Windward Audio)" --generate-notes

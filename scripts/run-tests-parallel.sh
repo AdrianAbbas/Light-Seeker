@@ -8,7 +8,7 @@ tests="${1:?the LightSeekerTests binary}"
 logs="${2:-build/test-logs}"
 mkdir -p "$logs"
 
-"$tests" --only smoke,parameters,state,layouts,transparency,editor,art,levels,workflow > "$logs/1-basics.txt" 2>&1 &
+"$tests" --only smoke,parameters,state,layouts,transparency,editor,art,levels,workflow,release > "$logs/1-basics.txt" 2>&1 &
 "$tests" --only search > "$logs/9-search.txt" 2>&1 &
 "$tests" --only rates,extremes,realtime,place,journeys,atmosphere,navigation > "$logs/2-robustness.txt" 2>&1 &
 "$tests" --only locations,travel,modules,musicality > "$logs/3-locations.txt" 2>&1 &

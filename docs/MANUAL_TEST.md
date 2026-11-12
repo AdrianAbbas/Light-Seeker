@@ -1,6 +1,6 @@
 # LIGHT SEEKER: manual test in GarageBand (MacBook Air)
 
-Each milestone adds its section. Install the `LightSeeker-macOS-Universal` artifact with
+Each milestone adds its section. Install the `WindwardAudio-LightSeeker-1.0.0-macOS-Universal` artifact with
 `bash install-mac.sh` first. Since Direction Update 1 the download holds two plug-ins:
 **LIGHT SEEKER** (the instrument, section "Instrument edition" at the end) and **LIGHT SEEKER
 FX** (the effect: sections M1 to M5, which name it LIGHT SEEKER as it was then called).
@@ -8,7 +8,7 @@ FX** (the effect: sections M1 to M5, which name it LIGHT SEEKER as it was then c
 ## M1: setup
 
 1. The installer ends with "LIGHT SEEKER is installed and validated".
-2. GarageBand → a track → an Audio Effect slot → Audio Units → **Veil Audio → LIGHT SEEKER**.
+2. GarageBand → a track → an Audio Effect slot → Audio Units → **Windward Audio → LIGHT SEEKER**.
    If DUNGEON CRAWLER is installed, it is still listed beside it and still works.
 3. The window opens on the painted map. Click a landmark: the sound travels there and the
    view zooms in.
@@ -127,8 +127,8 @@ Install with `bash install-mac.sh`: it should end with "LIGHT SEEKER and LIGHT S
 installed and validated" (two auval PASS lines).
 
 1. **Both plug-ins.** GarageBand: a new Software Instrument track → the instrument slot →
-   Audio Units → Veil Audio → **LIGHT SEEKER**. On an audio track, an Audio Effect slot →
-   Veil Audio → **LIGHT SEEKER FX**: it behaves exactly as before (an old project that used
+   Audio Units → Windward Audio → **LIGHT SEEKER**. On an audio track, an Audio Effect slot →
+   Windward Audio → **LIGHT SEEKER FX**: it behaves exactly as before (an old project that used
    LIGHT SEEKER finds LIGHT SEEKER FX). DUNGEON CRAWLER, if installed, still loads.
 2. **The window**: the map with the instrument panel underneath (pearl and ivory, gold
    tracks). It must not flicker or slow GarageBand when you play.
@@ -362,3 +362,23 @@ at its own place (Starlit Canopy, Windswept Isle, Wildflower Hill, Throne of Lig
   MIX Character and Shimmer bring more of the vault.
 - In your seven-part piece with every fader at 0 dB: the celesta as loud as before.
 - Celesta and Harp: the bars a little rounder. Music Box: unchanged.
+
+## 1.0.0: Windward Audio (the release freeze)
+
+On a Mac that had a build before 1.0 (keep an old GarageBand project with both plug-ins and
+a saved preset of each), install the 1.0.0 download with `bash install-mac.sh`.
+
+- [ ] The installer removes any earlier copy (step 0), copies your presets ("… files from
+      earlier builds copied …"), and ends with two "macOS lists Windward Audio: …" lines and
+      "LIGHT SEEKER and LIGHT SEEKER FX are installed and validated."
+- [ ] GarageBand (restart it): a Software Instrument track → the instrument slot → Audio
+      Units → **Windward Audio → LIGHT SEEKER**; an Audio Effect slot → Audio Units →
+      **Windward Audio → LIGHT SEEKER FX**. Each is listed **once**; no folder under the old
+      company name remains in the Audio Units menu (DUNGEON CRAWLER, if installed, keeps its own folder).
+- [ ] The old project opens and sounds exactly as before: the same places, the instrument
+      locked as it was, the journeys, the window as it was left.
+- [ ] Your presets: the preset menu → Your presets lists the ones saved before 1.0, in
+      both plug-ins (they are now in `~/Library/Windward Audio/LIGHT SEEKER/Presets` and
+      `…/LIGHT SEEKER FX/Presets`; the old folder is still there).
+- [ ] ⚙ → About LIGHT SEEKER (and About LIGHT SEEKER FX): "version 1.0.0", Windward Audio,
+      the data folder, the credits. Logic Pro: Plug-in Manager shows version 1.0.0.

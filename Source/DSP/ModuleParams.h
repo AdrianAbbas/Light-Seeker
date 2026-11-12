@@ -48,7 +48,7 @@ inline constexpr const char* signatureChoices =
     "|Spectral Prism|Still Reflection|Crystal Modes"
     "|Sun Warmth|Butterfly Flutter|Valley Echoes"
     "|Radiant Cascade|Angel Choir|Colour Shift"
-    "|Cloud Swirl|Wind Veil|Soaring Echoes"
+    "|Cloud Swirl|Wind Shroud|Soaring Echoes"
     "|Lush Chorus|Fountain Sparkle|Column Slaps"
     "|Bouncy Sparkle|Firefly Glitter|Harp Resonance"
     "|Cliff Echoes|Golden Harmonics|Soaring Octave";
