@@ -3418,7 +3418,9 @@ artifact share the name; `CHANGELOG.md` is in it), `WindwardAudio-LightSeeker-ma
   a three-stop journey, the window open on the MIX section at 125 %; the instrument with the organ
   locked and carried into the Sanctum, its tone, release, level, Punch, echoes and octave moved, a
   journey), loaded and saved again, compared element by element and attribute by attribute (and
-  every parameter ID found with its saved value); **presets migrate** (a scratch library: each
+  every parameter ID found with its saved value; numbers equal to float precision: on macOS a
+  value through a skewed range comes back a last bit off, 180.00003 vs 180.000046 Hz, as it
+  always did; the same compare in the AU harness); **presets migrate** (a scratch library: each
   plug-in's own presets, the shared scenes and the host presets copied, an existing file kept,
   originals kept, once, other plug-ins' presets untouched, nothing created without old data);
   each plug-in's own preset folder.

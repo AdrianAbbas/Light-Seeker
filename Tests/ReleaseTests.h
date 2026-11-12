@@ -21,12 +21,21 @@ std::unique_ptr<juce::XmlElement> roundTrip(LightSeekerProcessor& p, const juce:
     return juce::AudioProcessor::getXmlFromBinary(out.getData(), static_cast<int>(out.getSize()));
 }
 
+// Two saved values: the same text, or numbers equal to float precision (a parameter's value
+// goes through its normalised range, whose last bit differs between platforms' maths).
+bool sameValue(const juce::String& a, const juce::String& b) {
+    if (a == b) return true;
+    if (!a.containsOnly("0123456789.-+eE") || !b.containsOnly("0123456789.-+eE") || a.isEmpty() || b.isEmpty()) return false;
+    const double x = a.getDoubleValue(), y = b.getDoubleValue();
+    return std::abs(x - y) <= 1.0e-6 * std::max(1.0, std::max(std::abs(x), std::abs(y)));
+}
+
 // The first difference between two saved states (attribute by attribute, child by child).
 std::string firstDifference(const juce::XmlElement& a, const juce::XmlElement& b) {
     if (a.getTagName() != b.getTagName()) return "tag " + a.getTagName().toStdString() + " vs " + b.getTagName().toStdString();
     for (int i = 0; i < std::max(a.getNumAttributes(), b.getNumAttributes()); ++i) {
         const auto name = i < a.getNumAttributes() ? a.getAttributeName(i) : b.getAttributeName(i);
-        if (a.getStringAttribute(name) != b.getStringAttribute(name) || a.hasAttribute(name) != b.hasAttribute(name))
+        if (!sameValue(a.getStringAttribute(name), b.getStringAttribute(name)) || a.hasAttribute(name) != b.hasAttribute(name))
             return a.getTagName().toStdString() + " " + (a.hasAttribute("id") ? a.getStringAttribute("id").toStdString() + " " : "") + name.toStdString()
                    + ": " + a.getStringAttribute(name, "(absent)").toStdString() + " vs " + b.getStringAttribute(name, "(absent)").toStdString();
     }
@@ -100,7 +109,8 @@ void testRelease(Suite& s) {
         for (auto* child : old->getChildWithTagNameIterator("PARAM")) {
             ++params;
             const auto v = p->parameters.getRawParameterValue(child->getStringAttribute("id"));
-            if (v == nullptr || std::abs(v->load() - static_cast<float>(child->getDoubleAttribute("value"))) > 1.0e-5f) ++wrong;
+            const float want = static_cast<float>(child->getDoubleAttribute("value"));
+            if (v == nullptr || std::abs(v->load() - want) > 1.0e-6f * std::max(1.0f, std::abs(want))) ++wrong;
         }
         s.check(params > 100 && wrong == 0, "... every parameter ID still exists and has its saved value (" + kind + ")",
                 std::to_string(wrong) + " of " + std::to_string(params));

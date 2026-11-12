@@ -1350,6 +1350,18 @@ NSXMLDocument* juceStateDocument(NSData* state, std::string& error) {
     return doc;
 }
 
+// Two saved values: the same text, or numbers equal to float precision (a parameter's value
+// goes through its normalised range, whose last bit differs between platforms' maths).
+bool sameValue(NSString* a, NSString* b) {
+    if (a == nil || b == nil) return a == b;
+    if ([a isEqualToString: b]) return true;
+    NSCharacterSet* notNumeric = [[NSCharacterSet characterSetWithCharactersInString: @"0123456789.-+eE"] invertedSet];
+    if (a.length == 0 || b.length == 0 || [a rangeOfCharacterFromSet: notNumeric].location != NSNotFound
+        || [b rangeOfCharacterFromSet: notNumeric].location != NSNotFound) return false;
+    const double x = a.doubleValue, y = b.doubleValue;
+    return std::abs(x - y) <= 1.0e-6 * std::max(1.0, std::max(std::abs(x), std::abs(y)));
+}
+
 // The first difference between two saved states: tags, attributes, child elements (in order).
 std::string firstDifference(NSXMLElement* a, NSXMLElement* b) {
     if (![a.name isEqualToString: b.name]) return "tag " + toString(a.name) + " vs " + toString(b.name);
@@ -1361,7 +1373,7 @@ std::string firstDifference(NSXMLElement* a, NSXMLElement* b) {
         NSMutableSet<NSString*>* names = [NSMutableSet setWithArray: left.allKeys];
         [names addObjectsFromArray: right.allKeys];
         for (NSString* name in names)
-            if (!(left[name] != nil && right[name] != nil && [left[name] isEqualToString: right[name]]))
+            if (!sameValue(left[name], right[name]))
                 return toString(a.name) + " " + (left[@"id"] != nil ? toString(left[@"id"]) + " " : std::string()) + toString(name) + ": "
                        + (left[name] != nil ? toString(left[name]) : std::string("(absent)")) + " vs " + (right[name] != nil ? toString(right[name]) : std::string("(absent)"));
     }
