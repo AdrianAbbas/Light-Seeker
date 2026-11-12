@@ -148,7 +148,7 @@ rosetta=0
 /usr/bin/arch -x86_64 /usr/bin/true 2>/dev/null && rosetta=1
 for plugin in "instrument:aumu:Lski:LIGHT SEEKER" "effect:aufx:Lsek:LIGHT SEEKER FX"; do
     IFS=: read -r kind type subtype shown <<< "$plugin"
-    identity=(--expect-name "$company: $shown" --expect-version 0x10000 --old-session "$repo/Tests/fixtures/old-session-$kind.xml")
+    identity=(--expect-name "$company: $shown" --expect-version 0x10000 --old-session "$repo/Tests/fixtures/old-session-${kind/effect/fx}.xml")
     for arch in arm64 x86_64; do
         [[ $arch == arm64 || $rosetta == 1 ]] || continue
         # shellcheck disable=SC2086  # $strict is empty or one flag
