@@ -3459,6 +3459,15 @@ one cost the same under the same load (six heavy shards on four cores: 14.7-22.9
 alternating; 6-10 ms alone). One sample under the shards' load had too little margin; the check now
 takes the best of three repaints, as the Eco/Standard check does.
 
+**CI, final push (`d20a6cd`, run `43230518499`): green.** macOS: build, the `release` group on
+both slices, the bundle gate, the install over a simulated pre-1.0 Mac, auval and every harness
+route and old session, arm64 and x86_64, for both plug-ins; the package
+`WindwardAudio-LightSeeker-1.0.0-macOS-Universal`. Linux: 2984 passed, 0 failed, every listening
+render. **Tag `v1.0.0`**: this session's GitHub access refuses tag pushes (git and the API both),
+so the tag is still to be made, on the commit that carries this note once its run is green:
+`git tag -a v1.0.0 -m "LIGHT SEEKER 1.0.0" <commit> && git push origin v1.0.0` (the workflow's
+release job then publishes the package as a GitHub Release).
+
 ### Handoff: the GarageBand check
 
 `docs/MANUAL_TEST.md`, "1.0.0: Windward Audio". On your Mac, with an old GarageBand project that
