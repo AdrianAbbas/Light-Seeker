@@ -166,5 +166,7 @@ if(LS_BUILD_TESTS)
     target_sources(LightSeekerTests PRIVATE Tests/LightSeekerTests.cpp)
     target_link_libraries(LightSeekerTests PRIVATE LightSeeker juce::juce_audio_utils)
     target_compile_definitions(LightSeekerTests PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0)
+    # The release group's saved sessions (an absolute path: ccache's base dir makes __FILE__ relative).
+    target_compile_definitions(LightSeekerTests PRIVATE LS_TEST_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/Tests/fixtures")
     add_test(NAME light_seeker_tests COMMAND LightSeekerTests)
 endif()

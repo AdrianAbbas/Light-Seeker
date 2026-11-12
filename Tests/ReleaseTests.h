@@ -10,7 +10,7 @@ namespace release {
 // written as XML): the effect in a place with its controls moved, a journey and the window
 // left open; the instrument with the organ locked and carried into the Sanctum, its sound
 // shaped. The AU harness loads the same files through the Audio Unit route on macOS.
-juce::File fixture(const char* name) { return juce::File(__FILE__).getParentDirectory().getChildFile("fixtures").getChildFile(name); }
+juce::File fixture(const char* name) { return juce::File(LS_TEST_FIXTURES).getChildFile(name); }
 
 // Loads an old session into `p` and returns what `p` saves afterwards.
 std::unique_ptr<juce::XmlElement> roundTrip(LightSeekerProcessor& p, const juce::XmlElement& old) {
