@@ -104,8 +104,8 @@ Nave of Light, a chorus hall in the Rose Garden), measured and rebuilt as impuls
 
 One download installs both plug-ins.
 
-1. Download the `WindwardAudio-LightSeeker-1.0.0-macOS-Universal` artifact of a green run (GitHub → Actions →
-   Native build → the run → Artifacts) or a release, and unzip it.
+1. Download the `LIGHT SEEKER-dev-macOS` artifact of a green run (GitHub → Actions →
+   Native build → the run → Artifacts) and unzip it.
 2. Quit GarageBand and Logic. In Terminal type `bash ` (with a space), drag
    `install-mac.sh` from the unzipped folder into the window, press Return.
 3. Wait for "LIGHT SEEKER and LIGHT SEEKER FX are installed and validated."

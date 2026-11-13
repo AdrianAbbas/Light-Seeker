@@ -47,6 +47,16 @@ expanded="$(mktemp -d)/expanded"
 src_au="$expanded/au.pkg/Payload"
 src_vst3="$expanded/vst3.pkg/Payload"
 ls "$src_au" "$src_vst3"
+# The installer standard (docs/INSTALLER_STANDARD.md): title, pages, licence and backgrounds.
+dist_xml="$expanded/Distribution"
+/usr/bin/grep -q "<title>LIGHT SEEKER by Windward Audio</title>" "$dist_xml" || { echo "::error::the installer's window title is not 'LIGHT SEEKER by Windward Audio'"; status=1; }
+for res in welcome.html readme.html EULA.rtf conclusion.html background.png background-dark.png; do
+    /usr/bin/grep -q "\"$res\"" "$dist_xml" || { echo "::error::the distribution does not use $res"; status=1; }
+    [[ -f "$expanded/Resources/$res" ]] || { echo "::error::the installer has no $res"; status=1; }
+done
+if /usr/bin/grep -il -E 'veil|before 1\.0|install-mac' "$expanded/Distribution" "$expanded"/Resources/*.html "$expanded/Resources/EULA.rtf"; then
+    echo "::error::the installer's pages mention an old name or a script"; status=1
+fi
 plant() {   # plant <source bundle> <destination> <bundle ID or -delete> [sudo]
     ${4:+/usr/bin/sudo} mkdir -p "$(dirname "$2")"
     ${4:+/usr/bin/sudo} /usr/bin/ditto "$1" "$2"
@@ -84,7 +94,7 @@ if /usr/bin/grep -iE 'veil|before 1\.0|Old Effect|Without ID' "$logs/pkg-scripts
     echo "::error::the installer log names an earlier copy or an old name"; status=1
 fi
 /usr/sbin/pkgutil --pkgs | /usr/bin/grep com.windwardaudio | tee "$logs/pkg-receipts.txt" || true
-for receipt in com.windwardaudio.lightseeker.pkg.au com.windwardaudio.lightseeker.pkg.vst3; do
+for receipt in com.windwardaudio.pkg.lightseeker.au com.windwardaudio.pkg.lightseeker.vst3; do
     /usr/bin/grep -qx "$receipt" "$logs/pkg-receipts.txt" || { echo "::error::no installer receipt $receipt"; status=1; }
 done
 installed=("$sys_components/LightSeeker.component" "$sys_components/LightSeekerFX.component" "$sys_vst3/LightSeeker.vst3" "$sys_vst3/LightSeekerFX.vst3")

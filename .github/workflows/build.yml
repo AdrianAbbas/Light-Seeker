@@ -7,13 +7,15 @@ permissions:
   contents: read
 env:
   JUCE_COMMIT: ea77444750de45e036e0279bb0291144bf8e3688 # JUCE 8.0.16, as in CMakeLists.txt
-  # The installable package (1.0.0): its zip, the folder inside and the artifact share the name.
+  # The developer package (1.0.0): its zip and the folder inside share the name (artifact LIGHT SEEKER-dev-macOS).
   PACKAGE: WindwardAudio-LightSeeker-1.0.0-macOS-Universal
 jobs:
   macos:
     runs-on: macos-15
     # 2026-11-12: 120 (was 90): Developer ID signing and two notarisations join the job.
     timeout-minutes: 120
+    outputs:
+      customer: ${{ steps.customer.outputs.name }}
     env:
       APPLE_TEAM_ID: YYZP4W7G7D # LJP Records Inc. (Windward Audio); not a secret
       # With the Samples token the captured spaces and the recordings must be there (the
@@ -189,10 +191,10 @@ jobs:
             if [[ -f "$f" ]]; then tail -25 "$f" > "$f.tail"; fi
           done
           bash scripts/ci-annotate.sh --condense build/ci-logs/harness-x86_64-*.txt build/ci-logs/control-*.txt build/ci-logs/crashes.txt build/ci-logs/auval-*.txt.tail
-      - name: Upload installable package (only when every check passed)
+      - name: Upload the developer package (bundles and install scripts, for testing only; only when every check passed)
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.PACKAGE }}
+          name: LIGHT SEEKER-dev-macOS
           path: dist/${{ env.PACKAGE }}.zip
           if-no-files-found: error
       - name: Publish LIGHT SEEKER.pkg install logs as annotations
@@ -202,12 +204,24 @@ jobs:
             if [[ -f "$f" ]]; then tail -12 "$f" > "$f.tail"; fi
           done
           bash scripts/ci-annotate.sh --condense build/ci-logs/pkg/pkg-gatekeeper.txt build/ci-logs/pkg/pkg-scripts.txt build/ci-logs/pkg/pkg-registry.txt build/ci-logs/pkg/pkg-crashes.txt build/ci-logs/pkg/pkg-auval-*.txt.tail
-      - name: Upload the signed and notarised installer LIGHT SEEKER.pkg (only when every check passed)
+      # Customer download (docs/INSTALLER_STANDARD.md): LIGHT SEEKER-<version>-macOS with only the signed,
+      # notarised "LIGHT SEEKER Installer.pkg" and "LIGHT SEEKER - Read Me.pdf". Ad-hoc runs produce none.
+      - name: Stage the customer package (LIGHT SEEKER Installer.pkg and the Read Me)
+        id: customer
+        run: |
+          name="LIGHT SEEKER-$(python3 -c 'import json; print(json.load(open("installer/product.json"))["version"])')-macOS"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          if [[ "${{ steps.signing.outputs.enabled }}" == true ]]; then
+            bash scripts/package-mac.sh --customer "dist/LIGHT SEEKER.pkg" dist
+          else
+            echo "::notice title=No customer package::This run was signed ad hoc, so LIGHT SEEKER.pkg is unsigned and the customer artifact $name was not produced. Only the developer artifact LIGHT SEEKER-dev-macOS is available."
+          fi
+      - name: Upload the customer package (signed runs only, when every check passed)
         if: steps.signing.outputs.enabled == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: WindwardAudio-LightSeeker-1.0.0-macOS-Installer
-          path: dist/LIGHT SEEKER.pkg
+          name: ${{ steps.customer.outputs.name }}
+          path: dist/${{ steps.customer.outputs.name }}/
           if-no-files-found: error
       - name: Upload diagnostics
         if: always()
@@ -368,7 +382,8 @@ jobs:
           path: build/test-logs/
           if-no-files-found: warn
   release:
-    # Tagged commits (v*) publish the same package as a GitHub Release.
+    # Tagged commits (v*) publish the customer package as a GitHub Release: LIGHT SEEKER-<version>-macOS.zip
+    # with only "LIGHT SEEKER Installer.pkg" and "LIGHT SEEKER - Read Me.pdf". It needs a signed run on the tag (docs/RELEASING.md).
     if: startsWith(github.ref, 'refs/tags/v')
     needs: [macos, linux]
     runs-on: ubuntu-24.04
@@ -376,17 +391,18 @@ jobs:
       contents: write
     steps:
       - uses: actions/download-artifact@v4
-        with:
-          name: ${{ env.PACKAGE }}
-      # Present only when the tag's run was signed and notarised (a manual run on the tag; docs/RELEASING.md).
-      - uses: actions/download-artifact@v4
         continue-on-error: true
         with:
-          name: WindwardAudio-LightSeeker-1.0.0-macOS-Installer
+          name: ${{ needs.macos.outputs.customer }}
+          path: ${{ needs.macos.outputs.customer }}
       - name: Create release
         env:
           GH_TOKEN: ${{ github.token }}
+          CUSTOMER: ${{ needs.macos.outputs.customer }}
         run: |
-          files=("$PACKAGE.zip")
-          if [[ -f "LIGHT SEEKER.pkg" ]]; then files=("LIGHT SEEKER.pkg" "${files[@]}"); else echo "::warning::no signed LIGHT SEEKER.pkg in this run; the release has the zip only"; fi
-          gh release create "$GITHUB_REF_NAME" "${files[@]}" --repo "$GITHUB_REPOSITORY" --title "LIGHT SEEKER $GITHUB_REF_NAME (Windward Audio)" --generate-notes
+          if [[ ! -f "$CUSTOMER/LIGHT SEEKER Installer.pkg" ]]; then
+            echo "::error::no signed LIGHT SEEKER Installer.pkg in this run (ad-hoc build), so there is no customer package to release"
+            exit 1
+          fi
+          (cd "$CUSTOMER" && zip -X "../$CUSTOMER.zip" "LIGHT SEEKER Installer.pkg" "LIGHT SEEKER - Read Me.pdf")
+          gh release create "$GITHUB_REF_NAME" "$CUSTOMER.zip" --repo "$GITHUB_REPOSITORY" --title "LIGHT SEEKER $GITHUB_REF_NAME" --generate-notes

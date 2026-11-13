@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# Build the installer package "LIGHT SEEKER.pkg" with productbuild: LIGHT SEEKER (the instrument,
-# LightSeeker.*) and LIGHT SEEKER FX (the effect, LightSeekerFX.*) as Audio Units
+# Build the installer package "LIGHT SEEKER.pkg" with productbuild, to the Windward Audio installer
+# standard (docs/INSTALLER_STANDARD.md: pages, wording, background and Read Me from installer/,
+# rendered by installer/render.py; identifiers com.windwardaudio.pkg.lightseeker[.au|.vst3|.prepare]):
+# LIGHT SEEKER (the instrument, LightSeeker.*) and LIGHT SEEKER FX (the effect, LightSeekerFX.*) as Audio Units
 # (/Library/Audio/Plug-Ins/Components) and VST3s (/Library/Audio/Plug-Ins/VST3), for all users.
 # The sounds (Contents/Resources/Samples and Painted) and the factory presets (compiled into each
 # binary) travel inside the bundles. Preinstall scripts silently remove copies from the builds
@@ -11,6 +13,7 @@
 # without one it is left unsigned, for the ad-hoc CI build only.
 #
 # Environment (optional): LIGHTSEEKER_INSTALLER_IDENTITY, LIGHTSEEKER_KEYCHAIN
+# The customer download renames it "LIGHT SEEKER Installer.pkg" (scripts/package-mac.sh --customer).
 # Usage: scripts/build-pkg.sh <build dir> <output .pkg>
 #   (the artefacts are <build dir>/LightSeeker_artefacts/Release and LightSeekerFX_artefacts/Release)
 set -euo pipefail
@@ -61,17 +64,21 @@ component_pkg() {   # component_pkg <name> <install location>
         i=$((i + 1))
     done
     /usr/bin/pkgbuild --root "$work/root-$name" --component-plist "$plist" --install-location "$location" \
-        --scripts "$work/scripts-$name" --identifier "com.windwardaudio.lightseeker.pkg.$name" --version "$version" \
+        --scripts "$work/scripts-$name" --identifier "com.windwardaudio.pkg.lightseeker.$name" --version "$version" \
         --ownership recommended "$work/packages/$name.pkg"
 }
 component_pkg au /Library/Audio/Plug-Ins/Components
 component_pkg vst3 /Library/Audio/Plug-Ins/VST3
-/usr/bin/pkgbuild --nopayload --scripts "$work/scripts-prepare" --identifier com.windwardaudio.lightseeker.pkg.prepare \
+/usr/bin/pkgbuild --nopayload --scripts "$work/scripts-prepare" --identifier com.windwardaudio.pkg.lightseeker.prepare \
     --version "$version" "$work/packages/prepare.pkg"
 
-/usr/bin/sed "s/@VERSION@/$version/g" "$here/packaging/pkg/distribution.xml" | /usr/bin/grep -v -E '^<!--.*-->$' > "$work/distribution.xml"
-cp "$here/packaging/pkg/welcome.html" "$here/packaging/pkg/conclusion.html" "$work/resources/"
+# Installer pages, background, licence and the distribution (installer/product.json + templates).
+# Disk space: the payload, rounded up to 10 MB.
 mkdir -p "$(dirname "$out")"
+kb=$(/usr/bin/du -sk "$work/root-au" "$work/root-vst3" | /usr/bin/awk '{ s += $1 } END { print s }')
+disk="$(( (kb + 10239) / 10240 * 10 )) MB"
+/usr/bin/python3 "$here/installer/render.py" --pkg-version "$version" --disk-space "$disk" \
+    --resources "$work/resources" --distribution "$work/distribution.xml" --readme-pdf "$(dirname "$out")/LIGHT SEEKER - Read Me.pdf"
 rm -f "$out"
 sign_args=()
 if [[ -n "$identity" ]]; then
@@ -81,7 +88,7 @@ else
     echo "::notice::LIGHT SEEKER.pkg is built UNSIGNED (no Developer ID Installer identity): for the CI install test only, not for distribution"
 fi
 /usr/bin/productbuild --distribution "$work/distribution.xml" --package-path "$work/packages" \
-    --resources "$work/resources" --identifier com.windwardaudio.lightseeker.pkg --version "$version" \
+    --resources "$work/resources" --identifier com.windwardaudio.pkg.lightseeker --version "$version" \
     ${sign_args[@]+"${sign_args[@]}"} "$out"
 echo "Built $out ($(/usr/bin/du -h "$out" | /usr/bin/cut -f1))"
 /usr/sbin/pkgutil --check-signature "$out" || [[ -z "$identity" ]]

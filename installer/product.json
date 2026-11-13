@@ -1,0 +1,14 @@
+{
+    "_comment": "The only per-product file of the Windward Audio installer standard (docs/INSTALLER_STANDARD.md). Everything else in installer/ is copied unchanged between products.",
+    "product": "LIGHT SEEKER",
+    "id": "lightseeker",
+    "version": "1.0",
+    "description": "A radiant light-fantasy instrument and effect.",
+    "accent": "#c08a22",
+    "min_macos": "10.15",
+    "min_macos_name": "Catalina",
+    "plugins": [
+        { "name": "LIGHT SEEKER", "file": "LightSeeker", "kind": "instrument" },
+        { "name": "LIGHT SEEKER FX", "file": "LightSeekerFX", "kind": "effect" }
+    ]
+}

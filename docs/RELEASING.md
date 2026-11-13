@@ -2,8 +2,11 @@
 
 LIGHT SEEKER (the instrument) and LIGHT SEEKER FX (the effect) are signed with the Developer ID of
 **LJP Records Inc.** (team ID **YYZP4W7G7D**, brand Windward Audio), notarised by Apple and shipped
-as a signed installer package, **LIGHT SEEKER.pkg**. The zip with `install-mac.sh`
-(`WindwardAudio-LightSeeker-1.0.0-macOS-Universal.zip`) stays available as a secondary download.
+as a signed installer package to the Windward Audio installer standard (`docs/INSTALLER_STANDARD.md`,
+`installer/`). The customer download is `LIGHT SEEKER-1.0-macOS.zip` with only
+**LIGHT SEEKER Installer.pkg** and **LIGHT SEEKER - Read Me.pdf**. The zip with the bundles and
+`install-mac.sh` (`WindwardAudio-LightSeeker-1.0.0-macOS-Universal.zip`) is the developer package,
+for testing only.
 All of it happens in CI (`.github/workflows/build.yml`, job `macos`, on `macos-15`), the same way as
 VACANCY (AdrianAbbas/LIMINAL).
 
@@ -23,9 +26,9 @@ VACANCY (AdrianAbbas/LIMINAL).
 | Package path: Gatekeeper on the quarantined `.pkg`, `sudo installer -pkg`, receipts, earlier copies removed (and not named in the installer log), registry, codesign / Gatekeeper on the installed copies, auval and the AU harness (every route, name, version, old sessions) arm64 + x86_64 on the installed copies | `scripts/ci-pkg-install-test.sh` | always (Gatekeeper parts only when notarised) |
 | Delete the keychain and the key file, restore the keychain search list | `scripts/ci-signing-cleanup.sh` | always, last step |
 
-Artifacts: `WindwardAudio-LightSeeker-1.0.0-macOS-Universal` (the zip, every run) and
-`WindwardAudio-LightSeeker-1.0.0-macOS-Installer` (`LIGHT SEEKER.pkg`, only signed and notarised
-runs). Notarisation logs are in the `WindwardAudio-LightSeeker-macOS-diagnostics` artifact under
+Artifacts: `LIGHT SEEKER-dev-macOS` (the developer zip, every run) and `LIGHT SEEKER-1.0-macOS`
+(`LIGHT SEEKER Installer.pkg` and `LIGHT SEEKER - Read Me.pdf`, staged by
+`scripts/package-mac.sh --customer`; only signed and notarised runs). Notarisation logs are in the `WindwardAudio-LightSeeker-macOS-diagnostics` artifact under
 `notary/`, the package install logs under `pkg/`; on a rejection the log is also printed in the step.
 
 ### When it signs
@@ -40,7 +43,7 @@ installer is still tested, and it is not uploaded. CI never fails because the se
 
 Tag pushes (`v*`) are not signing runs. To publish a signed release, push the tag, then start
 **Run workflow** on that tag: the run signs and notarises, and the `release` job (which runs for
-`refs/tags/v*`) attaches `LIGHT SEEKER.pkg` and the zip to the GitHub Release.
+`refs/tags/v*`) attaches the customer package `LIGHT SEEKER-1.0-macOS.zip` to the GitHub Release.
 
 ## Secrets (Settings > Secrets and variables > Actions)
 
@@ -86,9 +89,9 @@ bundles (`Contents/Resources/Samples` in the instrument's, `Contents/Resources/P
 bundle); the factory presets of both plug-ins are compiled into their binaries, so they install with
 the bundles. Users' own presets (`~/Library/Windward Audio/...`) are never touched.
 
-The customer sees only the welcome page (`packaging/pkg/welcome.html`), the standard Installer
-panes and the conclusion page (`packaging/pkg/conclusion.html`): no old names and no scripts are
-mentioned. Before installing, the preinstall scripts (`packaging/pkg/remove-copies.sh`, copied into
+The customer sees the installer standard's pages (Welcome, Read Me, License, Destination and
+Installation Type, Summary; rendered from `installer/` by `installer/render.py`): no old names and
+no scripts are mentioned. Before installing, the preinstall scripts (`packaging/pkg/remove-copies.sh`, copied into
 the package without its comments) silently remove, system-wide and in every user's `~/Library`:
 
 - copies from the builds before 1.0: bundles with the old bundle IDs `audio.veil.lightseeker` and
@@ -108,7 +111,7 @@ sudo rm -rf /Library/Audio/Plug-Ins/Components/LightSeeker.component /Library/Au
 ```
 
 ```bash
-sudo pkgutil --forget com.windwardaudio.lightseeker.pkg.au; sudo pkgutil --forget com.windwardaudio.lightseeker.pkg.vst3; sudo pkgutil --forget com.windwardaudio.lightseeker.pkg.prepare
+sudo pkgutil --forget com.windwardaudio.pkg.lightseeker.au; sudo pkgutil --forget com.windwardaudio.pkg.lightseeker.vst3; sudo pkgutil --forget com.windwardaudio.pkg.lightseeker.prepare
 ```
 
 ## Renewing the certificates

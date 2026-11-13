@@ -1,6 +1,6 @@
 # LIGHT SEEKER: manual test in GarageBand (MacBook Air)
 
-Each milestone adds its section. Install the `WindwardAudio-LightSeeker-1.0.0-macOS-Universal` artifact with
+Each milestone adds its section. Install the `LIGHT SEEKER-dev-macOS` artifact with
 `bash install-mac.sh` first. Since Direction Update 1 the download holds two plug-ins:
 **LIGHT SEEKER** (the instrument, section "Instrument edition" at the end) and **LIGHT SEEKER
 FX** (the effect: sections M1 to M5, which name it LIGHT SEEKER as it was then called).
